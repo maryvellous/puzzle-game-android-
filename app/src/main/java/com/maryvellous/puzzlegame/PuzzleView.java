@@ -14,6 +14,7 @@ import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.view.View;
+import android.view.ViewConfiguration;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -25,13 +26,14 @@ public class PuzzleView extends View {
     private static final int MODE_MENU = 0;
     private static final int MODE_PUZZLE = 1;
 
+    private static final int GRID = 10;
+    private static final int TILE_COUNT = GRID * GRID;
+
     private static final float WORLD_W = 1000f;
-    private static final float WORLD_H = 2100f;
+    private static final float WORLD_H = 1160f;
     private static final float BOARD_X = 50f;
-    private static final float BOARD_Y = 120f;
+    private static final float BOARD_Y = 130f;
     private static final float BOARD_SIZE = 900f;
-    private static final float TRAY_X = 50f;
-    private static final float TRAY_Y = 1120f;
 
     private static final int CREAM = Color.rgb(247, 232, 198);
     private static final int PAPER = Color.rgb(255, 249, 236);
@@ -44,19 +46,21 @@ public class PuzzleView extends View {
     private final Paint linePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Bitmap[] images = new Bitmap[5];
     private final RectF[] puzzleRects = new RectF[5];
-    private final RectF[] difficultyRects = new RectF[3];
-    private final int[] difficultyPieces = new int[]{36, 64, 100};
+    private final int[] board = new int[TILE_COUNT];
+
     private final SharedPreferences prefs;
     private final ScaleGestureDetector scaleDetector;
     private final Random random = new Random();
 
-    private final List<Piece> pieces = new ArrayList<>();
     private int mode = MODE_MENU;
-    private int selectedDifficulty = 1;
     private int selectedPuzzle = 0;
-    private int gridSize = 8;
-    private int solvedCount = 0;
+    private int selectedSlot = -1;
+    private int downSlot = -1;
+    private int moves = 0;
     private boolean complete = false;
+    private boolean previewHeld = false;
+    private boolean panning = false;
+    private boolean gestureMoved = false;
 
     private float density;
     private float scaledDensity;
@@ -65,15 +69,14 @@ public class PuzzleView extends View {
     private float zoom = 1f;
     private float panX = 0f;
     private float panY = 0f;
-
-    private Piece draggingPiece = null;
-    private float dragOffsetX;
-    private float dragOffsetY;
-    private boolean panning = false;
     private float lastTouchX;
     private float lastTouchY;
+    private float downTouchX;
+    private float downTouchY;
+    private final float touchSlop;
 
     private final RectF backRect = new RectF();
+    private final RectF previewRect = new RectF();
     private final RectF zoomOutRect = new RectF();
     private final RectF zoomResetRect = new RectF();
     private final RectF zoomInRect = new RectF();
@@ -85,7 +88,8 @@ public class PuzzleView extends View {
         setFocusable(true);
         density = getResources().getDisplayMetrics().density;
         scaledDensity = getResources().getDisplayMetrics().scaledDensity;
-        headerH = dp(88);
+        headerH = dp(118);
+        touchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
         prefs = context.getSharedPreferences("puzzle_progress", Context.MODE_PRIVATE);
 
         images[0] = BitmapFactory.decodeResource(getResources(), R.drawable.puzzle_1);
@@ -95,22 +99,24 @@ public class PuzzleView extends View {
         images[4] = BitmapFactory.decodeResource(getResources(), R.drawable.puzzle_5);
 
         for (int i = 0; i < puzzleRects.length; i++) puzzleRects[i] = new RectF();
-        for (int i = 0; i < difficultyRects.length; i++) difficultyRects[i] = new RectF();
 
         scaleDetector = new ScaleGestureDetector(context, new ScaleGestureDetector.SimpleOnScaleGestureListener() {
             @Override
             public boolean onScale(ScaleGestureDetector detector) {
-                if (mode != MODE_PUZZLE || complete) return false;
-                float old = zoom;
-                float next = clamp(zoom * detector.getScaleFactor(), baseScale * 0.72f, baseScale * 4.5f);
-                if (Math.abs(next - old) < 0.0001f) return true;
-                float fx = detector.getFocusX();
-                float fy = detector.getFocusY();
-                float wx = (fx - panX) / old;
-                float wy = (fy - panY) / old;
-                zoom = next;
-                panX = fx - wx * zoom;
-                panY = fy - wy * zoom;
+                if (mode != MODE_PUZZLE || complete || previewHeld) return false;
+
+                float oldZoom = zoom;
+                float nextZoom = clamp(zoom * detector.getScaleFactor(), baseScale * 0.75f, baseScale * 5f);
+                if (Math.abs(nextZoom - oldZoom) < 0.0001f) return true;
+
+                float focusX = detector.getFocusX();
+                float focusY = detector.getFocusY();
+                float worldX = (focusX - panX) / oldZoom;
+                float worldY = (focusY - panY) / oldZoom;
+
+                zoom = nextZoom;
+                panX = focusX - worldX * zoom;
+                panY = focusY - worldY * zoom;
                 clampPan();
                 invalidate();
                 return true;
@@ -118,9 +124,10 @@ public class PuzzleView extends View {
 
             @Override
             public boolean onScaleBegin(ScaleGestureDetector detector) {
-                cancelDrag();
+                gestureMoved = true;
                 panning = false;
-                return mode == MODE_PUZZLE && !complete;
+                downSlot = -1;
+                return mode == MODE_PUZZLE && !complete && !previewHeld;
             }
         });
 
@@ -147,28 +154,10 @@ public class PuzzleView extends View {
         paint.setFakeBoldText(false);
         paint.setTextSize(sp(14));
         paint.setColor(PURPLE);
-        drawCentered(canvas, "Scegli quanti pezzi e poi un disegno", w / 2f, dp(76));
+        drawCentered(canvas, "5 puzzle · 100 tessere ciascuno", w / 2f, dp(76));
 
-        float gap = dp(10);
-        float buttonW = Math.min(dp(100), (w - dp(48) - gap * 2) / 3f);
-        float total = buttonW * 3 + gap * 2;
-        float startX = (w - total) / 2f;
-        float y = dp(96);
-        float bh = dp(46);
-        for (int i = 0; i < 3; i++) {
-            RectF r = difficultyRects[i];
-            r.set(startX + i * (buttonW + gap), y, startX + i * (buttonW + gap) + buttonW, y + bh);
-            paint.setColor(i == selectedDifficulty ? PLUM : PAPER);
-            canvas.drawRoundRect(r, dp(16), dp(16), paint);
-            paint.setTextSize(sp(15));
-            paint.setFakeBoldText(true);
-            paint.setColor(i == selectedDifficulty ? Color.WHITE : PLUM);
-            drawCentered(canvas, difficultyPieces[i] + " pezzi", r.centerX(), r.centerY() + sp(5));
-        }
-        paint.setFakeBoldText(false);
-
-        float top = dp(164);
-        float bottomMargin = dp(20);
+        float top = dp(104);
+        float bottomMargin = dp(18);
         float rowGap = dp(12);
         float colGap = dp(12);
         float side = dp(16);
@@ -184,6 +173,7 @@ public class PuzzleView extends View {
             int row = i / 2;
             float left = col == 0 ? side : w - side - cardW;
             float cardTop = top + row * (rowH + rowGap);
+
             RectF card = puzzleRects[i];
             card.set(left, cardTop, left + cardW, cardTop + imageSize + dp(30));
 
@@ -225,40 +215,19 @@ public class PuzzleView extends View {
         canvas.translate(panX, panY);
         canvas.scale(zoom, zoom);
 
+        RectF boardRect = new RectF(BOARD_X, BOARD_Y, BOARD_X + BOARD_SIZE, BOARD_Y + BOARD_SIZE);
         paint.setColor(PAPER);
-        RectF board = new RectF(BOARD_X, BOARD_Y, BOARD_X + BOARD_SIZE, BOARD_Y + BOARD_SIZE);
-        canvas.drawRect(board, paint);
+        canvas.drawRect(boardRect, paint);
 
-        paint.setAlpha(28);
-        canvas.drawBitmap(images[selectedPuzzle], null, board, paint);
-        paint.setAlpha(255);
-
-        linePaint.setColor(Color.argb(80, 90, 60, 65));
-        linePaint.setStrokeWidth(Math.max(1f, 1.2f / zoom));
-        linePaint.setStyle(Paint.Style.STROKE);
-        float tile = BOARD_SIZE / gridSize;
-        for (int i = 0; i <= gridSize; i++) {
-            float p = BOARD_X + i * tile;
-            canvas.drawLine(p, BOARD_Y, p, BOARD_Y + BOARD_SIZE, linePaint);
-            p = BOARD_Y + i * tile;
-            canvas.drawLine(BOARD_X, p, BOARD_X + BOARD_SIZE, p, linePaint);
+        if (previewHeld) {
+            canvas.drawBitmap(images[selectedPuzzle], null, boardRect, paint);
+            linePaint.setStyle(Paint.Style.STROKE);
+            linePaint.setStrokeWidth(Math.max(2f, 3f / zoom));
+            linePaint.setColor(PLUM);
+            canvas.drawRect(boardRect, linePaint);
+        } else {
+            drawShuffledBoard(canvas);
         }
-
-        paint.setColor(Color.argb(45, 112, 55, 91));
-        RectF tray = new RectF(TRAY_X - 18, TRAY_Y - 58, TRAY_X + BOARD_SIZE + 18, TRAY_Y + BOARD_SIZE + 18);
-        canvas.drawRoundRect(tray, 22, 22, paint);
-        paint.setColor(PURPLE);
-        paint.setTextSize(28);
-        paint.setFakeBoldText(true);
-        canvas.drawText("PEZZI", TRAY_X, TRAY_Y - 22, paint);
-        paint.setFakeBoldText(false);
-
-        Piece active = draggingPiece;
-        for (Piece piece : pieces) {
-            if (piece == active) continue;
-            drawPiece(canvas, piece, tile);
-        }
-        if (active != null) drawPiece(canvas, active, tile);
 
         canvas.restore();
 
@@ -266,30 +235,76 @@ public class PuzzleView extends View {
         if (complete) drawCompletion(canvas);
     }
 
-    private void drawPiece(Canvas canvas, Piece piece, float tile) {
-        RectF dst = new RectF(piece.x, piece.y, piece.x + tile, piece.y + tile);
-        if (!piece.locked) {
-            paint.setColor(Color.argb(42, 40, 20, 25));
-            canvas.drawRect(dst.left + 6, dst.top + 8, dst.right + 6, dst.bottom + 8, paint);
+    private void drawShuffledBoard(Canvas canvas) {
+        Bitmap bitmap = images[selectedPuzzle];
+        float tile = BOARD_SIZE / GRID;
+
+        for (int slot = 0; slot < TILE_COUNT; slot++) {
+            int piece = board[slot];
+            int pieceRow = piece / GRID;
+            int pieceCol = piece % GRID;
+            int slotRow = slot / GRID;
+            int slotCol = slot % GRID;
+
+            int left = pieceCol * bitmap.getWidth() / GRID;
+            int top = pieceRow * bitmap.getHeight() / GRID;
+            int right = (pieceCol + 1) * bitmap.getWidth() / GRID;
+            int bottom = (pieceRow + 1) * bitmap.getHeight() / GRID;
+
+            Rect src = new Rect(left, top, right, bottom);
+            RectF dst = new RectF(
+                    BOARD_X + slotCol * tile,
+                    BOARD_Y + slotRow * tile,
+                    BOARD_X + (slotCol + 1) * tile,
+                    BOARD_Y + (slotRow + 1) * tile
+            );
+
+            canvas.drawBitmap(bitmap, src, dst, paint);
         }
-        paint.setAlpha(piece.locked ? 255 : 248);
-        canvas.drawBitmap(images[selectedPuzzle], piece.src, dst, paint);
-        paint.setAlpha(255);
+
         linePaint.setStyle(Paint.Style.STROKE);
-        linePaint.setStrokeWidth(Math.max(1f, 1.3f / zoom));
-        linePaint.setColor(piece.locked ? Color.argb(65, 70, 45, 50) : Color.argb(150, 70, 40, 55));
-        canvas.drawRect(dst, linePaint);
+        linePaint.setStrokeWidth(Math.max(1f, 1.2f / zoom));
+        linePaint.setColor(Color.argb(105, 72, 44, 56));
+
+        for (int i = 0; i <= GRID; i++) {
+            float x = BOARD_X + i * tile;
+            float y = BOARD_Y + i * tile;
+            canvas.drawLine(x, BOARD_Y, x, BOARD_Y + BOARD_SIZE, linePaint);
+            canvas.drawLine(BOARD_X, y, BOARD_X + BOARD_SIZE, y, linePaint);
+        }
+
+        if (selectedSlot >= 0) {
+            int row = selectedSlot / GRID;
+            int col = selectedSlot % GRID;
+            RectF selected = new RectF(
+                    BOARD_X + col * tile,
+                    BOARD_Y + row * tile,
+                    BOARD_X + (col + 1) * tile,
+                    BOARD_Y + (row + 1) * tile
+            );
+
+            paint.setColor(Color.argb(58, 255, 255, 255));
+            canvas.drawRect(selected, paint);
+
+            linePaint.setStrokeWidth(Math.max(4f, 6f / zoom));
+            linePaint.setColor(PLUM);
+            canvas.drawRect(selected, linePaint);
+        }
+
+        linePaint.setStrokeWidth(Math.max(2f, 3f / zoom));
+        linePaint.setColor(Color.argb(180, 82, 53, 47));
+        canvas.drawRect(new RectF(BOARD_X, BOARD_Y, BOARD_X + BOARD_SIZE, BOARD_Y + BOARD_SIZE), linePaint);
     }
 
     private void drawHeader(Canvas canvas) {
         int w = getWidth();
-        paint.setColor(Color.argb(247, 255, 249, 236));
+
+        paint.setColor(Color.argb(250, 255, 249, 236));
         canvas.drawRect(0, 0, w, headerH, paint);
-        paint.setColor(Color.argb(40, 80, 40, 50));
+        paint.setColor(Color.argb(45, 80, 40, 50));
         canvas.drawRect(0, headerH - 1, w, headerH, paint);
 
-        float btn = dp(48);
-        backRect.set(dp(10), dp(14), dp(10) + btn, dp(14) + btn);
+        backRect.set(dp(10), dp(10), dp(54), dp(54));
         paint.setColor(PLUM);
         canvas.drawRoundRect(backRect, dp(14), dp(14), paint);
         paint.setColor(Color.WHITE);
@@ -299,37 +314,57 @@ public class PuzzleView extends View {
         paint.setFakeBoldText(false);
 
         paint.setColor(BROWN);
-        paint.setTextSize(sp(16));
+        paint.setTextSize(sp(17));
         paint.setFakeBoldText(true);
-        canvas.drawText("Puzzle " + (selectedPuzzle + 1), dp(72), dp(32), paint);
+        canvas.drawText("Puzzle " + (selectedPuzzle + 1), dp(66), dp(29), paint);
         paint.setFakeBoldText(false);
+
+        previewRect.set(w - dp(96), dp(10), w - dp(10), dp(54));
+        paint.setColor(previewHeld ? PLUM : PAPER);
+        canvas.drawRoundRect(previewRect, dp(14), dp(14), paint);
+        linePaint.setStyle(Paint.Style.STROKE);
+        linePaint.setStrokeWidth(dp(1));
+        linePaint.setColor(Color.argb(75, 112, 55, 91));
+        canvas.drawRoundRect(previewRect, dp(14), dp(14), linePaint);
+        paint.setColor(previewHeld ? Color.WHITE : PLUM);
+        paint.setTextSize(sp(11));
+        paint.setFakeBoldText(true);
+        drawCentered(canvas, "ANTEPRIMA", previewRect.centerX(), previewRect.centerY() + sp(4));
+        paint.setFakeBoldText(false);
+
         paint.setTextSize(sp(12));
         paint.setColor(PURPLE);
-        canvas.drawText((gridSize * gridSize) + " pezzi · " + solvedCount + "/" + (gridSize * gridSize), dp(72), dp(53), paint);
-        paint.setTextSize(sp(10));
-        canvas.drawText("Pizzica per zoomare · trascina lo sfondo per spostarti", dp(72), dp(70), paint);
+        canvas.drawText("100 tessere · " + moves + (moves == 1 ? " mossa" : " mosse"), dp(16), dp(78), paint);
 
         float right = w - dp(10);
-        float controlH = dp(40);
-        float smallW = dp(42);
-        float resetW = dp(64);
-        float top = dp(20);
-        zoomInRect.set(right - smallW, top, right, top + controlH);
-        zoomResetRect.set(zoomInRect.left - dp(6) - resetW, top, zoomInRect.left - dp(6), top + controlH);
-        zoomOutRect.set(zoomResetRect.left - dp(6) - smallW, top, zoomResetRect.left - dp(6), top + controlH);
+        float controlH = dp(34);
+        float smallW = dp(36);
+        float resetW = dp(56);
+        float top = dp(59);
 
-        drawZoomButton(canvas, zoomOutRect, "−", sp(22));
-        drawZoomButton(canvas, zoomResetRect, String.format(Locale.ITALIAN, "%d%%", Math.round((zoom / baseScale) * 100)), sp(11));
-        drawZoomButton(canvas, zoomInRect, "+", sp(20));
+        zoomInRect.set(right - smallW, top, right, top + controlH);
+        zoomResetRect.set(zoomInRect.left - dp(5) - resetW, top, zoomInRect.left - dp(5), top + controlH);
+        zoomOutRect.set(zoomResetRect.left - dp(5) - smallW, top, zoomResetRect.left - dp(5), top + controlH);
+
+        drawZoomButton(canvas, zoomOutRect, "−", sp(20));
+        drawZoomButton(canvas, zoomResetRect,
+                String.format(Locale.ITALIAN, "%d%%", Math.round((zoom / baseScale) * 100)), sp(10));
+        drawZoomButton(canvas, zoomInRect, "+", sp(18));
+
+        paint.setColor(PURPLE);
+        paint.setTextSize(sp(10));
+        canvas.drawText("Tocca due tessere per scambiarle · trascina per spostarti", dp(16), dp(108), paint);
     }
 
     private void drawZoomButton(Canvas canvas, RectF r, String label, float size) {
         paint.setColor(PAPER);
-        canvas.drawRoundRect(r, dp(12), dp(12), paint);
+        canvas.drawRoundRect(r, dp(11), dp(11), paint);
+
         linePaint.setStyle(Paint.Style.STROKE);
         linePaint.setStrokeWidth(dp(1));
         linePaint.setColor(Color.argb(70, 112, 55, 91));
-        canvas.drawRoundRect(r, dp(12), dp(12), linePaint);
+        canvas.drawRoundRect(r, dp(11), dp(11), linePaint);
+
         paint.setColor(PLUM);
         paint.setTextSize(size);
         paint.setFakeBoldText(true);
@@ -340,27 +375,36 @@ public class PuzzleView extends View {
     private void drawCompletion(Canvas canvas) {
         int w = getWidth();
         int h = getHeight();
-        paint.setColor(Color.argb(145, 45, 25, 40));
+
+        paint.setColor(Color.argb(150, 45, 25, 40));
         canvas.drawRect(0, 0, w, h, paint);
 
         float cardW = Math.min(w - dp(40), dp(360));
         float cardH = dp(230);
-        RectF card = new RectF((w - cardW) / 2f, (h - cardH) / 2f, (w + cardW) / 2f, (h + cardH) / 2f);
+        RectF card = new RectF(
+                (w - cardW) / 2f,
+                (h - cardH) / 2f,
+                (w + cardW) / 2f,
+                (h + cardH) / 2f
+        );
+
         paint.setColor(PAPER);
         canvas.drawRoundRect(card, dp(24), dp(24), paint);
 
         paint.setColor(BROWN);
-        paint.setTextSize(sp(28));
+        paint.setTextSize(sp(27));
         paint.setFakeBoldText(true);
         drawCentered(canvas, "Puzzle completato!", card.centerX(), card.top + dp(58));
         paint.setFakeBoldText(false);
+
         paint.setColor(PURPLE);
         paint.setTextSize(sp(14));
-        drawCentered(canvas, (gridSize * gridSize) + " pezzi sistemati", card.centerX(), card.top + dp(90));
+        drawCentered(canvas, moves + (moves == 1 ? " mossa" : " mosse"), card.centerX(), card.top + dp(91));
 
         float gap = dp(10);
         float bw = (cardW - dp(48) - gap) / 2f;
         float by = card.bottom - dp(70);
+
         completionMenuRect.set(card.left + dp(24), by, card.left + dp(24) + bw, by + dp(46));
         completionNextRect.set(completionMenuRect.right + gap, by, completionMenuRect.right + gap + bw, by + dp(46));
 
@@ -374,51 +418,28 @@ public class PuzzleView extends View {
         paint.setColor(BROWN);
         drawCentered(canvas, "Menu", completionMenuRect.centerX(), completionMenuRect.centerY() + sp(5));
         paint.setColor(Color.WHITE);
-        drawCentered(canvas, selectedPuzzle < images.length - 1 ? "Prossimo" : "Ricomincia", completionNextRect.centerX(), completionNextRect.centerY() + sp(5));
+        drawCentered(canvas, selectedPuzzle < images.length - 1 ? "Prossimo" : "Rigioca",
+                completionNextRect.centerX(), completionNextRect.centerY() + sp(5));
         paint.setFakeBoldText(false);
     }
 
     private void startPuzzle(int puzzleIndex) {
         selectedPuzzle = puzzleIndex;
-        gridSize = (int) Math.round(Math.sqrt(difficultyPieces[selectedDifficulty]));
-        solvedCount = 0;
+        selectedSlot = -1;
+        downSlot = -1;
+        moves = 0;
         complete = false;
-        pieces.clear();
+        previewHeld = false;
 
-        Bitmap bitmap = images[selectedPuzzle];
-        int srcW = bitmap.getWidth() / gridSize;
-        int srcH = bitmap.getHeight() / gridSize;
-        float tile = BOARD_SIZE / gridSize;
+        List<Integer> shuffled = new ArrayList<>();
+        for (int i = 0; i < TILE_COUNT; i++) shuffled.add(i);
 
-        List<Integer> slots = new ArrayList<>();
-        for (int i = 0; i < gridSize * gridSize; i++) slots.add(i);
-        Collections.shuffle(slots, random);
+        do {
+            Collections.shuffle(shuffled, random);
+        } while (isSolved(shuffled));
 
-        for (int row = 0; row < gridSize; row++) {
-            for (int col = 0; col < gridSize; col++) {
-                int index = row * gridSize + col;
-                int slot = slots.get(index);
-                int sr = slot / gridSize;
-                int sc = slot % gridSize;
+        for (int i = 0; i < TILE_COUNT; i++) board[i] = shuffled.get(i);
 
-                int l = col * srcW;
-                int t = row * srcH;
-                int r = (col == gridSize - 1) ? bitmap.getWidth() : (col + 1) * srcW;
-                int b = (row == gridSize - 1) ? bitmap.getHeight() : (row + 1) * srcH;
-
-                Piece p = new Piece();
-                p.src = new Rect(l, t, r, b);
-                p.targetX = BOARD_X + col * tile;
-                p.targetY = BOARD_Y + row * tile;
-                p.homeX = TRAY_X + sc * tile;
-                p.homeY = TRAY_Y + sr * tile;
-                p.x = p.homeX;
-                p.y = p.homeY;
-                pieces.add(p);
-            }
-        }
-
-        Collections.shuffle(pieces, random);
         mode = MODE_PUZZLE;
         post(new Runnable() {
             @Override
@@ -429,9 +450,73 @@ public class PuzzleView extends View {
         });
     }
 
+    private boolean isSolved(List<Integer> values) {
+        for (int i = 0; i < values.size(); i++) {
+            if (values.get(i) != i) return false;
+        }
+        return true;
+    }
+
+    private boolean isBoardSolved() {
+        for (int i = 0; i < TILE_COUNT; i++) {
+            if (board[i] != i) return false;
+        }
+        return true;
+    }
+
+    private void handleTileTap(int slot) {
+        if (slot < 0 || slot >= TILE_COUNT || complete) return;
+
+        if (selectedSlot < 0) {
+            selectedSlot = slot;
+            performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
+            invalidate();
+            return;
+        }
+
+        if (selectedSlot == slot) {
+            selectedSlot = -1;
+            invalidate();
+            return;
+        }
+
+        int tmp = board[selectedSlot];
+        board[selectedSlot] = board[slot];
+        board[slot] = tmp;
+
+        selectedSlot = -1;
+        moves++;
+        performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
+
+        if (isBoardSolved()) {
+            complete = true;
+            prefs.edit().putBoolean("done_" + selectedPuzzle, true).apply();
+            performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+        }
+
+        invalidate();
+    }
+
+    private int slotAtWorld(float wx, float wy) {
+        if (wx < BOARD_X || wy < BOARD_Y || wx >= BOARD_X + BOARD_SIZE || wy >= BOARD_Y + BOARD_SIZE) {
+            return -1;
+        }
+
+        float tile = BOARD_SIZE / GRID;
+        int col = (int) ((wx - BOARD_X) / tile);
+        int row = (int) ((wy - BOARD_Y) / tile);
+
+        if (col < 0 || col >= GRID || row < 0 || row >= GRID) return -1;
+        return row * GRID + col;
+    }
+
     private void resetCamera() {
-        if (getWidth() <= 0) return;
-        baseScale = Math.max(0.1f, (getWidth() - dp(16)) / WORLD_W);
+        if (getWidth() <= 0 || getHeight() <= 0) return;
+
+        float widthScale = (getWidth() - dp(16)) / WORLD_W;
+        float heightScale = (getHeight() - headerH - dp(16)) / WORLD_H;
+        baseScale = Math.max(0.1f, Math.min(widthScale, heightScale));
+
         zoom = baseScale;
         panX = (getWidth() - WORLD_W * zoom) / 2f;
         panY = headerH + dp(8) - BOARD_Y * zoom;
@@ -439,35 +524,41 @@ public class PuzzleView extends View {
     }
 
     private void setZoom(float factor) {
-        float next = clamp(baseScale * factor, baseScale * 0.72f, baseScale * 4.5f);
-        float fx = getWidth() / 2f;
-        float fy = (getHeight() + headerH) / 2f;
-        float wx = (fx - panX) / zoom;
-        float wy = (fy - panY) / zoom;
-        zoom = next;
-        panX = fx - wx * zoom;
-        panY = fy - wy * zoom;
+        float oldZoom = zoom;
+        float nextZoom = clamp(baseScale * factor, baseScale * 0.75f, baseScale * 5f);
+        float focusX = getWidth() / 2f;
+        float focusY = (getHeight() + headerH) / 2f;
+
+        float worldX = (focusX - panX) / oldZoom;
+        float worldY = (focusY - panY) / oldZoom;
+
+        zoom = nextZoom;
+        panX = focusX - worldX * zoom;
+        panY = focusY - worldY * zoom;
         clampPan();
         invalidate();
     }
 
     private void nudgeZoom(float multiplier) {
-        float old = zoom;
-        float next = clamp(zoom * multiplier, baseScale * 0.72f, baseScale * 4.5f);
-        float fx = getWidth() / 2f;
-        float fy = (getHeight() + headerH) / 2f;
-        float wx = (fx - panX) / old;
-        float wy = (fy - panY) / old;
-        zoom = next;
-        panX = fx - wx * zoom;
-        panY = fy - wy * zoom;
+        float oldZoom = zoom;
+        float nextZoom = clamp(zoom * multiplier, baseScale * 0.75f, baseScale * 5f);
+        float focusX = getWidth() / 2f;
+        float focusY = (getHeight() + headerH) / 2f;
+
+        float worldX = (focusX - panX) / oldZoom;
+        float worldY = (focusY - panY) / oldZoom;
+
+        zoom = nextZoom;
+        panX = focusX - worldX * zoom;
+        panY = focusY - worldY * zoom;
         clampPan();
         invalidate();
     }
 
     private void clampPan() {
         if (getWidth() <= 0 || getHeight() <= 0) return;
-        float margin = dp(80);
+
+        float margin = dp(70);
         float contentW = WORLD_W * zoom;
         float contentH = WORLD_H * zoom;
 
@@ -479,14 +570,21 @@ public class PuzzleView extends View {
             panX = clamp(panX, minX, maxX);
         }
 
-        float minY = getHeight() - margin - contentH;
-        float maxY = headerH + margin;
-        panY = clamp(panY, minY, maxY);
+        float usableTop = headerH;
+        float usableH = getHeight() - usableTop;
+
+        if (contentH <= usableH - margin) {
+            panY = usableTop + (usableH - contentH) / 2f;
+        } else {
+            float minY = getHeight() - margin - contentH;
+            float maxY = usableTop + margin;
+            panY = clamp(panY, minY, maxY);
+        }
     }
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        if (mode == MODE_PUZZLE) scaleDetector.onTouchEvent(event);
+        if (mode == MODE_PUZZLE && !previewHeld) scaleDetector.onTouchEvent(event);
 
         float x = event.getX();
         float y = event.getY();
@@ -494,14 +592,6 @@ public class PuzzleView extends View {
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
                 if (mode == MODE_MENU) {
-                    for (int i = 0; i < difficultyRects.length; i++) {
-                        if (difficultyRects[i].contains(x, y)) {
-                            selectedDifficulty = i;
-                            performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
-                            invalidate();
-                            return true;
-                        }
-                    }
                     for (int i = 0; i < puzzleRects.length; i++) {
                         if (puzzleRects[i].contains(x, y)) {
                             startPuzzle(i);
@@ -527,122 +617,106 @@ public class PuzzleView extends View {
 
                 if (backRect.contains(x, y)) {
                     mode = MODE_MENU;
-                    pieces.clear();
+                    selectedSlot = -1;
                     invalidate();
                     return true;
                 }
-                if (zoomOutRect.contains(x, y)) {
-                    nudgeZoom(0.78f);
+
+                if (previewRect.contains(x, y)) {
+                    previewHeld = true;
+                    invalidate();
                     return true;
                 }
+
+                if (zoomOutRect.contains(x, y)) {
+                    nudgeZoom(0.8f);
+                    return true;
+                }
+
                 if (zoomResetRect.contains(x, y)) {
                     setZoom(1f);
                     return true;
                 }
+
                 if (zoomInRect.contains(x, y)) {
-                    nudgeZoom(1.28f);
+                    nudgeZoom(1.25f);
                     return true;
                 }
 
                 if (y < headerH) return true;
+
+                downTouchX = x;
+                downTouchY = y;
+                lastTouchX = x;
+                lastTouchY = y;
+                gestureMoved = false;
+                panning = false;
+
                 float wx = (x - panX) / zoom;
                 float wy = (y - panY) / zoom;
-                float tile = BOARD_SIZE / gridSize;
-                draggingPiece = findPieceAt(wx, wy, tile);
-                if (draggingPiece != null) {
-                    dragOffsetX = wx - draggingPiece.x;
-                    dragOffsetY = wy - draggingPiece.y;
-                    pieces.remove(draggingPiece);
-                    pieces.add(draggingPiece);
-                    performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
-                } else {
-                    panning = true;
-                    lastTouchX = x;
-                    lastTouchY = y;
-                }
-                invalidate();
+                downSlot = slotAtWorld(wx, wy);
                 return true;
 
             case MotionEvent.ACTION_POINTER_DOWN:
-                cancelDrag();
+                gestureMoved = true;
                 panning = false;
+                downSlot = -1;
                 return true;
 
             case MotionEvent.ACTION_MOVE:
-                if (scaleDetector.isInProgress()) return true;
-                if (draggingPiece != null && event.getPointerCount() == 1) {
-                    float mx = (x - panX) / zoom;
-                    float my = (y - panY) / zoom;
-                    draggingPiece.x = mx - dragOffsetX;
-                    draggingPiece.y = my - dragOffsetY;
-                    invalidate();
-                } else if (panning && event.getPointerCount() == 1) {
-                    panX += x - lastTouchX;
-                    panY += y - lastTouchY;
+                if (previewHeld) return true;
+                if (scaleDetector.isInProgress()) {
+                    gestureMoved = true;
+                    return true;
+                }
+
+                if (event.getPointerCount() == 1) {
+                    if (!panning) {
+                        float dxTotal = x - downTouchX;
+                        float dyTotal = y - downTouchY;
+                        if (dxTotal * dxTotal + dyTotal * dyTotal > touchSlop * touchSlop) {
+                            panning = true;
+                            gestureMoved = true;
+                            downSlot = -1;
+                        }
+                    }
+
+                    if (panning) {
+                        panX += x - lastTouchX;
+                        panY += y - lastTouchY;
+                        clampPan();
+                        invalidate();
+                    }
+
                     lastTouchX = x;
                     lastTouchY = y;
-                    clampPan();
-                    invalidate();
                 }
                 return true;
 
             case MotionEvent.ACTION_UP:
-                if (draggingPiece != null) {
-                    tryDrop(draggingPiece);
-                    draggingPiece = null;
+                if (previewHeld) {
+                    previewHeld = false;
                     invalidate();
+                    return true;
                 }
+
+                if (!gestureMoved && !panning && downSlot >= 0) {
+                    handleTileTap(downSlot);
+                }
+
                 panning = false;
+                downSlot = -1;
                 return true;
 
             case MotionEvent.ACTION_CANCEL:
-                cancelDrag();
+                previewHeld = false;
                 panning = false;
+                downSlot = -1;
                 invalidate();
                 return true;
         }
+
         return true;
-    }
-
-    private Piece findPieceAt(float wx, float wy, float tile) {
-        for (int i = pieces.size() - 1; i >= 0; i--) {
-            Piece p = pieces.get(i);
-            if (p.locked) continue;
-            if (wx >= p.x && wx <= p.x + tile && wy >= p.y && wy <= p.y + tile) return p;
-        }
-        return null;
-    }
-
-    private void tryDrop(Piece p) {
-        float tile = BOARD_SIZE / gridSize;
-        float cx = p.x + tile / 2f;
-        float cy = p.y + tile / 2f;
-        float tx = p.targetX + tile / 2f;
-        float ty = p.targetY + tile / 2f;
-        float tolerance = tile * 0.46f;
-        if (Math.abs(cx - tx) <= tolerance && Math.abs(cy - ty) <= tolerance) {
-            p.x = p.targetX;
-            p.y = p.targetY;
-            p.locked = true;
-            solvedCount++;
-            performHapticFeedback(HapticFeedbackConstants.CONFIRM);
-            if (solvedCount == pieces.size()) {
-                complete = true;
-                prefs.edit().putBoolean("done_" + selectedPuzzle, true).apply();
-                performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
-            }
-        } else {
-            p.x = p.homeX;
-            p.y = p.homeY;
-        }
-    }
-
-    private void cancelDrag() {
-        if (draggingPiece != null && !draggingPiece.locked) {
-            draggingPiece.x = draggingPiece.homeX;
-            draggingPiece.y = draggingPiece.homeY;
-        }
-        draggingPiece = null;
     }
 
     @Override
@@ -663,18 +737,7 @@ public class PuzzleView extends View {
         return value * scaledDensity;
     }
 
-    private float clamp(float v, float min, float max) {
-        return Math.max(min, Math.min(max, v));
-    }
-
-    private static class Piece {
-        Rect src;
-        float x;
-        float y;
-        float homeX;
-        float homeY;
-        float targetX;
-        float targetY;
-        boolean locked;
+    private float clamp(float value, float min, float max) {
+        return Math.max(min, Math.min(max, value));
     }
 }
