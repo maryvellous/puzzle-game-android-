@@ -23,3 +23,6 @@ Richiede JDK 17, Android SDK 35 e Gradle 8.9.
 ```bash
 gradle :app:assembleDebug
 ```
+
+
+<!-- CI diagnostic -->
