@@ -39,22 +39,22 @@ jobs:
       - name: Prepare release asset
         run: |
           mkdir -p release
-          cp app/build/outputs/apk/debug/app-debug.apk release/rovina-puzzle-v0.2.0.apk
+          cp app/build/outputs/apk/debug/app-debug.apk release/rovina-puzzle-v0.3.0.apk
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rovina-puzzle-v0.2.0
-          path: release/rovina-puzzle-v0.2.0.apk
+          name: rovina-puzzle-v0.3.0
+          path: release/rovina-puzzle-v0.3.0.apk
 
       - name: Create or update GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: v0.2.0
-          APK: release/rovina-puzzle-v0.2.0.apk
+          TAG: v0.3.0
+          APK: release/rovina-puzzle-v0.3.0.apk
         run: |
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$APK" --clobber
           else
-            gh release create "$TAG" "$APK" --target "$GITHUB_SHA" --title "Rovina Puzzle v0.2.0" --notes "Puzzle a scambio: 5 immagini, griglia 10x10 da 100 tessere, selezione di due tessere per scambiarle, niente immagine fantasma, zoom/pan e anteprima tenendo premuto il pulsante."
+            gh release create "$TAG" "$APK" --target "$GITHUB_SHA" --title "Rovina Puzzle v0.3.0" --notes "Puzzle a scambio 10x10 con salvataggio automatico e ripresa dei puzzle non finiti. Nuova schermata di completamento sobria con immagine intera, conteggio mosse e accesso al puzzle successivo."
           fi
