@@ -41,6 +41,7 @@ public class PuzzleView extends View {
     private static final int PURPLE = Color.rgb(91, 48, 84);
     private static final int BROWN = Color.rgb(82, 53, 47);
     private static final int GREEN = Color.rgb(79, 125, 91);
+    private static final int MUTED = Color.rgb(151, 122, 112);
 
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
     private final Paint linePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -61,6 +62,7 @@ public class PuzzleView extends View {
     private boolean previewHeld = false;
     private boolean panning = false;
     private boolean gestureMoved = false;
+    private long completionStartedAt = 0L;
 
     private float density;
     private float scaledDensity;
@@ -165,7 +167,7 @@ public class PuzzleView extends View {
         float availableH = h - top - bottomMargin;
         float rowH = (availableH - rowGap * 2) / 3f;
         float cardH = Math.max(dp(150), rowH);
-        float imageSize = Math.min(colW, cardH - dp(34));
+        float imageSize = Math.min(colW, cardH - dp(38));
         float cardW = imageSize;
 
         for (int i = 0; i < images.length; i++) {
@@ -175,7 +177,7 @@ public class PuzzleView extends View {
             float cardTop = top + row * (rowH + rowGap);
 
             RectF card = puzzleRects[i];
-            card.set(left, cardTop, left + cardW, cardTop + imageSize + dp(30));
+            card.set(left, cardTop, left + cardW, cardTop + imageSize + dp(34));
 
             paint.setColor(PAPER);
             canvas.drawRoundRect(card, dp(16), dp(16), paint);
@@ -188,15 +190,27 @@ public class PuzzleView extends View {
             canvas.drawBitmap(images[i], null, imageRect, paint);
             canvas.restore();
 
+            boolean saved = hasSavedPuzzle(i);
+            boolean done = prefs.getBoolean("done_" + i, false);
+
             paint.setColor(BROWN);
             paint.setTextSize(sp(13));
             paint.setFakeBoldText(true);
-            canvas.drawText("Puzzle " + (i + 1), card.left + dp(10), card.bottom - dp(9), paint);
+            canvas.drawText(saved ? "Continua Puzzle " + (i + 1) : "Puzzle " + (i + 1),
+                    card.left + dp(10), card.bottom - dp(12), paint);
             paint.setFakeBoldText(false);
 
-            if (prefs.getBoolean("done_" + i, false)) {
+            if (saved) {
+                int savedMoves = prefs.getInt("save_moves_" + i, 0);
+                paint.setColor(MUTED);
+                paint.setTextSize(sp(9));
+                canvas.drawText(savedMoves + (savedMoves == 1 ? " mossa salvata" : " mosse salvate"),
+                        card.left + dp(10), card.bottom - dp(2), paint);
+            }
+
+            if (done) {
                 float cx = card.right - dp(18);
-                float cy = card.bottom - dp(15);
+                float cy = card.bottom - dp(17);
                 paint.setColor(GREEN);
                 canvas.drawCircle(cx, cy, dp(10), paint);
                 paint.setColor(Color.WHITE);
@@ -219,11 +233,11 @@ public class PuzzleView extends View {
         paint.setColor(PAPER);
         canvas.drawRect(boardRect, paint);
 
-        if (previewHeld) {
+        if (complete || previewHeld) {
             canvas.drawBitmap(images[selectedPuzzle], null, boardRect, paint);
             linePaint.setStyle(Paint.Style.STROKE);
             linePaint.setStrokeWidth(Math.max(2f, 3f / zoom));
-            linePaint.setColor(PLUM);
+            linePaint.setColor(complete ? Color.argb(110, 82, 53, 47) : PLUM);
             canvas.drawRect(boardRect, linePaint);
         } else {
             drawShuffledBoard(canvas);
@@ -231,8 +245,8 @@ public class PuzzleView extends View {
 
         canvas.restore();
 
-        drawHeader(canvas);
-        if (complete) drawCompletion(canvas);
+        if (!complete) drawHeader(canvas);
+        else drawCompletion(canvas);
     }
 
     private void drawShuffledBoard(Canvas canvas) {
@@ -353,7 +367,7 @@ public class PuzzleView extends View {
 
         paint.setColor(PURPLE);
         paint.setTextSize(sp(10));
-        canvas.drawText("Tocca due tessere per scambiarle · trascina per spostarti", dp(16), dp(108), paint);
+        canvas.drawText("Tocca due tessere per scambiarle · i progressi si salvano da soli", dp(16), dp(108), paint);
     }
 
     private void drawZoomButton(Canvas canvas, RectF r, String label, float size) {
@@ -376,44 +390,76 @@ public class PuzzleView extends View {
         int w = getWidth();
         int h = getHeight();
 
-        paint.setColor(Color.argb(150, 45, 25, 40));
+        float progress = Math.min(1f, (System.currentTimeMillis() - completionStartedAt) / 420f);
+        float eased = 1f - (float) Math.pow(1f - progress, 3);
+
+        paint.setColor(Color.argb((int) (92 * eased), 54, 34, 47));
         canvas.drawRect(0, 0, w, h, paint);
 
-        float cardW = Math.min(w - dp(40), dp(360));
-        float cardH = dp(230);
+        float cardW = Math.min(w - dp(32), dp(390));
+        float cardH = Math.min(dp(420), h - dp(56));
+        float finalTop = (h - cardH) / 2f;
+        float top = finalTop + dp(28) * (1f - eased);
+
         RectF card = new RectF(
                 (w - cardW) / 2f,
-                (h - cardH) / 2f,
+                top,
                 (w + cardW) / 2f,
-                (h + cardH) / 2f
+                top + cardH
         );
 
-        paint.setColor(PAPER);
-        canvas.drawRoundRect(card, dp(24), dp(24), paint);
+        paint.setColor(Color.argb((int) (255 * eased), 255, 249, 236));
+        canvas.drawRoundRect(card, dp(26), dp(26), paint);
+
+        float imageSize = Math.min(cardW - dp(44), dp(230));
+        RectF imageRect = new RectF(
+                card.centerX() - imageSize / 2f,
+                card.top + dp(26),
+                card.centerX() + imageSize / 2f,
+                card.top + dp(26) + imageSize
+        );
+
+        canvas.save();
+        Path clip = new Path();
+        clip.addRoundRect(imageRect, dp(18), dp(18), Path.Direction.CW);
+        canvas.clipPath(clip);
+        canvas.drawBitmap(images[selectedPuzzle], null, imageRect, paint);
+        canvas.restore();
+
+        linePaint.setStyle(Paint.Style.STROKE);
+        linePaint.setStrokeWidth(dp(1));
+        linePaint.setColor(Color.argb((int) (55 * eased), 82, 53, 47));
+        canvas.drawRoundRect(imageRect, dp(18), dp(18), linePaint);
+
+        paint.setColor(PLUM);
+        paint.setTextSize(sp(11));
+        paint.setFakeBoldText(true);
+        drawCentered(canvas, "COMPLETATO", card.centerX(), imageRect.bottom + dp(34));
 
         paint.setColor(BROWN);
-        paint.setTextSize(sp(27));
-        paint.setFakeBoldText(true);
-        drawCentered(canvas, "Puzzle completato!", card.centerX(), card.top + dp(58));
-        paint.setFakeBoldText(false);
+        paint.setTextSize(sp(24));
+        drawCentered(canvas, "Puzzle " + (selectedPuzzle + 1), card.centerX(), imageRect.bottom + dp(66));
 
-        paint.setColor(PURPLE);
-        paint.setTextSize(sp(14));
-        drawCentered(canvas, moves + (moves == 1 ? " mossa" : " mosse"), card.centerX(), card.top + dp(91));
+        paint.setFakeBoldText(false);
+        paint.setColor(MUTED);
+        paint.setTextSize(sp(13));
+        drawCentered(canvas, moves + (moves == 1 ? " mossa" : " mosse"),
+                card.centerX(), imageRect.bottom + dp(91));
 
         float gap = dp(10);
-        float bw = (cardW - dp(48) - gap) / 2f;
-        float by = card.bottom - dp(70);
+        float sidePadding = dp(22);
+        float bw = (cardW - sidePadding * 2 - gap) / 2f;
+        float by = card.bottom - dp(66);
 
-        completionMenuRect.set(card.left + dp(24), by, card.left + dp(24) + bw, by + dp(46));
-        completionNextRect.set(completionMenuRect.right + gap, by, completionMenuRect.right + gap + bw, by + dp(46));
+        completionMenuRect.set(card.left + sidePadding, by, card.left + sidePadding + bw, by + dp(44));
+        completionNextRect.set(completionMenuRect.right + gap, by, completionMenuRect.right + gap + bw, by + dp(44));
 
-        paint.setColor(Color.rgb(231, 216, 192));
-        canvas.drawRoundRect(completionMenuRect, dp(15), dp(15), paint);
+        paint.setColor(Color.rgb(235, 221, 199));
+        canvas.drawRoundRect(completionMenuRect, dp(14), dp(14), paint);
         paint.setColor(PLUM);
-        canvas.drawRoundRect(completionNextRect, dp(15), dp(15), paint);
+        canvas.drawRoundRect(completionNextRect, dp(14), dp(14), paint);
 
-        paint.setTextSize(sp(14));
+        paint.setTextSize(sp(13));
         paint.setFakeBoldText(true);
         paint.setColor(BROWN);
         drawCentered(canvas, "Menu", completionMenuRect.centerX(), completionMenuRect.centerY() + sp(5));
@@ -421,24 +467,31 @@ public class PuzzleView extends View {
         drawCentered(canvas, selectedPuzzle < images.length - 1 ? "Prossimo" : "Rigioca",
                 completionNextRect.centerX(), completionNextRect.centerY() + sp(5));
         paint.setFakeBoldText(false);
+
+        if (progress < 1f) postInvalidateOnAnimation();
     }
 
     private void startPuzzle(int puzzleIndex) {
         selectedPuzzle = puzzleIndex;
         selectedSlot = -1;
         downSlot = -1;
-        moves = 0;
         complete = false;
         previewHeld = false;
+        completionStartedAt = 0L;
 
-        List<Integer> shuffled = new ArrayList<>();
-        for (int i = 0; i < TILE_COUNT; i++) shuffled.add(i);
+        if (!loadSavedPuzzle(puzzleIndex)) {
+            moves = 0;
 
-        do {
-            Collections.shuffle(shuffled, random);
-        } while (isSolved(shuffled));
+            List<Integer> shuffled = new ArrayList<>();
+            for (int i = 0; i < TILE_COUNT; i++) shuffled.add(i);
 
-        for (int i = 0; i < TILE_COUNT; i++) board[i] = shuffled.get(i);
+            do {
+                Collections.shuffle(shuffled, random);
+            } while (isSolved(shuffled));
+
+            for (int i = 0; i < TILE_COUNT; i++) board[i] = shuffled.get(i);
+            saveCurrentPuzzle();
+        }
 
         mode = MODE_PUZZLE;
         post(new Runnable() {
@@ -490,11 +543,84 @@ public class PuzzleView extends View {
 
         if (isBoardSolved()) {
             complete = true;
+            completionStartedAt = System.currentTimeMillis();
+            clearSavedPuzzle(selectedPuzzle);
             prefs.edit().putBoolean("done_" + selectedPuzzle, true).apply();
             performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+        } else {
+            saveCurrentPuzzle();
         }
 
         invalidate();
+    }
+
+    private boolean hasSavedPuzzle(int puzzleIndex) {
+        return prefs.getBoolean("save_active_" + puzzleIndex, false);
+    }
+
+    private void saveCurrentPuzzle() {
+        if (complete || mode == MODE_MENU && completionStartedAt > 0L) return;
+
+        StringBuilder builder = new StringBuilder(TILE_COUNT * 3);
+        for (int i = 0; i < TILE_COUNT; i++) {
+            if (i > 0) builder.append(',');
+            builder.append(board[i]);
+        }
+
+        prefs.edit()
+                .putBoolean("save_active_" + selectedPuzzle, true)
+                .putString("save_board_" + selectedPuzzle, builder.toString())
+                .putInt("save_moves_" + selectedPuzzle, moves)
+                .apply();
+    }
+
+    private boolean loadSavedPuzzle(int puzzleIndex) {
+        if (!hasSavedPuzzle(puzzleIndex)) return false;
+
+        String saved = prefs.getString("save_board_" + puzzleIndex, null);
+        if (saved == null) {
+            clearSavedPuzzle(puzzleIndex);
+            return false;
+        }
+
+        String[] parts = saved.split(",");
+        if (parts.length != TILE_COUNT) {
+            clearSavedPuzzle(puzzleIndex);
+            return false;
+        }
+
+        boolean[] seen = new boolean[TILE_COUNT];
+        try {
+            for (int i = 0; i < TILE_COUNT; i++) {
+                int value = Integer.parseInt(parts[i]);
+                if (value < 0 || value >= TILE_COUNT || seen[value]) {
+                    clearSavedPuzzle(puzzleIndex);
+                    return false;
+                }
+                seen[value] = true;
+                board[i] = value;
+            }
+        } catch (NumberFormatException e) {
+            clearSavedPuzzle(puzzleIndex);
+            return false;
+        }
+
+        moves = Math.max(0, prefs.getInt("save_moves_" + puzzleIndex, 0));
+
+        if (isBoardSolved()) {
+            clearSavedPuzzle(puzzleIndex);
+            return false;
+        }
+
+        return true;
+    }
+
+    private void clearSavedPuzzle(int puzzleIndex) {
+        prefs.edit()
+                .remove("save_active_" + puzzleIndex)
+                .remove("save_board_" + puzzleIndex)
+                .remove("save_moves_" + puzzleIndex)
+                .apply();
     }
 
     private int slotAtWorld(float wx, float wy) {
@@ -609,13 +735,14 @@ public class PuzzleView extends View {
                     }
                     if (completionNextRect.contains(x, y)) {
                         int next = selectedPuzzle < images.length - 1 ? selectedPuzzle + 1 : selectedPuzzle;
-                        startPuzzle(next);
+                        startFreshPuzzle(next);
                         return true;
                     }
                     return true;
                 }
 
                 if (backRect.contains(x, y)) {
+                    saveCurrentPuzzle();
                     mode = MODE_MENU;
                     selectedSlot = -1;
                     invalidate();
@@ -717,6 +844,36 @@ public class PuzzleView extends View {
         }
 
         return true;
+    }
+
+    private void startFreshPuzzle(int puzzleIndex) {
+        clearSavedPuzzle(puzzleIndex);
+        selectedPuzzle = puzzleIndex;
+        selectedSlot = -1;
+        downSlot = -1;
+        moves = 0;
+        complete = false;
+        previewHeld = false;
+        completionStartedAt = 0L;
+
+        List<Integer> shuffled = new ArrayList<>();
+        for (int i = 0; i < TILE_COUNT; i++) shuffled.add(i);
+
+        do {
+            Collections.shuffle(shuffled, random);
+        } while (isSolved(shuffled));
+
+        for (int i = 0; i < TILE_COUNT; i++) board[i] = shuffled.get(i);
+        saveCurrentPuzzle();
+
+        mode = MODE_PUZZLE;
+        post(new Runnable() {
+            @Override
+            public void run() {
+                resetCamera();
+                invalidate();
+            }
+        });
     }
 
     @Override
