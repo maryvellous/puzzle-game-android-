@@ -59,6 +59,42 @@ final class BlobWorld {
         return options[random.nextInt(options.length)];
     }
 
+    /**
+     * A short burst of acceleration moves the blobs as if the lamp had been
+     * jolted. Horizontal sensor X runs right; screen Y runs downward, opposite
+     * to accelerometer Y. Z-only shakes still stir the liquid via turbulence.
+     */
+    void shake(float sensorX, float sensorY, float sensorZ) {
+        if (gameOver || blobs.isEmpty()) return;
+        float magnitude = (float) Math.sqrt(sensorX * sensorX + sensorY * sensorY
+                + sensorZ * sensorZ);
+        float amplitude = clamp(magnitude / 8f, .55f, 1.75f);
+        float inertialX = clamp(-sensorX * 25f, -320f, 320f);
+        float inertialY = clamp(sensorY * 25f, -320f, 320f);
+        float depth = Math.min(150f, Math.abs(sensorZ) * 22f);
+        for (Blob b : blobs) {
+            float sizeFactor = 1.15f - b.tier * .065f;
+            // Shared inertial motion plus small independent swirls prevents
+            // every bubble from translating as a single rigid block.
+            float spread = 37f * amplitude;
+            float swirlX = (random.nextFloat() * 2f - 1f) * spread;
+            float swirlY = (random.nextFloat() * 2f - 1f) * spread;
+            float dx = b.x - WIDTH * .5f;
+            float dy = b.y - (TOP + bottom()) * .5f;
+            float length = Math.max(35f, (float) Math.hypot(dx, dy));
+            float outwardX = dx / length * depth * amplitude;
+            float outwardY = dy / length * depth * amplitude;
+            float impulseX = (inertialX + swirlX + outwardX) * sizeFactor;
+            float impulseY = (inertialY + swirlY + outwardY) * sizeFactor;
+            b.vx = clamp(b.vx + impulseX, -430f, 430f);
+            b.vy = clamp(b.vy + impulseY, -430f, 430f);
+            float impulseLength = (float) Math.hypot(impulseX, impulseY);
+            float nx = impulseLength > .01f ? impulseX / impulseLength : 1f;
+            float ny = impulseLength > .01f ? impulseY / impulseLength : 0f;
+            b.bump(nx, ny, 105f * amplitude);
+        }
+    }
+
     boolean canLaunch(float x) {
         if (gameOver || blobs.size() > 75) return false;
         float r = Blob.RADII[nextTier];

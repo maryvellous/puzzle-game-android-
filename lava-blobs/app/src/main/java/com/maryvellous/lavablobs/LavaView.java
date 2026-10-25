@@ -26,10 +26,18 @@ import java.util.Random;
 public final class LavaView extends View {
     private static final float W = BlobWorld.WIDTH;
     private static final int BACKGROUND = Color.rgb(10, 9, 31);
+    // Deliberately varied colours, not nine nearly identical dark purples.
+    // The palette stays between pale blue, indigo, lavender and violet.
     private static final int[] PURPLES = {
-            0xFF30216F, 0xFF3D278D, 0xFF4D32A8,
-            0xFF5E3BC1, 0xFF7048D0, 0xFF8557DE,
-            0xFF996BE9, 0xFFAF87F1, 0xFFC4A1F9
+            0xFF4347C7, // indaco brillante
+            0xFF9DCEFF, // azzurro chiaro
+            0xFF5A35C7, // indaco profondo
+            0xFFCAAFFF, // lavanda
+            0xFF7831D5, // viola intenso
+            0xFF728DFA, // pervinca azzurra
+            0xFF512AA8, // viola scuro
+            0xFFB581F0, // lilla
+            0xFF9250EB  // ametista
     };
     private final BlobWorld world = new BlobWorld(new Random());
     private final Random random = new Random();
@@ -79,13 +87,19 @@ public final class LavaView extends View {
         line.setStyle(Paint.Style.STROKE);
         for (int i = 0; i < PURPLES.length; i++) {
             float r = Blob.RADII[i];
-            int soft = blend(PURPLES[i], 0xFFE1CAFF, .52f);
-            int dark = blend(PURPLES[i], 0xFF151039, .49f);
+            int soft = blend(PURPLES[i], 0xFFF4EBFF, .32f);
+            int dark = blend(PURPLES[i], 0xFF151039, .28f);
             blobShaders[i] = new RadialGradient(
                     -r * .35f, -r * .40f, r * 1.75f,
                     new int[] {soft, PURPLES[i], dark},
                     new float[] {0f, .50f, 1f}, Shader.TileMode.CLAMP);
         }
+    }
+
+    /** Called by the activity's sensor listener on the UI thread. */
+    void shake(float sensorX, float sensorY, float sensorZ) {
+        world.shake(sensorX, sensorY, sensorZ);
+        invalidate();
     }
 
     private float scale() {
@@ -317,7 +331,7 @@ public final class LavaView extends View {
         paint.setColor(0x443D2D75);
         c.drawRoundRect(new RectF(42, world.bottom()+34, 378, h-20), 28, 28, paint);
         drawNextBubble(c, aimX, launcher);
-        label(c, "TRASCINA E RILASCIA", 210, h-23, 12, 0xFFC9B9ED, true);
+        label(c, "TRASCINA · RILASCIA · SCUOTI", 210, h-23, 11, 0xFFC9B9ED, true);
         if (blockedFlash > 0f) {
             label(c, "SPOSTATI: QUI NON C'È SPAZIO",
                     210, world.bottom()-19, 12,

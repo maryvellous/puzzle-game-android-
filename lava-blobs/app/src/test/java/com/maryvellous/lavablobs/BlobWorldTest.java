@@ -107,6 +107,49 @@ public class BlobWorldTest {
                 1, world.blobs.size());
     }
 
+    @Test public void shakeStirsAndSquishesBlobsWithoutChangingTheirTier() {
+        BlobWorld world = new BlobWorld(new Random(6));
+        Blob a = new Blob(150, 370, 0, new Random(2));
+        Blob b = new Blob(270, 390, 4, new Random(3));
+        a.scale = b.scale = 1f;
+        world.blobs.add(a);
+        world.blobs.add(b);
+        world.shake(9f, 0f, 0f);
+        assertTrue("Acceleration must cause actual movement, not just an animation",
+                a.vx < -100f && b.vx < -50f);
+        assertEquals(0, a.tier);
+        assertEquals(4, b.tier);
+        for (int i = 0; i < 10; i++) world.tick(.016f);
+        assertTrue("The shake must excite elastic perimeter nodes",
+                hasAnyDeformation(a));
+    }
+
+    @Test public void depthOnlyShakeMovesBlobsToo() {
+        BlobWorld world = new BlobWorld(new Random(6));
+        Blob b = new Blob(110, 400, 2, new Random(4));
+        b.vx = b.vy = 0;
+        world.blobs.add(b);
+        world.shake(0f, 0f, 8f);
+        assertTrue(Math.abs(b.vx) + Math.abs(b.vy) > 3f);
+    }
+
+    @Test public void shakeDoesNotChangeFinishedGame() {
+        BlobWorld world = new BlobWorld(new Random(6));
+        Blob b = new Blob(110, 400, 2, new Random(4));
+        world.blobs.add(b);
+        world.gameOver = true;
+        world.shake(12, 12, 12);
+        assertEquals(0f, b.vx, .001f);
+        assertEquals(0f, b.vy, .001f);
+    }
+
+    private static boolean hasAnyDeformation(Blob b) {
+        for (float v : b.deformation) {
+            if (Math.abs(v) > .25f) return true;
+        }
+        return false;
+    }
+
     @Test public void resetClearsProgress() {
         BlobWorld world = new BlobWorld(new Random(8));
         world.nextTier = 2;
