@@ -135,6 +135,7 @@ public final class LavaView extends View {
         drawVessel(canvas);
         drawFloatingSpecks(canvas);
         drawWaves(canvas);
+        drawAdhesions(canvas);
         for (Blob b : world.blobs) drawBlob(canvas, b);
         drawDroplets(canvas);
         drawVesselRim(canvas);
@@ -192,15 +193,12 @@ public final class LavaView extends View {
 
     private void drawBlob(Canvas canvas, Blob b) {
         float r = b.radius();
-        float currentTime = world.time;
         for (int i = 0; i < Blob.NODES; i++) {
-            float theta = (float) (i * Math.PI * 2 / Blob.NODES);
-            float radial = b.surfaceRadius(i, currentTime);
-            xx[i] = b.x + (float) Math.cos(theta) * radial;
-            yy[i] = b.y + (float) Math.sin(theta) * radial;
+            xx[i] = b.px[i];
+            yy[i] = b.py[i];
         }
-        // Catmull-Rom to cubic Bézier: the drawn contour passes through
-        // exactly the 20 nodes whose radial positions drive physical contacts.
+        // The silhouette is the real positional mesh, not a visual warp.
+        // Short smoothing tangents avoid inventing distant overshooting lobes.
         blobPath.reset();
         blobPath.moveTo(xx[0], yy[0]);
         for (int i = 0; i < Blob.NODES; i++) {
@@ -208,10 +206,10 @@ public final class LavaView extends View {
             int next = (i + 1) % Blob.NODES;
             int after = (i + 2) % Blob.NODES;
             blobPath.cubicTo(
-                    xx[i] + (xx[next] - xx[prev]) / 6f,
-                    yy[i] + (yy[next] - yy[prev]) / 6f,
-                    xx[next] - (xx[after] - xx[i]) / 6f,
-                    yy[next] - (yy[after] - yy[i]) / 6f,
+                    xx[i] + (xx[next] - xx[prev]) / 9f,
+                    yy[i] + (yy[next] - yy[prev]) / 9f,
+                    xx[next] - (xx[after] - xx[i]) / 9f,
+                    yy[next] - (yy[after] - yy[i]) / 9f,
                     xx[next], yy[next]);
         }
         blobPath.close();
@@ -226,6 +224,25 @@ public final class LavaView extends View {
         line.setColor(blend(PURPLES[b.tier], 0xFFF1E9FF, .24f));
         line.setStrokeWidth(Math.max(1.0f, r * .020f));
         canvas.drawPath(blobPath, line);
+    }
+
+    private void drawAdhesions(Canvas canvas) {
+        // Subtle coloured filaments appear between different-tier blobs as
+        // they part. They are tied to actual physical sticky particle links.
+        paint.setShader(null);
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeCap(Paint.Cap.ROUND);
+        for (BlobWorld.Adhesion link : world.adhesions) {
+            float d=link.length();
+            if(d<4.5f||d>25f)continue;
+            float alpha=(1f-link.age/.36f)*(.85f-(d-4.5f)/50f);
+            paint.setColor(withAlpha(PURPLES[link.a.tier],(int)(220f*alpha)));
+            paint.setStrokeWidth(Math.max(1.2f,4.1f-d*.12f));
+            canvas.drawLine(link.a.px[link.ai],link.a.py[link.ai],
+                    link.b.px[link.bi],link.b.py[link.bi],paint);
+        }
+        paint.setStrokeCap(Paint.Cap.BUTT);
+        paint.setStyle(Paint.Style.FILL);
     }
 
     private void drawWaves(Canvas c) {

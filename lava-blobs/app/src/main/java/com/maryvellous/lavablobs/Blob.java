@@ -3,125 +3,165 @@ package com.maryvellous.lavablobs;
 import java.util.Random;
 
 /**
- * An independently animated, 32-node elastic perimeter around a moving mass.
- * Collisions press the perimeter inward; neighbour springs redistribute the
- * displacement, which decays gradually rather than snapping to a circle.
+ * A closed 24-particle, two-dimensional pressure membrane.
+ *
+ * Every visible vertex has its own position and velocity. Springs constrain
+ * neighbour distances, an area constraint represents internal fluid pressure,
+ * and collisions directly move particles rather than deforming a fake ring
+ * around an invisible circle. There are NO radial displacement limits or
+ * rigid circular hitboxes in this class.
  */
 final class Blob {
     static final float[] RADII = {18f, 23f, 29f, 36f, 45f, 56f, 69f, 84f, 99f};
-    static final int NODES = 32;
+    static final int NODES = 24;
+    private static final float TWO_PI = (float) (Math.PI * 2);
 
-    float x, y, vx, vy, age;
-    float scale = 0.70f;
     final int tier;
-    final float[] deformation = new float[NODES];
-    private final float[] speed = new float[NODES];
-    private final float phase;
+    final float[] px = new float[NODES], py = new float[NODES];
+    final float[] vx = new float[NODES], vy = new float[NODES];
+    private final float[] lastX = new float[NODES], lastY = new float[NODES];
 
-    Blob(float x, float y, int tier, Random random) {
-        this.x = x;
-        this.y = y;
+    float x, y, age, radiusTarget, launchScale;
+
+    Blob(float centerX, float centerY, int tier, Random random) {
+        this(centerX, centerY, tier, 1f);
+    }
+
+    Blob(float centerX, float centerY, int tier, float initialScale) {
         this.tier = tier;
-        phase = random.nextFloat() * 6.2831853f;
+        launchScale = Math.max(.65f, Math.min(1f, initialScale));
+        radiusTarget = radius() * launchScale;
         for (int i = 0; i < NODES; i++) {
-            deformation[i] = (random.nextFloat() - .5f) * radius() * .04f;
+            float angle = TWO_PI * i / NODES;
+            px[i] = centerX + (float) Math.cos(angle) * radiusTarget;
+            py[i] = centerY + (float) Math.sin(angle) * radiusTarget;
         }
+        recenter();
     }
 
     float radius() {
         return RADII[tier];
     }
 
-    /**
-     * The same deformable outline as the renderer, sampled along an arbitrary
-     * ray. Neither launch checks nor collisions use an invisible solid circle.
-     */
-    float outlineRadius(float angle, float time) {
-        final float twoPi = (float) (Math.PI * 2.0);
-        float normalised = angle % twoPi;
-        if (normalised < 0f) normalised += twoPi;
-        float index = normalised * NODES / twoPi;
-        int first = Math.min(NODES - 1, (int) index);
-        float fraction = index - first;
-        float a = surfaceRadius(first, time);
-        float b = surfaceRadius((first + 1) % NODES, time);
-        return a + (b - a) * fraction;
+    void recenter() {
+        float sx = 0f, sy = 0f;
+        for (int i = 0; i < NODES; i++) { sx += px[i]; sy += py[i]; }
+        x = sx / NODES;
+        y = sy / NODES;
     }
 
-    float surfaceRadius(int node, float time) {
-        float theta = (float) (node * Math.PI * 2 / NODES);
-        float organic = (float) (Math.sin(3 * theta + time * 1.65 + phase) * .018
-                + Math.sin(5 * theta - time * 1.10 + phase * 1.6) * .012
-                + Math.sin(time * 2.3 + phase) * .009) * radius();
-        return Math.max(radius() * .36f, Math.min(radius() * 1.46f,
-                radius() * scale + deformation[node] + organic));
-    }
-
-    void bump(float nx, float ny, float force) {
-        float strength = Math.min(210f, Math.max(0f, force));
+    void translate(float dx, float dy) {
         for (int i = 0; i < NODES; i++) {
-            double theta = i * 2 * Math.PI / NODES;
-            float directional = (float) (Math.cos(theta) * nx + Math.sin(theta) * ny);
-            if (directional > .15f) {
-                float proximity = (directional - .15f) / .85f;
-                speed[i] -= strength * proximity * proximity;
-            } else if (directional < -.50f) {
-                speed[i] += strength * .10f * (-directional);
-            }
+            px[i] += dx; py[i] += dy;
+        }
+        x += dx; y += dy;
+    }
+
+    float area() {
+        float sum = 0f;
+        for (int i = 0; i < NODES; i++) {
+            int j = (i + 1) % NODES;
+            sum += px[i] * py[j] - px[j] * py[i];
+        }
+        return sum * .5f;
+    }
+
+    float expectedArea() {
+        return (float) (NODES * .5 * Math.sin(TWO_PI / NODES)
+                * radiusTarget * radiusTarget);
+    }
+
+    void kick(float kickX, float kickY, Random random, float strength) {
+        for (int i = 0; i < NODES; i++) {
+            vx[i] += kickX + (random.nextFloat() - .5f) * strength;
+            vy[i] += kickY + (random.nextFloat() - .5f) * strength;
         }
     }
 
-    /**
-     * Sculpt the actual silhouette at contact: almost all penetration becomes
-     * a broad flat dimple; displacement also flows toward perpendicular
-     * lobes, so blobs look like compressible jelly rather than rigid balls.
-     * The same nodes drive both rendering and collision support distances.
-     */
-    void squish(float nx, float ny, float depth) {
-        float radius = radius();
-        float indentation = Math.min(radius * .56f, Math.max(0f, depth));
-        if (indentation < .001f) return;
-        for (int i = 0; i < NODES; i++) {
-            float theta = (float) (i * 2.0 * Math.PI / NODES);
-            float alignment = (float) (Math.cos(theta) * nx + Math.sin(theta) * ny);
-            float face = Math.max(0f, (alignment - .04f) / .96f);
-            // A smooth, wide contact patch instead of a single sharp dimple.
-            float inward = indentation * face * face;
-            // Material displaced at the contact fattens the two shoulders.
-            float shoulder = Math.max(0f, 1f - Math.abs(alignment) / .52f);
-            float sideways = indentation * .46f * shoulder * shoulder;
-            deformation[i] = Math.max(-radius * .56f,
-                    Math.min(radius * .46f, deformation[i] - inward + sideways));
-        }
-    }
-
-    void updateShape(float dt, float time) {
+    void integrate(float dt, float time) {
         age += dt;
-        // A merge expands beyond target very briefly, followed by a damped settle.
-        scale += (1f - scale) * Math.min(1f, dt * 6.8f);
-        float[] accelerations = new float[NODES];
+        // The merged/spawned membrane inflates gradually, not as a visual-only
+        // scale transform. Target area and spring rest lengths change together.
+        radiusTarget += (radius() - radiusTarget) * Math.min(1f, 3.7f * dt);
         for (int i = 0; i < NODES; i++) {
-            int previous = (i + NODES - 1) % NODES;
-            int next = (i + 1) % NODES;
-            float neighbours = deformation[previous] + deformation[next] - 2f * deformation[i];
-            float ripple = (float) Math.sin(time * 3.3 + phase + i * .78) * .38f;
-            accelerations[i] = -19f * deformation[i] + 26f * neighbours + ripple;
+            lastX[i] = px[i];
+            lastY[i] = py[i];
+            vx[i] += (float) Math.sin(time * 1.65f + y * .014f + tier) * 13f * dt;
+            vy[i] += (-135f + tier * 1.5f) * dt;
+            float friction = (float) Math.exp(-1.65f * dt);
+            vx[i] *= friction;
+            vy[i] *= friction;
+            vx[i] = clamp(vx[i], -380f, 380f);
+            vy[i] = clamp(vy[i], -380f, 380f);
+            px[i] += vx[i] * dt;
+            py[i] += vy[i] * dt;
         }
-        // A softer membrane: neighbouring nodes transmit a ripple before
-        // the perimeter returns to rest, rather than instantly springing back.
-        float damping = (float) Math.exp(-3.3f * dt);
-        float minimum = -radius() * .56f;
-        float maximum = radius() * .46f;
+        recenter();
+    }
+
+    void solveMembrane() {
+        // Strong perimeter, weaker bending, firm but compliant area pressure.
         for (int i = 0; i < NODES; i++) {
-            speed[i] = (speed[i] + accelerations[i] * dt) * damping;
-            deformation[i] += speed[i] * dt;
-            if (deformation[i] < minimum) {
-                deformation[i] = minimum;
-                speed[i] = Math.max(0f, speed[i]) * .25f;
-            } else if (deformation[i] > maximum) {
-                deformation[i] = maximum;
-                speed[i] = Math.min(0f, speed[i]) * .25f;
-            }
+            solveDistance(i, (i + 1) % NODES,
+                    (float) (2f * radiusTarget * Math.sin(Math.PI / NODES)), .77f);
         }
+        for (int i = 0; i < NODES; i++) {
+            solveDistance(i, (i + 2) % NODES,
+                    (float) (2f * radiusTarget * Math.sin(2 * Math.PI / NODES)), .21f);
+        }
+        solvePressure();
+    }
+
+    private void solveDistance(int i, int j, float target, float stiffness) {
+        float dx = px[j] - px[i], dy = py[j] - py[i];
+        float dist = (float) Math.hypot(dx, dy);
+        if (dist < .001f) return;
+        float amount = clamp((dist - target) / dist * stiffness * .5f, -.25f, .25f);
+        float cx = dx * amount, cy = dy * amount;
+        px[i] += cx; py[i] += cy;
+        px[j] -= cx; py[j] -= cy;
+    }
+
+    private void solvePressure() {
+        float target = expectedArea();
+        float current = area();
+        float sumGradient = 0f;
+        // Global signed area constraint, the same technique used in PBD
+        // incompressible membranes. Avoids pointy dents and area collapse.
+        for (int i = 0; i < NODES; i++) {
+            int p = (i + NODES - 1) % NODES, n = (i + 1) % NODES;
+            float gx = (py[n] - py[p]) * .5f;
+            float gy = (px[p] - px[n]) * .5f;
+            sumGradient += gx * gx + gy * gy;
+        }
+        if (sumGradient < 1e-4f) return;
+        float lambda = (target - current) * .66f / sumGradient;
+        for (int i = 0; i < NODES; i++) {
+            int p = (i + NODES - 1) % NODES, n = (i + 1) % NODES;
+            float gx = (py[n] - py[p]) * .5f;
+            float gy = (px[p] - px[n]) * .5f;
+            px[i] += clamp(lambda * gx, -4.5f, 4.5f);
+            py[i] += clamp(lambda * gy, -4.5f, 4.5f);
+        }
+    }
+
+    void confine(float left, float right, float top, float bottom) {
+        for (int i = 0; i < NODES; i++) {
+            px[i] = clamp(px[i], left + .8f, right - .8f);
+            py[i] = clamp(py[i], top + .8f, bottom - .8f);
+        }
+    }
+
+    void finish(float dt) {
+        float inv = 1f / Math.max(.001f, dt);
+        for (int i = 0; i < NODES; i++) {
+            vx[i] = clamp((px[i] - lastX[i]) * inv, -360f, 360f);
+            vy[i] = clamp((py[i] - lastY[i]) * inv, -360f, 360f);
+        }
+        recenter();
+    }
+
+    static float clamp(float v, float min, float max) {
+        return Math.max(min, Math.min(max, v));
     }
 }

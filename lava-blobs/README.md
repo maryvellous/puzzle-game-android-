@@ -4,13 +4,13 @@ Un piccolo gioco originale per Android, ispirato alla soddisfazione dei merge pu
 
 ## Aspetto e fisica
 - Palette di nove colori distinti: indaco brillante, azzurro chiaro, indaco profondo, lavanda, viola intenso, pervinca, viola scuro, lilla e ametista. Nessun rosso, giallo o verde.
-- Ogni blob ha **32 punti su un perimetro elastico**: gli urti comprimono la superficie effettiva, le molle tra vicini trasmettono le onde, smorzamento e oscillazioni ricostruiscono lentamente la forma. Le collisioni e i bordi usano direttamente il profilo visibile, non un secondo cerchio rigido.
+- Ogni blob ha **24 particelle mobili su un perimetro collegato da molle**: gli urti comprimono la superficie effettiva, le molle tra vicini trasmettono le onde, smorzamento e oscillazioni ricostruiscono lentamente la forma. Le collisioni e i bordi usano direttamente il profilo visibile, non un secondo cerchio rigido.
 - Le masse hanno galleggiamento verso l'alto, attrito viscoso, urti con pareti e fra blob, trasferimento della quantità di moto e deformazioni di contatto.
-- **Scuoti il telefono**: l'accelerometro rileva l'accelerazione brusca senza confonderla con la gravità statica. La scossa imprime una spinta reale (anche muovendo il telefono avanti e indietro), provoca collisioni e fa tremolare i 32 nodi elastici. Sensore attivo solo mentre il gioco è in primo piano; nessun permesso speciale o accesso alla rete.
+- **Scuoti il telefono**: l'accelerometro rileva l'accelerazione brusca senza confonderla con la gravità statica. La scossa imprime una spinta reale (anche muovendo il telefono avanti e indietro), provoca collisioni e fa tremolare i 24 particelle elastiche. Sensore attivo solo mentre il gioco è in primo piano; nessun permesso speciale o accesso alla rete.
 - Merge con pulsazione circolare, gocce di colore, vibrazione aptica e piccola accelerazione verso l'alto.
 - Record salvato sul dispositivo; pulsante ricomincia; game over quando il fondo rimane occupato troppo a lungo.
 - Rendering pieno, opaco e saturo: rimossi i due riflessi ovali, gli shader sfumati e gli aloni; ogni livello si riconosce dal colore.
-- Collisioni volutamente **molto morbide**: quasi tutta la sovrapposizione comprime il contorno visibile e gonfia i lati, anziché allontanare bruscamente i centri; rimbalzo ridotto e onde che si propagano lungo 32 nodi.
+- Collisioni volutamente **molto morbide**: quasi tutta la sovrapposizione comprime il contorno visibile e gonfia i lati, anziché allontanare bruscamente i centri; rimbalzo ridotto e onde che si propagano lungo 24 nodi.
 - Grafica interamente disegnata su Android Canvas: niente immagini, librerie di gioco, login, ads o rete. La superficie visibile corrisponde al corpo che collide.
 
 ## Compilare
@@ -35,10 +35,13 @@ L'APK sarà in `lava-blobs/app/build/outputs/apk/debug/app-debug.apk`. La workfl
 
 ## Struttura
 - `BlobWorld.java`: simulazione e punteggio senza dipendenze Android, testabile con JUnit.
-- `Blob.java`: deformazione elastica a 32 nodi.
+- `Blob.java`: deformazione elastica a 24 nodi.
 - `LavaView.java`: rendering procedurale, input, particelle e UI.
 - `MainActivity.java`: host Android fullscreen e gestione del ciclo di vita del sensore.
 - `ShakeDetector.java`: filtro gravità, soglia scossa e cooldown, testabile senza Android.
 
 ## Stato
-Versione 0.4.0: collisioni molto più cedevoli (profilo deformato, compressione importante, rigonfiamento laterale, risposta poco rimbalzante) e blob in tinta unita più satura senza riflessi. Conserva lo scuotimento accelerometrico della 0.3.0 e la correzione hitbox della 0.2.0. La CI controlla codice e test della fisica; il feeling visivo va verificato sul telefono.
+Versione 0.5.0: **sostituito completamente il solver radiale**. Ogni blob è un poligono morbido con 24 particelle mobili, molle fra vicini e fra secondi vicini, pressione interna mediante vincolo di area, urti locali tra particella e segmento e legami appiccicosi temporanei fra blob di livelli diversi. Un sottile filamento può apparire mentre il contatto si stacca. I blob continuano a salire e ad accumularsi al soffitto. Non vengono modificati i colori pieni, lo scuotimento, i merge o il punteggio. CI: compilazione e test numerici; la resa dei contatti va collaudata su Android.
+
+## Nota tecnica 0.5
+Il rendering segue direttamente le coordinate delle particelle fisiche. Non esiste più un cerchio di collisione separato, né un elenco di spostamenti radiali che possano produrre triangoli artificiali. L'area è conservata approssimativamente dalla pressione; la forma si adatta grazie ai vincoli di lunghezza. Le collisioni sono risolte sulla membrana, non sui centri. Lo scuotimento muove fisicamente tutti i punti della membrana.
