@@ -62,12 +62,15 @@ final class BlobWorld {
     boolean canLaunch(float x) {
         if (gameOver || blobs.size() > 75) return false;
         float r = Blob.RADII[nextTier];
+        float spawnR = r * .78f;
         float clamped = clamp(x, LEFT + r, RIGHT - r);
         float y = bottom() - r - 7f;
         for (Blob b : blobs) {
-            float dx = b.x - clamped, dy = b.y - y;
-            if (dx * dx + dy * dy < (r + b.physicalRadius() - 5f) * (r + b.physicalRadius() - 5f))
-                return false;
+            float dx = clamped - b.x, dy = y - b.y;
+            float d = (float) Math.hypot(dx, dy);
+            // Visible launch size (0.78x), not a full-sized invisible collider.
+            float contact = spawnR + b.outlineRadius((float) Math.atan2(dy, dx), time);
+            if (d < contact - 2f) return false;
         }
         return true;
     }
@@ -95,7 +98,7 @@ final class BlobWorld {
         if (crowded) {
             crowded = false;
             for (Blob b : blobs) {
-                if (b.y + b.physicalRadius() > bottom() - 27f) {
+                if (b.y + b.outlineRadius((float) (Math.PI / 2), time) > bottom() - 27f) {
                     crowded = true;
                     break;
                 }
@@ -108,6 +111,7 @@ final class BlobWorld {
     private void step(float dt) {
         time += dt;
         for (Blob b : blobs) {
+            b.updateShape(dt, time);
             b.vy += (-128f + b.tier * 2.5f) * dt;
             b.vx += (float) Math.sin(time * 1.9 + b.y * .017 + b.tier) * 19f * dt;
             float friction = (float) Math.exp(-.66f * dt);
@@ -127,12 +131,18 @@ final class BlobWorld {
                 Blob b = blobs.get(j);
                 float dx = b.x - a.x, dy = b.y - a.y;
                 float d2 = dx * dx + dy * dy;
-                float sum = a.physicalRadius() + b.physicalRadius();
-                if (d2 >= sum * sum) continue;
+                // Broad phase only: this bound cannot reject a possible contact,
+                // even at maximum allowed stretch of the perimeter.
+                float broad = (a.radius() + b.radius()) * 1.33f;
+                if (d2 > broad * broad) continue;
                 float d = (float) Math.sqrt(d2);
                 float nx = d > .0001f ? dx / d : 1f;
                 float ny = d > .0001f ? dy / d : 0f;
-                if (a.tier == b.tier && a.age > .14f && b.age > .14f) {
+                float angle = (float) Math.atan2(ny, nx);
+                float sum = a.outlineRadius(angle, time)
+                        + b.outlineRadius(angle + (float)Math.PI, time);
+                if (d >= sum) continue;
+                if (a.tier == b.tier) {
                     fuse(i, j, a, b);
                     fused = true;
                     break;
@@ -141,8 +151,14 @@ final class BlobWorld {
                 float massA = a.radius() * a.radius();
                 float massB = b.radius() * b.radius();
                 float total = massA + massB;
-                float shiftA = overlap * massB / total * .63f;
-                float shiftB = overlap * massA / total * .63f;
+                // The collision is resolved partly by centre separation and
+                // partly by actual changes to the two visible perimeters.
+                float shareA = massB / total;
+                float shareB = massA / total;
+                float shiftA = overlap * shareA * .67f;
+                float shiftB = overlap * shareB * .67f;
+                a.squish(nx, ny, overlap * shareA * .30f);
+                b.squish(-nx, -ny, overlap * shareB * .30f);
                 a.x -= nx * shiftA;
                 a.y -= ny * shiftA;
                 b.x += nx * shiftB;
@@ -162,24 +178,37 @@ final class BlobWorld {
         }
         for (Blob b : blobs) {
             confine(b);
-            b.updateShape(dt, time);
         }
     }
 
     private void confine(Blob b) {
-        float r = b.physicalRadius();
-        if (b.x < LEFT + r) {
-            b.x = LEFT + r;
+        // Each wall touches the same contoured surface used by the renderer.
+        float leftExtent = b.outlineRadius((float) Math.PI, time);
+        if (b.x - leftExtent < LEFT) {
+            float overlap = LEFT - (b.x - leftExtent);
+            b.squish(-1f, 0f, overlap * .35f);
+            b.x = LEFT + b.outlineRadius((float) Math.PI, time);
             if (b.vx < 0) { b.bump(-1, 0, Math.abs(b.vx) * .9f); b.vx *= -.28f; }
-        } else if (b.x > RIGHT - r) {
-            b.x = RIGHT - r;
+        }
+        float rightExtent = b.outlineRadius(0f, time);
+        if (b.x + rightExtent > RIGHT) {
+            float overlap = b.x + rightExtent - RIGHT;
+            b.squish(1f, 0f, overlap * .35f);
+            b.x = RIGHT - b.outlineRadius(0f, time);
             if (b.vx > 0) { b.bump(1, 0, Math.abs(b.vx) * .9f); b.vx *= -.28f; }
         }
-        if (b.y < TOP + r) {
-            b.y = TOP + r;
+        float topExtent = b.outlineRadius((float) (-Math.PI / 2), time);
+        if (b.y - topExtent < TOP) {
+            float overlap = TOP - (b.y - topExtent);
+            b.squish(0f, -1f, overlap * .35f);
+            b.y = TOP + b.outlineRadius((float) (-Math.PI / 2), time);
             if (b.vy < 0) { b.bump(0, -1, Math.abs(b.vy) * 1.2f); b.vy *= -.14f; }
-        } else if (b.y > bottom() - r) {
-            b.y = bottom() - r;
+        }
+        float bottomExtent = b.outlineRadius((float) (Math.PI / 2), time);
+        if (b.y + bottomExtent > bottom()) {
+            float overlap = b.y + bottomExtent - bottom();
+            b.squish(0f, 1f, overlap * .35f);
+            b.y = bottom() - b.outlineRadius((float) (Math.PI / 2), time);
             if (b.vy > 0) { b.bump(0, 1, Math.abs(b.vy)); b.vy *= -.18f; }
         }
     }

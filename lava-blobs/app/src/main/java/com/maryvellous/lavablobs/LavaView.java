@@ -197,20 +197,27 @@ public final class LavaView extends View {
             xx[i] = b.x + (float) Math.cos(theta) * radial;
             yy[i] = b.y + (float) Math.sin(theta) * radial;
         }
+        // Catmull-Rom to cubic Bézier: the drawn contour passes through
+        // exactly the 20 nodes whose radial positions drive physical contacts.
         blobPath.reset();
-        int last = Blob.NODES - 1;
-        blobPath.moveTo((xx[last] + xx[0]) * .5f, (yy[last] + yy[0]) * .5f);
+        blobPath.moveTo(xx[0], yy[0]);
         for (int i = 0; i < Blob.NODES; i++) {
+            int prev = (i + Blob.NODES - 1) % Blob.NODES;
             int next = (i + 1) % Blob.NODES;
-            blobPath.quadTo(xx[i], yy[i],
-                    (xx[i] + xx[next]) * .5f, (yy[i] + yy[next]) * .5f);
+            int after = (i + 2) % Blob.NODES;
+            blobPath.cubicTo(
+                    xx[i] + (xx[next] - xx[prev]) / 6f,
+                    yy[i] + (yy[next] - yy[prev]) / 6f,
+                    xx[next] - (xx[after] - xx[i]) / 6f,
+                    yy[next] - (yy[after] - yy[i]) / 6f,
+                    xx[next], yy[next]);
         }
         blobPath.close();
 
         paint.setStyle(Paint.Style.FILL);
         paint.setShader(null);
-        paint.setColor(withAlpha(PURPLES[b.tier], 39));
-        canvas.drawCircle(b.x, b.y, r * b.scale * 1.14f, paint);
+        // Removed the old translucent enclosing circle: its larger silhouette
+        // looked like a second rigid bubble with a fake jelly shape inside.
         Shader shader = blobShaders[b.tier];
         shaderMatrix.reset();
         shaderMatrix.setTranslate(b.x, b.y);

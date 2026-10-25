@@ -32,8 +32,20 @@ final class Blob {
         return RADII[tier];
     }
 
-    float physicalRadius() {
-        return radius() * (.92f + .08f * scale);
+    /**
+     * The same deformable outline as the renderer, sampled along an arbitrary
+     * ray. Neither launch checks nor collisions use an invisible solid circle.
+     */
+    float outlineRadius(float angle, float time) {
+        final float twoPi = (float) (Math.PI * 2.0);
+        float normalised = angle % twoPi;
+        if (normalised < 0f) normalised += twoPi;
+        float index = normalised * NODES / twoPi;
+        int first = Math.min(NODES - 1, (int) index);
+        float fraction = index - first;
+        float a = surfaceRadius(first, time);
+        float b = surfaceRadius((first + 1) % NODES, time);
+        return a + (b - a) * fraction;
     }
 
     float surfaceRadius(int node, float time) {
@@ -59,6 +71,27 @@ final class Blob {
         }
     }
 
+    /**
+     * Shape deformation also participates in contact resolution. The leading
+     * face becomes flatter and the opposite face bulges very slightly, so
+     * touching blobs visibly yield instead of floating apart on rigid hitboxes.
+     */
+    void squish(float nx, float ny, float depth) {
+        float indentation = Math.min(radius() * .17f, Math.max(0f, depth));
+        float limit = radius() * .28f;
+        for (int i = 0; i < NODES; i++) {
+            double theta = i * 2.0 * Math.PI / NODES;
+            float alignment = (float) (Math.cos(theta) * nx + Math.sin(theta) * ny);
+            if (alignment > .15f) {
+                float local = (alignment - .15f) / .85f;
+                deformation[i] -= indentation * local * local;
+            } else if (alignment < -.45f) {
+                deformation[i] += indentation * .22f * (-alignment - .45f) / .55f;
+            }
+            deformation[i] = Math.max(-limit, Math.min(limit, deformation[i]));
+        }
+    }
+
     void updateShape(float dt, float time) {
         age += dt;
         // A merge expands beyond target very briefly, followed by a damped settle.
@@ -71,7 +104,7 @@ final class Blob {
             float ripple = (float) Math.sin(time * 3.3 + phase + i * .78) * .38f;
             accelerations[i] = -63f * deformation[i] + 36f * neighbours + ripple;
         }
-        float damping = (float) Math.exp(-5.8f * dt);
+        float damping = (float) Math.exp(-4.6f * dt);
         float max = radius() * .28f;
         for (int i = 0; i < NODES; i++) {
             speed[i] = (speed[i] + accelerations[i] * dt) * damping;
