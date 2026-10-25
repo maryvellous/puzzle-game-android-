@@ -3,13 +3,13 @@ package com.maryvellous.lavablobs;
 import java.util.Random;
 
 /**
- * An independently animated, 20-node elastic perimeter around a moving mass.
+ * An independently animated, 32-node elastic perimeter around a moving mass.
  * Collisions press the perimeter inward; neighbour springs redistribute the
  * displacement, which decays gradually rather than snapping to a circle.
  */
 final class Blob {
     static final float[] RADII = {18f, 23f, 29f, 36f, 45f, 56f, 69f, 84f, 99f};
-    static final int NODES = 20;
+    static final int NODES = 32;
 
     float x, y, vx, vy, age;
     float scale = 0.70f;
@@ -53,8 +53,8 @@ final class Blob {
         float organic = (float) (Math.sin(3 * theta + time * 1.65 + phase) * .018
                 + Math.sin(5 * theta - time * 1.10 + phase * 1.6) * .012
                 + Math.sin(time * 2.3 + phase) * .009) * radius();
-        return Math.max(radius() * .56f,
-                radius() * scale + deformation[node] + organic);
+        return Math.max(radius() * .36f, Math.min(radius() * 1.46f,
+                radius() * scale + deformation[node] + organic));
     }
 
     void bump(float nx, float ny, float force) {
@@ -72,23 +72,26 @@ final class Blob {
     }
 
     /**
-     * Shape deformation also participates in contact resolution. The leading
-     * face becomes flatter and the opposite face bulges very slightly, so
-     * touching blobs visibly yield instead of floating apart on rigid hitboxes.
+     * Sculpt the actual silhouette at contact: almost all penetration becomes
+     * a broad flat dimple; displacement also flows toward perpendicular
+     * lobes, so blobs look like compressible jelly rather than rigid balls.
+     * The same nodes drive both rendering and collision support distances.
      */
     void squish(float nx, float ny, float depth) {
-        float indentation = Math.min(radius() * .17f, Math.max(0f, depth));
-        float limit = radius() * .28f;
+        float radius = radius();
+        float indentation = Math.min(radius * .56f, Math.max(0f, depth));
+        if (indentation < .001f) return;
         for (int i = 0; i < NODES; i++) {
-            double theta = i * 2.0 * Math.PI / NODES;
+            float theta = (float) (i * 2.0 * Math.PI / NODES);
             float alignment = (float) (Math.cos(theta) * nx + Math.sin(theta) * ny);
-            if (alignment > .15f) {
-                float local = (alignment - .15f) / .85f;
-                deformation[i] -= indentation * local * local;
-            } else if (alignment < -.45f) {
-                deformation[i] += indentation * .22f * (-alignment - .45f) / .55f;
-            }
-            deformation[i] = Math.max(-limit, Math.min(limit, deformation[i]));
+            float face = Math.max(0f, (alignment - .04f) / .96f);
+            // A smooth, wide contact patch instead of a single sharp dimple.
+            float inward = indentation * face * face;
+            // Material displaced at the contact fattens the two shoulders.
+            float shoulder = Math.max(0f, 1f - Math.abs(alignment) / .52f);
+            float sideways = indentation * .46f * shoulder * shoulder;
+            deformation[i] = Math.max(-radius * .56f,
+                    Math.min(radius * .46f, deformation[i] - inward + sideways));
         }
     }
 
@@ -102,18 +105,21 @@ final class Blob {
             int next = (i + 1) % NODES;
             float neighbours = deformation[previous] + deformation[next] - 2f * deformation[i];
             float ripple = (float) Math.sin(time * 3.3 + phase + i * .78) * .38f;
-            accelerations[i] = -63f * deformation[i] + 36f * neighbours + ripple;
+            accelerations[i] = -19f * deformation[i] + 26f * neighbours + ripple;
         }
-        float damping = (float) Math.exp(-4.6f * dt);
-        float max = radius() * .28f;
+        // A softer membrane: neighbouring nodes transmit a ripple before
+        // the perimeter returns to rest, rather than instantly springing back.
+        float damping = (float) Math.exp(-3.3f * dt);
+        float minimum = -radius() * .56f;
+        float maximum = radius() * .46f;
         for (int i = 0; i < NODES; i++) {
             speed[i] = (speed[i] + accelerations[i] * dt) * damping;
             deformation[i] += speed[i] * dt;
-            if (deformation[i] < -max) {
-                deformation[i] = -max;
+            if (deformation[i] < minimum) {
+                deformation[i] = minimum;
                 speed[i] = Math.max(0f, speed[i]) * .25f;
-            } else if (deformation[i] > max) {
-                deformation[i] = max;
+            } else if (deformation[i] > maximum) {
+                deformation[i] = maximum;
                 speed[i] = Math.min(0f, speed[i]) * .25f;
             }
         }

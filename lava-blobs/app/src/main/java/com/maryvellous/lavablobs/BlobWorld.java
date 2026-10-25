@@ -187,29 +187,32 @@ final class BlobWorld {
                 float massA = a.radius() * a.radius();
                 float massB = b.radius() * b.radius();
                 float total = massA + massB;
-                // The collision is resolved partly by centre separation and
-                // partly by actual changes to the two visible perimeters.
+                // Give almost all the overlap to the elastic membrane.
+                // Pushing the centres apart is a last resort, not the main
+                // collision solver (old value: 67% of penetration).
                 float shareA = massB / total;
                 float shareB = massA / total;
-                float shiftA = overlap * shareA * .67f;
-                float shiftB = overlap * shareB * .67f;
-                a.squish(nx, ny, overlap * shareA * .30f);
-                b.squish(-nx, -ny, overlap * shareB * .30f);
-                a.x -= nx * shiftA;
-                a.y -= ny * shiftA;
-                b.x += nx * shiftB;
-                b.y += ny * shiftB;
+                a.squish(nx, ny, overlap * shareA * .89f);
+                b.squish(-nx, -ny, overlap * shareB * .89f);
+                float remaining = Math.max(0f, a.outlineRadius(angle, time)
+                        + b.outlineRadius(angle + (float)Math.PI, time) - d);
+                float separation = remaining * .23f;
+                a.x -= nx * separation * shareA;
+                a.y -= ny * separation * shareA;
+                b.x += nx * separation * shareB;
+                b.y += ny * separation * shareB;
                 float approach = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
                 if (approach < 0) {
-                    float impulse = -(1.08f) * approach / (1f / massA + 1f / massB);
+                    // Absorb speed into deformation: almost no elastic bounce.
+                    float impulse = -(.65f) * approach / (1f / massA + 1f / massB);
                     a.vx -= impulse * nx / massA;
                     a.vy -= impulse * ny / massA;
                     b.vx += impulse * nx / massB;
                     b.vy += impulse * ny / massB;
                 }
-                float wobble = Math.min(180f, 8f + overlap * 7f + Math.abs(approach) * .55f);
-                a.bump(nx, ny, wobble * dt * 48f);
-                b.bump(-nx, -ny, wobble * dt * 48f);
+                float wobble = Math.min(280f, 12f + overlap * 6f + Math.abs(approach) * .65f);
+                a.bump(nx, ny, wobble * dt * 60f);
+                b.bump(-nx, -ny, wobble * dt * 60f);
             }
         }
         for (Blob b : blobs) {
@@ -217,35 +220,38 @@ final class BlobWorld {
         }
     }
 
+    /**
+     * Even the glass compresses the mesh; only the tiny residual intrusion
+     * shifts the centre. Low restitution keeps the impression of thick fluid.
+     */
     private void confine(Blob b) {
-        // Each wall touches the same contoured surface used by the renderer.
         float leftExtent = b.outlineRadius((float) Math.PI, time);
         if (b.x - leftExtent < LEFT) {
             float overlap = LEFT - (b.x - leftExtent);
-            b.squish(-1f, 0f, overlap * .35f);
-            b.x = LEFT + b.outlineRadius((float) Math.PI, time);
-            if (b.vx < 0) { b.bump(-1, 0, Math.abs(b.vx) * .9f); b.vx *= -.28f; }
+            b.squish(-1f, 0f, overlap * .94f);
+            b.x = Math.max(b.x, LEFT + b.outlineRadius((float) Math.PI, time));
+            if (b.vx < 0) { b.bump(-1, 0, Math.abs(b.vx) * .85f); b.vx *= -.045f; }
         }
         float rightExtent = b.outlineRadius(0f, time);
         if (b.x + rightExtent > RIGHT) {
             float overlap = b.x + rightExtent - RIGHT;
-            b.squish(1f, 0f, overlap * .35f);
-            b.x = RIGHT - b.outlineRadius(0f, time);
-            if (b.vx > 0) { b.bump(1, 0, Math.abs(b.vx) * .9f); b.vx *= -.28f; }
+            b.squish(1f, 0f, overlap * .94f);
+            b.x = Math.min(b.x, RIGHT - b.outlineRadius(0f, time));
+            if (b.vx > 0) { b.bump(1, 0, Math.abs(b.vx) * .85f); b.vx *= -.045f; }
         }
         float topExtent = b.outlineRadius((float) (-Math.PI / 2), time);
         if (b.y - topExtent < TOP) {
             float overlap = TOP - (b.y - topExtent);
-            b.squish(0f, -1f, overlap * .35f);
-            b.y = TOP + b.outlineRadius((float) (-Math.PI / 2), time);
-            if (b.vy < 0) { b.bump(0, -1, Math.abs(b.vy) * 1.2f); b.vy *= -.14f; }
+            b.squish(0f, -1f, overlap * .94f);
+            b.y = Math.max(b.y, TOP + b.outlineRadius((float) (-Math.PI / 2), time));
+            if (b.vy < 0) { b.bump(0, -1, Math.abs(b.vy) * 1.1f); b.vy *= -.035f; }
         }
         float bottomExtent = b.outlineRadius((float) (Math.PI / 2), time);
         if (b.y + bottomExtent > bottom()) {
             float overlap = b.y + bottomExtent - bottom();
-            b.squish(0f, 1f, overlap * .35f);
-            b.y = bottom() - b.outlineRadius((float) (Math.PI / 2), time);
-            if (b.vy > 0) { b.bump(0, 1, Math.abs(b.vy)); b.vy *= -.18f; }
+            b.squish(0f, 1f, overlap * .94f);
+            b.y = Math.min(b.y, bottom() - b.outlineRadius((float) (Math.PI / 2), time));
+            if (b.vy > 0) { b.bump(0, 1, Math.abs(b.vy)); b.vy *= -.035f; }
         }
     }
 

@@ -5,10 +5,8 @@ import android.content.SharedPreferences;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.LinearGradient;
-import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Path;
-import android.graphics.RadialGradient;
 import android.graphics.RectF;
 import android.graphics.Shader;
 import android.graphics.Typeface;
@@ -26,18 +24,18 @@ import java.util.Random;
 public final class LavaView extends View {
     private static final float W = BlobWorld.WIDTH;
     private static final int BACKGROUND = Color.rgb(10, 9, 31);
-    // Deliberately varied colours, not nine nearly identical dark purples.
-    // The palette stays between pale blue, indigo, lavender and violet.
+    // Solid, saturated, intentionally distinguishable hues from blue-indigo
+    // through lavender and violet, never red/yellow/green.
     private static final int[] PURPLES = {
-            0xFF4347C7, // indaco brillante
-            0xFF9DCEFF, // azzurro chiaro
-            0xFF5A35C7, // indaco profondo
-            0xFFCAAFFF, // lavanda
-            0xFF7831D5, // viola intenso
-            0xFF728DFA, // pervinca azzurra
-            0xFF512AA8, // viola scuro
-            0xFFB581F0, // lilla
-            0xFF9250EB  // ametista
+            0xFF4347D8, // indaco
+            0xFF55B7FF, // azzurro brillante
+            0xFF672BE8, // viola blu intenso
+            0xFFB98AFF, // lavanda
+            0xFF8C29E8, // viola saturo
+            0xFF538BFF, // pervinca
+            0xFF4A20B9, // indaco scuro
+            0xFFC970F5, // lilla vivace
+            0xFFA53AF1  // ametista
     };
     private final BlobWorld world = new BlobWorld(new Random());
     private final Random random = new Random();
@@ -46,10 +44,8 @@ public final class LavaView extends View {
     private final Paint letters = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint line = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path blobPath = new Path();
-    private final Matrix shaderMatrix = new Matrix();
     private final float[] xx = new float[Blob.NODES];
     private final float[] yy = new float[Blob.NODES];
-    private final RadialGradient[] blobShaders = new RadialGradient[PURPLES.length];
     private final ArrayList<Wave> waves = new ArrayList<>();
     private final ArrayList<Droplet> droplets = new ArrayList<>();
 
@@ -85,15 +81,7 @@ public final class LavaView extends View {
         letters.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         letters.setTextAlign(Paint.Align.CENTER);
         line.setStyle(Paint.Style.STROKE);
-        for (int i = 0; i < PURPLES.length; i++) {
-            float r = Blob.RADII[i];
-            int soft = blend(PURPLES[i], 0xFFF4EBFF, .32f);
-            int dark = blend(PURPLES[i], 0xFF151039, .28f);
-            blobShaders[i] = new RadialGradient(
-                    -r * .35f, -r * .40f, r * 1.75f,
-                    new int[] {soft, PURPLES[i], dark},
-                    new float[] {0f, .50f, 1f}, Shader.TileMode.CLAMP);
-        }
+
     }
 
     /** Called by the activity's sensor listener on the UI thread. */
@@ -228,30 +216,15 @@ public final class LavaView extends View {
         }
         blobPath.close();
 
+        // Exactly one opaque fill; no fake light ovals, radial gradients or
+        // translucent collision halos. The elastic outline is the entire blob.
         paint.setStyle(Paint.Style.FILL);
         paint.setShader(null);
-        // Removed the old translucent enclosing circle: its larger silhouette
-        // looked like a second rigid bubble with a fake jelly shape inside.
-        Shader shader = blobShaders[b.tier];
-        shaderMatrix.reset();
-        shaderMatrix.setTranslate(b.x, b.y);
-        shader.setLocalMatrix(shaderMatrix);
-        paint.setShader(shader);
+        paint.setColor(PURPLES[b.tier]);
         canvas.drawPath(blobPath, paint);
-        paint.setShader(null);
 
-        canvas.save();
-        canvas.clipPath(blobPath);
-        paint.setColor(0x50E1D4FF);
-        canvas.drawOval(new RectF(b.x-r*.62f, b.y-r*.74f,
-                b.x+r*.14f, b.y-r*.32f), paint);
-        paint.setColor(0x3EB6A0FF);
-        canvas.drawOval(new RectF(b.x+r*.23f, b.y+r*.27f,
-                b.x+r*.69f, b.y+r*.55f), paint);
-        canvas.restore();
-
-        line.setColor(0x99DCCBFF);
-        line.setStrokeWidth(Math.max(1.1f, r * .027f));
+        line.setColor(blend(PURPLES[b.tier], 0xFFF1E9FF, .24f));
+        line.setStrokeWidth(Math.max(1.0f, r * .020f));
         canvas.drawPath(blobPath, line);
     }
 
@@ -348,9 +321,7 @@ public final class LavaView extends View {
         c.drawCircle(x, y, r * .88f + 6f, paint);
         paint.setColor(PURPLES[world.nextTier]);
         c.drawCircle(x, y, r * .88f, paint);
-        paint.setColor(0xA0DED0FF);
-        c.drawCircle(x-r*.25f, y-r*.25f, r*.17f, paint);
-        line.setColor(0xAACDBEFF);
+        line.setColor(blend(PURPLES[world.nextTier], 0xFFF1E9FF, .24f));
         line.setStrokeWidth(1.5f);
         c.drawCircle(x, y, r * .88f, line);
     }

@@ -86,7 +86,7 @@ public class BlobWorldTest {
         a.age = b.age = 1f;
         // Both opposing surfaces visibly flatten toward their centres.
         for (int index : new int[] {0, 1, 19}) a.deformation[index] = -9f;
-        for (int index : new int[] {9, 10, 11}) b.deformation[index] = -9f;
+        for (int index : new int[] {Blob.NODES / 2 - 1, Blob.NODES / 2, Blob.NODES / 2 + 1}) b.deformation[index] = -9f;
         world.blobs.add(a);
         world.blobs.add(b);
         world.tick(.016f);
@@ -148,6 +148,45 @@ public class BlobWorldTest {
             if (Math.abs(v) > .25f) return true;
         }
         return false;
+    }
+
+    @Test public void contactMostlyFlattensFacesInsteadOfShovingCentres() {
+        BlobWorld world = new BlobWorld(new Random(51));
+        Blob a = new Blob(150, 405, 4, new Random(10)); // radius 45
+        Blob b = new Blob(229, 405, 5, new Random(11)); // radius 56
+        a.scale = b.scale = 1f;
+        a.age = b.age = 1f;
+        world.blobs.add(a);
+        world.blobs.add(b);
+        float originalA = a.outlineRadius(0f, world.time);
+        float originalB = b.outlineRadius((float)Math.PI, world.time);
+        float originalSide = a.outlineRadius((float)Math.PI/2, world.time);
+        world.tick(.016f);
+        assertEquals(2, world.blobs.size());
+        assertTrue("The first contact face should visibly flatten",
+                a.outlineRadius(0f, world.time) < originalA - 5f);
+        assertTrue("The second contact face should visibly flatten",
+                b.outlineRadius((float)Math.PI, world.time) < originalB - 5f);
+        assertTrue("Jelly should bulge sideways when compressed",
+                a.outlineRadius((float)Math.PI/2, world.time) > originalSide + 1f);
+        assertTrue("Centre separation should be much smaller than total overlap",
+                b.x - a.x < 90f);
+    }
+
+    @Test public void topWallPancakesTheBlobRatherThanPushingItsCentre() {
+        BlobWorld world = new BlobWorld(new Random(52));
+        Blob b = new Blob(210, BlobWorld.TOP + 58, 7, new Random(11));
+        b.scale = 1f;
+        b.age = 1f;
+        world.blobs.add(b);
+        float oldY = b.y;
+        world.tick(.016f);
+        assertTrue("The top-facing surface must compress strongly",
+                b.deformation[Blob.NODES * 3 / 4] < -12f);
+        assertTrue("The bubble should keep most of its centre position",
+                b.y - oldY < 15f);
+        assertTrue("The rendered silhouette may not pass through the glass",
+                b.y - b.outlineRadius((float)-Math.PI/2, world.time) >= BlobWorld.TOP - .02f);
     }
 
     @Test public void resetClearsProgress() {
