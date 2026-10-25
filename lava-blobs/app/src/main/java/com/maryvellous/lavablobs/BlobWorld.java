@@ -132,7 +132,7 @@ final class BlobWorld {
                 float d = (float) Math.sqrt(d2);
                 float nx = d > .0001f ? dx / d : 1f;
                 float ny = d > .0001f ? dy / d : 0f;
-                if (a.tier == b.tier && d < sum * .84f && a.age > .14f && b.age > .14f) {
+                if (a.tier == b.tier && a.age > .14f && b.age > .14f) {
                     fuse(i, j, a, b);
                     fused = true;
                     break;
@@ -156,8 +156,8 @@ final class BlobWorld {
                     b.vy += impulse * ny / massB;
                 }
                 float wobble = Math.min(180f, 8f + overlap * 7f + Math.abs(approach) * .55f);
-                a.bump(nx, ny, wobble * dt * 17f);
-                b.bump(-nx, -ny, wobble * dt * 17f);
+                a.bump(nx, ny, wobble * dt * 48f);
+                b.bump(-nx, -ny, wobble * dt * 48f);
             }
         }
         for (Blob b : blobs) {

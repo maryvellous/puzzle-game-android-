@@ -30,6 +30,18 @@ public class BlobWorldTest {
         assertEquals(1, world.consumeMerges().size());
     }
 
+    @Test public void blobsMergeOnOrdinaryContactNotDeepOverlap() {
+        BlobWorld world = new BlobWorld(new Random(8));
+        Blob a = new Blob(175, 430, 0, new Random(2));
+        Blob b = new Blob(210, 430, 0, new Random(3));
+        a.age = b.age = 1f;
+        world.blobs.add(a);
+        world.blobs.add(b);
+        world.tick(.016f);
+        assertEquals("A normal surface touch should cause a merge", 1, world.blobs.size());
+        assertEquals(1, world.blobs.get(0).tier);
+    }
+
     @Test public void differentTiersDoNotFuse() {
         BlobWorld world = new BlobWorld(new Random(8));
         Blob a = new Blob(183, 430, 0, new Random(2));
