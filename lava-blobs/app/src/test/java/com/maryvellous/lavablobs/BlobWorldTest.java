@@ -34,6 +34,9 @@ public class BlobWorldTest {
         BlobWorld world = new BlobWorld(new Random(8));
         Blob a = new Blob(175, 430, 0, new Random(2));
         Blob b = new Blob(210, 430, 0, new Random(3));
+        // At full visible size, 35 units apart means that two radius-18
+        // contours really touch. At spawn scale 0.7 they correctly do not.
+        a.scale = b.scale = 1f;
         a.age = b.age = 1f;
         world.blobs.add(a);
         world.blobs.add(b);
