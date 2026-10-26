@@ -13,9 +13,20 @@ final class Vessel {
 
     Vessel(int shape,float screenHeight) {
         this.shape=shape;
-        bottom=shape==-1?Math.max(470f,screenHeight-153f):
-                Math.max(430f,screenHeight-187f);
-        top=shape==-1?155f:Math.min(211f,bottom-305f);
+        if(shape==-1) { // Preserve v0.5 test fixture coordinates exactly.
+            top=155f;
+            bottom=Math.max(470f,screenHeight-153f);
+        } else {
+            // Fixed container height, NOT proportional to the phone's screen.
+            // The vessel and launcher are centred together below the HUD.
+            float playableTop=208f, playableBottom=screenHeight-22f;
+            float launcherSpace=124f;
+            float free=playableBottom-playableTop;
+            float jarHeight=Math.min(desiredHeight(shape),free-launcherSpace);
+            jarHeight=Math.max(220f,jarHeight);
+            top=playableTop+(free-(jarHeight+launcherSpace))*.5f;
+            bottom=top+jarHeight;
+        }
         float[] x=new float[(SEGMENTS+1)*2];
         float[] y=new float[x.length];
         float mid=210f;
@@ -36,12 +47,35 @@ final class Vessel {
         xs=x;ys=y;
     }
 
+    // Shape heights are in game-world units and remain consistent on phones
+    // with different screen aspect ratios; the canvas is responsible for scale.
+    static float desiredHeight(int kind) {
+        switch(kind) {
+            case -1:return 0f;
+            case 0:return 340f;
+            case 1:return 360f;
+            case 2:return 325f;
+            case 3:return 355f;
+            case 4:return 340f;
+            case 5:return 350f;
+            case 6:return 360f;
+            case 7:return 320f;
+            case 8:return 370f;
+            case 9:return 370f;
+            case 10:return 340f;
+            case 11:return 285f; // comparison A
+            case 12:return 340f; // comparison B
+            case 13:return 400f; // comparison C
+            default:return 340f;
+        }
+    }
+
     // shape -1 = old prototype glass for physics regression tests.
     private static float halfWidth(int kind,float t) {
         float bell=(float)Math.sin(Math.PI*t);
         switch(kind) {
             case -1:return 181f;
-            case 0:return 138f-14f*bell;
+            case 0:case 11:case 12:case 13:return 138f-14f*bell;
             case 1:return 105f+41f*bell-10f*t;
             case 2:return 154f-50f*t-9f*bell;
             case 3:return 139f-44f*(float)Math.pow(Math.sin(Math.PI*t),2);

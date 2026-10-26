@@ -35,7 +35,7 @@ final class ProgressStore {
         int extraMask=spec.extrasMask(world.score,world.maxTierReached,world.mergeCount);
         SharedPreferences.Editor editor=prefs.edit();
         if(world.score>record(spec.id))editor.putLong("record_"+spec.id,world.score);
-        if(!spec.endless) {
+        if(!spec.endless&&!spec.trial) {
             if(finished&&spec.passed(world.score))editor.putBoolean("clear_"+spec.id,true);
             if(finished&&spec.passed(world.score))
                 editor.putInt("extras_mask_"+spec.id,
@@ -44,9 +44,10 @@ final class ProgressStore {
         editor.apply();
         try{
             JSONObject session=new JSONObject();
-            session.put("version","1.0.0");
+            session.put("version","1.0.1");
             session.put("time",System.currentTimeMillis());
-            session.put("mode",spec.endless?"endless":"level");
+            session.put("mode",spec.trial?"vessel_trial":(spec.endless?"endless":"level"));
+            session.put("vesselHeight",Math.round(world.vessel.bottom-world.vessel.top));
             session.put("level",spec.id);
             session.put("vessel",spec.shape);
             session.put("finished",finished);

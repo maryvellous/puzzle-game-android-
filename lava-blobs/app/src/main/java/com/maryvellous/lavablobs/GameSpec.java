@@ -8,12 +8,14 @@ final class GameSpec {
     final int id, shape, minScore, extraScore, goalTier, mergeGoal;
     final String name;
     final boolean endless;
+    final boolean trial;
 
     private GameSpec(int id, String name, int shape, int minScore, int extraScore,
             int goalTier, int mergeGoal, boolean endless) {
         this.id=id; this.name=name; this.shape=shape;
         this.minScore=minScore; this.extraScore=extraScore;
-        this.goalTier=goalTier; this.mergeGoal=mergeGoal; this.endless=endless;
+        this.goalTier=goalTier; this.mergeGoal=mergeGoal;
+        this.endless=endless; this.trial=id<=-10;
     }
 
     static final GameSpec[] LEVELS = {
@@ -37,10 +39,18 @@ final class GameSpec {
         new GameSpec(-3,"Infinita · Onde",5,0,0,0,0,true)
     };
 
-    int totalExtras() { return mergeGoal>0?3:2; }
-    boolean passed(long score) {return endless||score>=minScore;}
+    // Side-by-side playtest: equal width and identical physics, different heights.
+    // Neither trial scores nor completion can unlock story levels.
+    static final GameSpec[] TRIALS = {
+        new GameSpec(-10,"Prova A · 285",11,0,0,0,0,false),
+        new GameSpec(-11,"Prova B · 340",12,0,0,0,0,false),
+        new GameSpec(-12,"Prova C · 400",13,0,0,0,0,false)
+    };
+
+    int totalExtras() { return trial?0:(mergeGoal>0?3:2); }
+    boolean passed(long score) {return trial||endless||score>=minScore;}
     int extrasMask(long score,int maxTier,int merges) {
-        if(endless)return 0;
+        if(endless||trial)return 0;
         int mask=0;
         if(score>=extraScore)mask|=1;
         if(maxTier+1>=goalTier)mask|=2;
