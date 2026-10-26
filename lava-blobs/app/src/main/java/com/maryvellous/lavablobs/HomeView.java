@@ -83,6 +83,8 @@ public final class HomeView extends View {
 
     private void drawTitle(Canvas c,float t) {
         String title="Lava Blob";
+        letter.setTypeface(Typeface.create("sans-serif-black",Typeface.BOLD));
+        letter.setTextAlign(Paint.Align.LEFT);
         letter.setTextSize(58f);
         float total=letter.measureText(title);
         float x=(420-total)*.5f;

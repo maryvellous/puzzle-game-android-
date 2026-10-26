@@ -1,47 +1,32 @@
-# Lava Blobs — Android
+# Lava Blob 1.0 — Android
 
-Un piccolo gioco originale per Android, ispirato alla soddisfazione dei merge puzzle e al movimento di una lava lamp. **Le bolle salgono**, anziché cadere. Tocca, trascina orizzontalmente e rilascia per lanciare un blob; due blob uguali si fondono in uno più grande. Due blob di livello massimo si dissolvono e liberano spazio.
+Un cozy merge puzzle personale. Le bolle salgono e si ammassano nel recipiente, deformandosi come slime. La **fisica approvata nella 0.5.0** (membrana di 24 particelle, pressione interna, molle, adesione temporanea) resta il nucleo del gioco.
 
-## Aspetto e fisica
-- Palette di nove colori distinti: indaco brillante, azzurro chiaro, indaco profondo, lavanda, viola intenso, pervinca, viola scuro, lilla e ametista. Nessun rosso, giallo o verde.
-- Ogni blob ha **24 particelle mobili su un perimetro collegato da molle**: gli urti comprimono la superficie effettiva, le molle tra vicini trasmettono le onde, smorzamento e oscillazioni ricostruiscono lentamente la forma. Le collisioni e i bordi usano direttamente il profilo visibile, non un secondo cerchio rigido.
-- Le masse hanno galleggiamento verso l'alto, attrito viscoso, urti con pareti e fra blob, trasferimento della quantità di moto e deformazioni di contatto.
-- **Scuoti il telefono**: l'accelerometro rileva l'accelerazione brusca senza confonderla con la gravità statica. La scossa imprime una spinta reale (anche muovendo il telefono avanti e indietro), provoca collisioni e fa tremolare i 24 particelle elastiche. Sensore attivo solo mentre il gioco è in primo piano; nessun permesso speciale o accesso alla rete.
-- Merge con pulsazione circolare, gocce di colore, vibrazione aptica e piccola accelerazione verso l'alto.
-- Record salvato sul dispositivo; pulsante ricomincia; game over quando il fondo rimane occupato troppo a lungo.
-- Rendering pieno, opaco e saturo: rimossi i due riflessi ovali, gli shader sfumati e gli aloni; ogni livello si riconosce dal colore.
-- Collisioni volutamente **molto morbide**: quasi tutta la sovrapposizione comprime il contorno visibile e gonfia i lati, anziché allontanare bruscamente i centri; rimbalzo ridotto e onde che si propagano lungo 24 nodi.
-- Grafica interamente disegnata su Android Canvas: niente immagini, librerie di gioco, login, ads o rete. La superficie visibile corrisponde al corpo che collide.
+## Gioco
+- Home minimale: titolo **Lava Blob** con ogni lettera deformata in tempo reale; sei livelli per pagina, swipe orizzontale.
+- **12 livelli iniziali** con forme di contenitore differenti. Sblocchi il seguente completando il precedente; puoi rigiocarli senza limiti. Ogni livello richiede un punteggio minimo e presenta 2 o 3 obiettivi extra. **Le soglie sono provvisorie** e saranno tarate con le partite della giocatrice.
+- **Modalità infinita immediata**: scegli uno fra tre recipienti. Ogni 20.000 punti (soglia provvisoria) si ottiene un Erase, accumulabile senza limiti; premendo Erase e poi un blob si cancella soltanto quel blob.
+- **Game Over corretto**: non controlla più se una bolla scende in basso. Verifica invece se esiste un ingresso valido per il prossimo blob; serve un blocco persistente (7 secondi nei livelli, 10 nell'infinita), durante il quale si può scuotere e, nell'infinita, usare Erase.
+- Colori definitivi (dimensioni 1–9): `#065143`, `#4B748E`, `#6D9DC5`, `#6E73AD`, `#53599A`, `#6F4994`, `#8A4C88`, `#A54F7B`, `#DB5461`. Ripetuti ciclicamente oltre la nona.
+- Drop soltanto di dimensioni 1–5: **45%, 28%, 16%, 8%, 3%**.
+- Punteggio proposto: prima fusione **100**, poi ogni livello moltiplicato per **1,6** e arrotondato alle decine. Non ci sono bonus combo.
+- I blob giganti non si dissolvono e i tier proseguono oltre il nono.
+- Scuotimento via accelerometro, registrato solo mentre il gioco è in primo piano.
 
-## Compilare
+## Bilanciamento e privacy
+Le misure delle partite vengono salvate **solo sul telefono** (punteggio, drop, fusioni, dimensione massima, Erase, durata, fusioni per livello). Dalla Home, `COPIA DATI PARTITE` copia il JSON delle ultime 50 partite per l'analisi manuale; non esiste backend, raccolta a distanza o account. Le soglie dei livelli e dell'Erase sono ipotesi iniziali, non risultati di playtest.
 
-Progetto Gradle **autonomo** nella cartella `lava-blobs/`, non modifica il puzzle Rovina presente alla radice del repo.
-
-Requisiti: JDK 17, Android SDK 35, Gradle 8.9.
+## Sviluppo
+Progetto indipendente dentro `lava-blobs/`. L'app di puzzle Rovina nella radice del repository è separata. Richiede JDK 17, Android SDK 35 e Gradle 8.9.
 
 ```bash
 gradle -p lava-blobs :app:testDebugUnitTest :app:assembleDebug
 ```
 
-L'APK sarà in `lava-blobs/app/build/outputs/apk/debug/app-debug.apk`. La workflow **Build Lava Blobs APK** lo allega come artifact scaricabile ad ogni build riuscita.
+Il workflow `Build Lava Blobs APK` produce un artifact installabile. Debug APK firmati in job diversi potrebbero richiedere disinstallazione della versione precedente: il certificato di debug di GitHub Actions non è stabile.
 
-## Controlli
-- Tocca un punto o trascina il dito per scegliere la colonna.
-- Rilascia per far **salire** il blob.
-- Due blob della stessa dimensione si uniscono, facendo punti.
-- Il pulsante ↻ ricomincia; alla fine tocca per ripartire.
-- Se il punto di lancio è occupato, spostati e riprova.
-- **Scuoti fisicamente il telefono** per agitare tutti i blob e farli interagire; funziona anche con movimenti avanti/indietro, non serve inclinarlo. Se il dispositivo non ha accelerometro, tutto il resto del gioco continua a funzionare.
-
-## Struttura
-- `BlobWorld.java`: simulazione e punteggio senza dipendenze Android, testabile con JUnit.
-- `Blob.java`: deformazione elastica a 24 nodi.
-- `LavaView.java`: rendering procedurale, input, particelle e UI.
-- `MainActivity.java`: host Android fullscreen e gestione del ciclo di vita del sensore.
-- `ShakeDetector.java`: filtro gravità, soglia scossa e cooldown, testabile senza Android.
-
-## Stato
-Versione 0.5.0: **sostituito completamente il solver radiale**. Ogni blob è un poligono morbido con 24 particelle mobili, molle fra vicini e fra secondi vicini, pressione interna mediante vincolo di area, urti locali tra particella e segmento e legami appiccicosi temporanei fra blob di livelli diversi. Un sottile filamento può apparire mentre il contatto si stacca. I blob continuano a salire e ad accumularsi al soffitto. Non vengono modificati i colori pieni, lo scuotimento, i merge o il punteggio. CI: compilazione e test numerici; la resa dei contatti va collaudata su Android.
-
-## Nota tecnica 0.5
-Il rendering segue direttamente le coordinate delle particelle fisiche. Non esiste più un cerchio di collisione separato, né un elenco di spostamenti radiali che possano produrre triangoli artificiali. L'area è conservata approssimativamente dalla pressione; la forma si adatta grazie ai vincoli di lunghezza. Le collisioni sono risolte sulla membrana, non sui centri. Lo scuotimento muove fisicamente tutti i punti della membrana.
+## Aree da verificare con il telefono
+- Collisioni delle membrane dentro recipienti concavi e al soffitto; non alterare gratuitamente i parametri della 0.5.
+- Assenza di false sconfitte dopo una scossa e usabilità dell'Erase durante il conto alla rovescia.
+- Leggibilità del titolo animato e spaziature su display di diversa altezza.
+- Difficoltà e percentuali di completamento, per rivedere le soglie.
