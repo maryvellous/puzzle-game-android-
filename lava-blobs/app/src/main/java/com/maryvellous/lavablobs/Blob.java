@@ -40,7 +40,10 @@ final class Blob {
     }
 
     float radius() {
-        return RADII[tier];
+        if(tier<RADII.length)return RADII[tier];
+        // Unlimited merge tiers: colour repeats after nine, size grows until
+        // the finite playfield determines practical impossibility.
+        return (float)Math.min(160.0,99.0*Math.pow(1.15,tier-(RADII.length-1)));
     }
 
     void recenter() {

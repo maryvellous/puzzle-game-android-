@@ -11,7 +11,7 @@ import java.util.Random;
  */
 final class BlobWorld {
     static final float WIDTH = 420f, LEFT = 29f, RIGHT = 391f, TOP = 155f;
-    static final int MAX_TIER = Blob.RADII.length - 1;
+    static final int ERASE_EVERY_POINTS=20_000; // provisional: revise after playtests
 
     static final class Merge {
         final float x, y, radius;
@@ -40,41 +40,51 @@ final class BlobWorld {
     final ArrayList<Merge> merges = new ArrayList<>();
     final ArrayList<Adhesion> adhesions = new ArrayList<>();
     private final Random random;
-    float height = 850f, time, crowdedTime;
-    int score, nextTier;
+    final GameSpec spec;
+    Vessel vessel;
+    float height=850f, time, blockedTime,checkClock;
+    long score;
+    int nextTier,dropCount,mergeCount,maxTierReached;
+    int earnedErases,usedErases,eraseCount;
+    final int[] mergesByTier=new int[40];
     boolean gameOver;
 
-    BlobWorld(Random random) {
-        this.random=random;
+    BlobWorld(Random random){this(random,null);}
+    BlobWorld(Random random,GameSpec spec) {
+        this.random=random;this.spec=spec;
         reset();
     }
 
-    float bottom() { return height - 153f; }
-
-    void setHeight(float height) {
-        this.height=Math.max(620f,height);
+    float bottom(){return vessel.bottom;}
+    void setHeight(float height){
+        float h=Math.max(620f,height);
+        if(Math.abs(this.height-h)>.2f) {
+            this.height=h;
+            vessel=new Vessel(spec==null?-1:spec.shape,h);
+        }
     }
-
-    void reset() {
-        blobs.clear(); merges.clear(); adhesions.clear();
-        score=0; time=0f; crowdedTime=0f; gameOver=false;
+    void reset(){
+        blobs.clear();merges.clear();adhesions.clear();
+        score=0;time=0f;blockedTime=0f;checkClock=0f;gameOver=false;
+        dropCount=0;mergeCount=0;maxTierReached=0;
+        earnedErases=0;usedErases=0;eraseCount=0;
+        java.util.Arrays.fill(mergesByTier,0);
+        vessel=new Vessel(spec==null?-1:spec.shape,height);
         nextTier=rollTier();
     }
-
-    private int rollTier() {
-        int[] options={0,0,0,1,1,1,2,2,3};
-        return options[random.nextInt(options.length)];
-    }
+    private int rollTier(){return GameSpec.rollDrop(random);}
 
     boolean canLaunch(float x) {
-        if (gameOver || blobs.size() > 75) return false;
-        float r=Blob.RADII[nextTier], launchRadius=r*.76f;
-        float cx=clamp(x,LEFT+r,RIGHT-r), cy=bottom()-r-7f;
-        for (Blob b:blobs) {
-            for (int i=0;i<Blob.NODES;i++) {
-                if (Math.hypot(b.px[i]-cx,b.py[i]-cy)<launchRadius+2f) return false;
+        if(gameOver)return false;
+        float r=Blob.RADII[nextTier],launchRadius=r*.76f;
+        float cx=clamp(x,LEFT+r,RIGHT-r),cy=bottom()-r-7f;
+        if(!vessel.fits(cx,cy,launchRadius))return false;
+        for(Blob b:blobs) {
+            if(pointInside(b,cx,cy))return false;
+            for(int i=0;i<Blob.NODES;i++) {
+                if(Math.hypot(b.px[i]-cx,b.py[i]-cy)<launchRadius+2f)return false;
             }
-            if (Math.hypot(b.x-cx,b.y-cy)<launchRadius+b.radius()*.65f) return false;
+            if(Math.hypot(b.x-cx,b.y-cy)<launchRadius+b.radius()*.56f)return false;
         }
         return true;
     }
@@ -88,7 +98,10 @@ final class BlobWorld {
             b.vx[i]=(random.nextFloat()-.5f)*24f;
         }
         blobs.add(b);
+        dropCount++;
+        maxTierReached=Math.max(maxTierReached,nextTier);
         nextTier=rollTier();
+        checkClock=.2f;
         return true;
     }
 
@@ -108,21 +121,42 @@ final class BlobWorld {
         }
     }
 
+    /** True when at least one location can introduce the next actual mesh. */
+    boolean canLaunchAnywhere() {
+        for(float x=LEFT+18f;x<=RIGHT-18f;x+=8f)if(canLaunch(x))return true;
+        return canLaunch(210f);
+    }
+
+    float graceSeconds() {return spec!=null&&spec.endless?10f:7f;}
+    float remainingSeconds(){return Math.max(0f,graceSeconds()-blockedTime);}
+
+    boolean eraseAt(float x,float y) {
+        if(spec==null||!spec.endless||eraseCount<1||gameOver)return false;
+        for(int i=blobs.size()-1;i>=0;i--) {
+            Blob b=blobs.get(i);
+            if(!pointInside(b,x,y))continue;
+            blobs.remove(i);
+            adhesions.removeIf(link->link.a==b||link.b==b);
+            eraseCount--;usedErases++;
+            blockedTime=0;checkClock=.2f;
+            return true;
+        }
+        return false;
+    }
+
     void tick(float dt) {
         if(gameOver)return;
         dt=clamp(dt,0f,.042f);
         for(int s=0;s<2;s++)step(dt*.5f);
-        boolean crowded=false;
-        if(blobs.size()>=8) {
-            for(Blob b:blobs) {
-                for(int i=0;i<Blob.NODES;i++) {
-                    if(b.py[i]>bottom()-27f) { crowded=true; break; }
-                }
-                if(crowded)break;
-            }
+        // No Y-threshold. Check real incoming-object clearance, repeatedly,
+        // after giving the soft bodies time to rebound from any phone shake.
+        checkClock+=dt;
+        if(checkClock>=.18f) {
+            checkClock=0f;
+            if(canLaunchAnywhere())blockedTime=0f;
+            else blockedTime+=.18f;
         }
-        crowdedTime=crowded?crowdedTime+dt:Math.max(0f,crowdedTime-2.5f*dt);
-        if(crowdedTime>2.8f||blobs.size()>75)gameOver=true;
+        if(blockedTime>=graceSeconds())gameOver=true;
     }
 
     private void step(float dt) {
@@ -161,7 +195,7 @@ final class BlobWorld {
                 }
             }
             solveAdhesions();
-            for(Blob b:blobs)b.confine(LEFT,RIGHT,TOP,bottom());
+            for(Blob b:blobs)vessel.confine(b);
         }
         for(Blob b:blobs)b.finish(dt);
         updateAdhesions(dt);
@@ -176,18 +210,25 @@ final class BlobWorld {
 
     private void fuse(int i,int j,Blob a,Blob b) {
         float cx=(a.x+b.x)*.5f,cy=(a.y+b.y)*.5f;
-        int points=(a.tier+1)*(a.tier+1)*20;
-        int nextTier=Math.min(MAX_TIER,a.tier+1);
+        int points=GameSpec.pointsForMerge(a.tier);
+        int nextTier=a.tier+1;
         blobs.remove(j);blobs.remove(i);
         score+=points;
-        merges.add(new Merge(cx,cy,Blob.RADII[nextTier],nextTier,points));
-        if(a.tier==MAX_TIER)return;
+        mergeCount++;
+        if(a.tier<mergesByTier.length)mergesByTier[a.tier]++;
+        maxTierReached=Math.max(maxTierReached,nextTier);
+        merges.add(new Merge(cx,cy,new Blob(cx,cy,nextTier,.72f).radius(),nextTier,points));
+        if(spec!=null&&spec.endless) {
+            int earned=(int)Math.min(2_000_000_000L,score/ERASE_EVERY_POINTS);
+            if(earned>earnedErases) {eraseCount+=earned-earnedErases;earnedErases=earned;}
+        }
         Blob born=new Blob(cx,cy,nextTier,.72f);
         // Preserve some fluid motion through merging.
         for(int k=0;k<Blob.NODES;k++) {
             born.vx[k]=(a.vx[k]+b.vx[k])*.36f;
             born.vy[k]=(a.vy[k]+b.vy[k])*.36f-64f;
         }
+        vessel.confine(born);
         blobs.add(born);
     }
 

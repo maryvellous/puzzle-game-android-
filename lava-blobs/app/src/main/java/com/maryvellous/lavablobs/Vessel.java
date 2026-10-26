@@ -13,8 +13,9 @@ final class Vessel {
 
     Vessel(int shape,float screenHeight) {
         this.shape=shape;
-        bottom=Math.max(430f,screenHeight-187f);
-        top=Math.min(211f,bottom-305f);
+        bottom=shape==-1?Math.max(470f,screenHeight-153f):
+                Math.max(430f,screenHeight-187f);
+        top=shape==-1?155f:Math.min(211f,bottom-305f);
         float[] x=new float[(SEGMENTS+1)*2];
         float[] y=new float[x.length];
         float mid=210f;
