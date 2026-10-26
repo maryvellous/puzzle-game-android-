@@ -26,18 +26,10 @@ public final class LavaView extends View {
     private static final int BACKGROUND = Color.rgb(10, 9, 31);
     // Solid, saturated, intentionally distinguishable hues from blue-indigo
     // through lavender and violet, never red/yellow/green.
-    private static final int[] PURPLES = {
-            0xFF4347D8, // indaco
-            0xFF55B7FF, // azzurro brillante
-            0xFF672BE8, // viola blu intenso
-            0xFFB98AFF, // lavanda
-            0xFF8C29E8, // viola saturo
-            0xFF538BFF, // pervinca
-            0xFF4A20B9, // indaco scuro
-            0xFFC970F5, // lilla vivace
-            0xFFA53AF1  // ametista
-    };
-    private final BlobWorld world = new BlobWorld(new Random());
+    private final GameSpec spec;
+    private final ProgressStore progress;
+    private final Runnable onHome;
+    private final BlobWorld world;
     private final Random random = new Random();
     private final SharedPreferences prefs;
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -53,7 +45,9 @@ public final class LavaView extends View {
     private long previousFrame;
     private boolean aiming;
     private float blockedFlash;
-    private int best;
+    private long best;
+    private boolean eraseMode;
+    private boolean finalized;
 
     private static final class Wave {
         float x, y, r, age;
@@ -72,16 +66,23 @@ public final class LavaView extends View {
         }
     }
 
-    public LavaView(Context context) {
+    LavaView(Context context, GameSpec spec, ProgressStore progress, Runnable onHome) {
         super(context);
-        setLayerType(View.LAYER_TYPE_HARDWARE, null);
+        this.spec=spec;this.progress=progress;this.onHome=onHome;
+        world=new BlobWorld(new Random(),spec);
+        setLayerType(View.LAYER_TYPE_HARDWARE,null);
         setHapticFeedbackEnabled(true);
-        prefs = context.getSharedPreferences("lava_blobs", Context.MODE_PRIVATE);
-        best = prefs.getInt("best_score", 0);
-        letters.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        prefs=context.getSharedPreferences("lava_blobs",Context.MODE_PRIVATE);
+        best=progress.record(spec.id);
         letters.setTextAlign(Paint.Align.CENTER);
         line.setStyle(Paint.Style.STROKE);
+    }
 
+    void leave() {
+        if(!finalized&&(world.dropCount>0||world.mergeCount>0)){
+            progress.save(spec,world,false);
+            finalized=true;
+        }
     }
 
     /** Called by the activity's sensor listener on the UI thread. */
@@ -122,9 +123,10 @@ public final class LavaView extends View {
             }
             performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
         }
-        if (world.score > best) {
-            best = world.score;
-            prefs.edit().putInt("best_score", best).apply();
+        if (world.score > best) best=world.score;
+        if(world.gameOver&&!finalized) {
+            progress.save(spec,world,true);
+            finalized=true;
         }
         Canvas canvas = raw;
         canvas.save();
@@ -133,14 +135,18 @@ public final class LavaView extends View {
 
         drawBackground(canvas, h);
         drawVessel(canvas);
+        canvas.save();
+        Path glass=glassPath();
+        canvas.clipPath(glass);
         drawFloatingSpecks(canvas);
         drawWaves(canvas);
         drawAdhesions(canvas);
-        for (Blob b : world.blobs) drawBlob(canvas, b);
+        for(Blob b:world.blobs)drawBlob(canvas,b);
         drawDroplets(canvas);
+        canvas.restore();
         drawVesselRim(canvas);
-        drawHUD(canvas, h);
-        if (world.gameOver) drawGameOver(canvas, h);
+        drawHUD(canvas,h);
+        if(world.gameOver)drawGameOver(canvas,h);
 
         canvas.restore();
         postInvalidateOnAnimation();
@@ -160,32 +166,27 @@ public final class LavaView extends View {
         }
     }
 
+    private Path glassPath() {
+        Path shape=new Path();
+        for(int i=0;i<world.vessel.xs.length;i++){
+            float x=world.vessel.xs[i],y=world.vessel.ys[i];
+            if(i==0)shape.moveTo(x,y);else shape.lineTo(x,y);
+        }
+        shape.close();return shape;
+    }
+
     private void drawVessel(Canvas canvas) {
-        float top = BlobWorld.TOP - 21f;
-        float bottom = world.bottom() + 18f;
-        RectF bounds = new RectF(BlobWorld.LEFT - 13f, top,
-                BlobWorld.RIGHT + 13f, bottom);
-        paint.setStyle(Paint.Style.FILL);
-        paint.setShader(new LinearGradient(45, top, 355, bottom,
-                new int[] {0xFF19133D, 0xFF231744, 0xFF151133},
-                new float[] {0, .55f, 1}, Shader.TileMode.CLAMP));
-        canvas.drawRoundRect(bounds, 52f, 52f, paint);
-        paint.setShader(null);
-        paint.setColor(0x222E2774);
-        RectF inner = new RectF(BlobWorld.LEFT, BlobWorld.TOP,
-                BlobWorld.RIGHT, world.bottom());
-        canvas.drawRoundRect(inner, 30f, 30f, paint);
-        // The subtle diagonal reflection makes the vessel read as glass.
-        paint.setColor(0x295F50B4);
-        canvas.drawRoundRect(new RectF(34, top+45, 41, bottom-35), 3.5f, 3.5f, paint);
+        paint.setShader(null);paint.setStyle(Paint.Style.FILL);
+        paint.setColor(0xFF1B2B37);
+        canvas.drawPath(glassPath(),paint);
     }
 
     private void drawFloatingSpecks(Canvas c) {
         paint.setStyle(Paint.Style.FILL);
         for (int i = 0; i < 24; i++) {
             float x = 55 + (i * 79 % 305);
-            float range = world.bottom() - BlobWorld.TOP - 25;
-            float y = world.bottom() - ((i * 63f + world.time * (8 + i % 5 * 4)) % range);
+            float range = world.bottom() - world.vessel.top - 25;
+            float y = world.bottom() - ((i * 63f + world.time * (8 + i % 5 * 4)) % Math.max(1,range));
             paint.setColor(0x535D54BD);
             c.drawCircle(x + (float)Math.sin(world.time + i) * 2f, y, (i % 3 + 1) * .65f, paint);
         }
@@ -218,10 +219,10 @@ public final class LavaView extends View {
         // translucent collision halos. The elastic outline is the entire blob.
         paint.setStyle(Paint.Style.FILL);
         paint.setShader(null);
-        paint.setColor(PURPLES[b.tier]);
+        paint.setColor(Palette.forTier(b.tier));
         canvas.drawPath(blobPath, paint);
 
-        line.setColor(blend(PURPLES[b.tier], 0xFFF1E9FF, .24f));
+        line.setColor(blend(Palette.forTier(b.tier), 0xFFF1E9FF, .23f));
         line.setStrokeWidth(Math.max(1.0f, r * .020f));
         canvas.drawPath(blobPath, line);
     }
@@ -236,7 +237,7 @@ public final class LavaView extends View {
             float d=link.length();
             if(d<4.5f||d>25f)continue;
             float alpha=(1f-link.age/.36f)*(.85f-(d-4.5f)/50f);
-            paint.setColor(withAlpha(PURPLES[link.a.tier],(int)(220f*alpha)));
+            paint.setColor(withAlpha(Palette.forTier(link.a.tier),(int)(220f*alpha)));
             paint.setStrokeWidth(Math.max(1.2f,4.1f-d*.12f));
             canvas.drawLine(link.a.px[link.ai],link.a.py[link.ai],
                     link.b.px[link.bi],link.b.py[link.bi],paint);
@@ -248,7 +249,7 @@ public final class LavaView extends View {
     private void drawWaves(Canvas c) {
         for (Wave w : waves) {
             float progress = w.age / .68f;
-            line.setColor(withAlpha(PURPLES[w.tier], (int) (155 * (1 - progress))));
+            line.setColor(withAlpha(Palette.forTier(w.tier), (int) (155 * (1 - progress))));
             line.setStrokeWidth(2.8f * (1-progress) + .5f);
             c.drawCircle(w.x, w.y, w.r * (.55f + progress * 1.22f), line);
         }
@@ -258,7 +259,7 @@ public final class LavaView extends View {
         paint.setStyle(Paint.Style.FILL);
         paint.setShader(null);
         for (Droplet d : droplets) {
-            paint.setColor(withAlpha(PURPLES[d.tier], (int) (220 * (1f - d.age / .70f))));
+            paint.setColor(withAlpha(Palette.forTier(d.tier), (int) (220 * (1f - d.age / .70f))));
             c.drawCircle(d.x, d.y, d.radius * (1f - d.age / .70f), paint);
         }
     }
@@ -281,75 +282,93 @@ public final class LavaView extends View {
     }
 
     private void drawVesselRim(Canvas c) {
-        RectF edge = new RectF(BlobWorld.LEFT-13, BlobWorld.TOP-21f,
-                BlobWorld.RIGHT+13, world.bottom()+18f);
-        line.setColor(0x866A59AF);
-        line.setStrokeWidth(3f);
-        c.drawRoundRect(edge, 52, 52, line);
-        line.setColor(0x4CBAA1FF);
-        line.setStrokeWidth(1f);
-        c.drawRoundRect(new RectF(BlobWorld.LEFT-9, BlobWorld.TOP-17,
-                BlobWorld.RIGHT+9, world.bottom()+14), 49, 49, line);
-        // Glass neck and base, purely decorative.
-        paint.setStyle(Paint.Style.FILL);
-        paint.setColor(0xFF34245C);
-        c.drawRoundRect(new RectF(131, BlobWorld.TOP-34, 289, BlobWorld.TOP-19), 7, 7, paint);
-        c.drawRoundRect(new RectF(100, world.bottom()+16, 320, world.bottom()+27), 5, 5, paint);
+        line.setColor(0xFF688F95);
+        line.setStrokeWidth(4.2f);
+        c.drawPath(glassPath(),line);
+        line.setColor(0x886DA8A0);
+        line.setStrokeWidth(1.1f);
+        c.drawPath(glassPath(),line);
     }
 
-    private void drawHUD(Canvas c, float h) {
-        label(c, "LAVA BLOBS", 136, 53, 28, 0xFFE8DCFF, true);
-        label(c, "le bolle vanno su", 136, 75, 12, 0xFF9787C2, false);
-        label(c, "PUNTI", 76, 107, 10, 0xFF9787C2, true);
-        label(c, String.valueOf(world.score), 76, 127, 20, 0xFFE8DCFF, true);
-        label(c, "RECORD", 214, 107, 10, 0xFF9787C2, true);
-        label(c, String.valueOf(best), 214, 127, 20, 0xFFE8DCFF, true);
-        paint.setStyle(Paint.Style.FILL);
-        paint.setColor(0xFF2B204C);
-        c.drawCircle(365, 73, 26, paint);
-        label(c, "↻", 365, 83, 32, 0xFFE8DCFF, false);
+    private void drawHUD(Canvas c,float h) {
+        label(c,"LAVA BLOB",128,53,25,0xFFEDF4EE,true);
+        label(c,spec.endless?"Modalità infinita":("Livello "+(spec.id+1)+" · "+spec.name),
+                160,77,12,0xFFB1CDD0,false);
+        label(c,"PUNTI",73,105,10,0xFF9EB0B4,true);
+        label(c,Long.toString(world.score),73,133,22,0xFFFFFFFF,true);
+        label(c,"RECORD",189,105,10,0xFF9EB0B4,true);
+        label(c,Long.toString(best),189,133,20,0xFFFFFFFF,true);
 
-        float launcher = world.bottom()+74;
-        if (aiming) {
-            line.setColor(0x668777DD);
-            line.setStrokeWidth(1.7f);
-            line.setPathEffect(new android.graphics.DashPathEffect(new float[] {8,11}, 0f));
-            c.drawLine(aimX, world.bottom()-12, aimX, BlobWorld.TOP+15, line);
+        paint.setColor(0xFF263D45);paint.setStyle(Paint.Style.FILL);
+        c.drawCircle(319,58,20,paint);
+        c.drawCircle(376,58,20,paint);
+        label(c,"↻",319,66,25,0xFFD7EDE4,false);
+        label(c,"⌂",376,66,24,0xFFD7EDE4,false);
+
+        if(spec.endless) {
+            paint.setColor(eraseMode?0xFFDB5461:0xFF275F5A);
+            c.drawRoundRect(new RectF(273,97,398,143),17,17,paint);
+            label(c,"ERASE · "+world.eraseCount,335,125,14,0xFFFFFFFF,true);
+        }else{
+            label(c,"OBIETTIVO "+spec.minScore,328,110,11,0xFFB0D1C6,true);
+            label(c,"EXTRA "+spec.extras(world.score,world.maxTierReached,
+                    world.mergeCount)+"/"+spec.totalExtras(),
+                    327,132,11,0xFFE6B8C2,false);
+        }
+
+        if(world.blockedTime>.5f&&!world.gameOver) {
+            label(c,"INGRESSO BLOCCATO · "+(int)Math.ceil(world.remainingSeconds())+"s",
+                    210,188,12,0xFFFFAAB1,true);
+            if(spec.endless&&world.eraseCount>0)
+                label(c,"Usa un Erase per liberare spazio",210,206,11,0xFFE8D9D9,false);
+        }
+        if(eraseMode) {
+            label(c,"TOCCA IL BLOB DA ELIMINARE",210,190,12,0xFFFFBBC9,true);
+        }
+
+        float nextY=world.bottom()+80;
+        if(aiming) {
+            line.setColor(0x6679A6B1);line.setStrokeWidth(1.6f);
+            line.setPathEffect(new android.graphics.DashPathEffect(new float[]{7,11},0f));
+            c.drawLine(aimX,world.bottom()-8,aimX,world.vessel.top+10,line);
             line.setPathEffect(null);
         }
-        paint.setStyle(Paint.Style.FILL);
-        paint.setColor(0x443D2D75);
-        c.drawRoundRect(new RectF(42, world.bottom()+34, 378, h-20), 28, 28, paint);
-        drawNextBubble(c, aimX, launcher);
-        label(c, "TRASCINA · RILASCIA · SCUOTI", 210, h-23, 11, 0xFFC9B9ED, true);
-        if (blockedFlash > 0f) {
-            label(c, "SPOSTATI: QUI NON C'È SPAZIO",
-                    210, world.bottom()-19, 12,
-                    withAlpha(0xFFD4B6FF, (int)(255 * Math.min(1,blockedFlash * 3))), true);
-        } else if (world.crowdedTime > .25f) {
-            label(c, "LA LAMPADA SI STA RIEMPIENDO",
-                    210, world.bottom()-19, 11, 0xFFD4B6FF, true);
-        }
+        paint.setStyle(Paint.Style.FILL);paint.setShader(null);
+        paint.setColor(0xFF24333F);
+        c.drawRoundRect(new RectF(43,world.bottom()+32,377,h-22),21,21,paint);
+        drawNextBubble(c,aimX,nextY);
+        label(c,"TRASCINA · RILASCIA · SCUOTI",210,h-29,11,0xFFC3D3D4,true);
+        if(blockedFlash>0f)
+            label(c,"QUESTO INGRESSO È OCCUPATO",210,world.bottom()+22,11,
+                0xFFFFAAB1,true);
     }
 
-    private void drawNextBubble(Canvas c, float x, float y) {
-        float r = Blob.RADII[world.nextTier];
-        paint.setColor(withAlpha(PURPLES[world.nextTier], 65));
-        c.drawCircle(x, y, r * .88f + 6f, paint);
-        paint.setColor(PURPLES[world.nextTier]);
-        c.drawCircle(x, y, r * .88f, paint);
-        line.setColor(blend(PURPLES[world.nextTier], 0xFFF1E9FF, .24f));
-        line.setStrokeWidth(1.5f);
-        c.drawCircle(x, y, r * .88f, line);
+    private void drawNextBubble(Canvas c,float x,float y) {
+        float r=Blob.RADII[world.nextTier];
+        paint.setColor(Palette.forTier(world.nextTier));
+        c.drawCircle(x,y,r*.76f,paint);
+        line.setColor(blend(Palette.forTier(world.nextTier),0xFFFFFFFF,.28f));
+        line.setStrokeWidth(1.3f);
+        c.drawCircle(x,y,r*.76f,line);
     }
 
-    private void drawGameOver(Canvas c, float h) {
-        paint.setStyle(Paint.Style.FILL);
-        paint.setColor(0xD90B0822);
-        c.drawRoundRect(new RectF(50,h*.36f,370,h*.66f),35,35,paint);
-        label(c,"LAMPADA PIENA",210,h*.46f,26,0xFFE3D5FF,true);
-        label(c,"Hai fatto " + world.score + " punti",210,h*.51f,16,0xFFC6B5EB,false);
-        label(c,"TOCCA PER RICOMINCIARE",210,h*.59f,12,0xFFE3D5FF,true);
+    private void drawGameOver(Canvas c,float h) {
+        paint.setStyle(Paint.Style.FILL);paint.setShader(null);
+        paint.setColor(0xEB141C29);
+        c.drawRoundRect(new RectF(34,h*.36f,386,h*.71f),29,29,paint);
+        boolean won=spec.passed(world.score);
+        label(c,spec.endless?"PARTITA FINITA":(won?"LIVELLO SUPERATO":"RIPROVA"),
+                210,h*.44f,22,0xFFF2F5F1,true);
+        label(c,world.score+" punti",210,h*.495f,19,0xFFC6DCD7,false);
+        if(!spec.endless)label(c,"Extra "+spec.extras(world.score,
+                world.maxTierReached,world.mergeCount)+"/"+spec.totalExtras(),
+                210,h*.537f,14,0xFFD9BFC9,false);
+        paint.setColor(0xFF275F5A);
+        c.drawRoundRect(new RectF(55,h*.585f,198,h*.664f),15,15,paint);
+        paint.setColor(0xFF3A4553);
+        c.drawRoundRect(new RectF(221,h*.585f,365,h*.664f),15,15,paint);
+        label(c,"RIPROVA",127,h*.633f,13,0xFFF6F4F2,true);
+        label(c,"HOME",293,h*.633f,13,0xFFF6F4F2,true);
     }
 
     private void label(Canvas c, String value, float x, float y, float size,
@@ -375,53 +394,53 @@ public final class LavaView extends View {
     }
 
     @Override public boolean onTouchEvent(MotionEvent event) {
-        if (getWidth() == 0 || getHeight() == 0) return false;
-        float x = (event.getX() - offsetX()) / scale();
-        float y = event.getY() / scale();
-        switch (event.getActionMasked()) {
+        if(getWidth()==0||getHeight()==0)return false;
+        float x=(event.getX()-offsetX())/scale(),y=event.getY()/scale();
+        float h=getHeight()/scale();
+        switch(event.getActionMasked()){
             case MotionEvent.ACTION_DOWN:
-                if (world.gameOver) {
-                    restart();
+                if(world.gameOver){
+                    if(y>h*.57f&&y<h*.70f){
+                        if(x>=209)onHome.run();else restart();
+                    }
                     return true;
                 }
-                if (x > 332 && y < 115) {
-                    restart();
+                if(y<94f&&x>345f){onHome.run();return true;}
+                if(y<94f&&x>287f){restart();return true;}
+                if(spec.endless&&x>266f&&y>96f&&y<149f) {
+                    eraseMode=!eraseMode;invalidate();return true;
+                }
+                if(eraseMode){
+                    if(world.eraseAt(x,y)){
+                        performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+                        eraseMode=false;
+                    }
                     return true;
                 }
-                aiming = true;
-                aimX = BlobWorld.clamp(x, 52, 368);
-                invalidate();
-                return true;
+                aiming=true;aimX=BlobWorld.clamp(x,49f,371f);return true;
             case MotionEvent.ACTION_MOVE:
-                if (aiming) aimX = BlobWorld.clamp(x, 52, 368);
+                if(aiming)aimX=BlobWorld.clamp(x,49f,371f);
                 return true;
             case MotionEvent.ACTION_UP:
-                if (aiming) {
-                    aimX = BlobWorld.clamp(x, 52, 368);
-                    if (world.launch(aimX)) {
+                if(aiming){
+                    aimX=BlobWorld.clamp(x,49f,371f);
+                    if(world.launch(aimX))
                         performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
-                    } else {
-                        blockedFlash = .75f;
-                    }
+                    else blockedFlash=.9f;
                 }
-                aiming = false;
-                return true;
+                aiming=false;return true;
             case MotionEvent.ACTION_CANCEL:
-                aiming = false;
-                return true;
-            default:
-                return true;
+                aiming=false;return true;
+            default:return true;
         }
     }
 
     private void restart() {
+        leave();
         world.reset();
-        waves.clear();
-        droplets.clear();
-        blockedFlash = 0f;
-        aiming = false;
-        aimX = W / 2;
-        previousFrame = 0;
+        waves.clear();droplets.clear();
+        blockedFlash=0f;eraseMode=false;aiming=false;
+        aimX=W*.5f;previousFrame=0;finalized=false;
         invalidate();
     }
 }
