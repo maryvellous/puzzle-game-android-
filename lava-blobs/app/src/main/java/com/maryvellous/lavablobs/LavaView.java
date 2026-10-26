@@ -314,6 +314,11 @@ public final class LavaView extends View {
             label(c,"EXTRA "+spec.extras(world.score,world.maxTierReached,
                     world.mergeCount)+"/"+spec.totalExtras(),
                     327,132,11,0xFFE6B8C2,false);
+            label(c,""+spec.extraScore+" PT · BOLLA "+spec.goalTier,
+                    327,153,10,0xFFE2CAD0,false);
+            if(spec.mergeGoal>0)
+                label(c,""+spec.mergeGoal+" FUSIONI",
+                    327,170,10,0xFFE2CAD0,false);
         }
 
         if(world.blockedTime>.5f&&!world.gameOver) {

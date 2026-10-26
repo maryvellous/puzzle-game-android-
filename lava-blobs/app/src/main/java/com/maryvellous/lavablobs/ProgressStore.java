@@ -23,7 +23,7 @@ final class ProgressStore {
     }
     long record(int id) {return prefs.getLong("record_"+id,0L);}
     boolean cleared(int id) {return prefs.getBoolean("clear_"+id,false);}
-    int extras(int id) {return prefs.getInt("extras_"+id,0);}
+    int extras(int id) {return Integer.bitCount(prefs.getInt("extras_mask_"+id,0));}
     int highestUnlocked() {
         for(int i=0;i<GameSpec.LEVELS.length;i++) {
             if(!cleared(i))return i;
@@ -32,12 +32,14 @@ final class ProgressStore {
     }
 
     void save(GameSpec spec,BlobWorld world,boolean finished) {
-        int extra=spec.extras(world.score,world.maxTierReached,world.mergeCount);
+        int extraMask=spec.extrasMask(world.score,world.maxTierReached,world.mergeCount);
         SharedPreferences.Editor editor=prefs.edit();
         if(world.score>record(spec.id))editor.putLong("record_"+spec.id,world.score);
         if(!spec.endless) {
             if(finished&&spec.passed(world.score))editor.putBoolean("clear_"+spec.id,true);
-            editor.putInt("extras_"+spec.id,Math.max(extras(spec.id),extra));
+            if(finished&&spec.passed(world.score))
+                editor.putInt("extras_mask_"+spec.id,
+                        prefs.getInt("extras_mask_"+spec.id,0)|extraMask);
         }
         editor.apply();
         try{

@@ -39,13 +39,16 @@ final class GameSpec {
 
     int totalExtras() { return mergeGoal>0?3:2; }
     boolean passed(long score) {return endless||score>=minScore;}
-    int extras(long score,int maxTier,int merges) {
+    int extrasMask(long score,int maxTier,int merges) {
         if(endless)return 0;
-        int count=0;
-        if(score>=extraScore)count++;
-        if(maxTier+1>=goalTier)count++;
-        if(mergeGoal>0&&merges>=mergeGoal)count++;
-        return count;
+        int mask=0;
+        if(score>=extraScore)mask|=1;
+        if(maxTier+1>=goalTier)mask|=2;
+        if(mergeGoal>0&&merges>=mergeGoal)mask|=4;
+        return mask;
+    }
+    int extras(long score,int maxTier,int merges) {
+        return Integer.bitCount(extrasMask(score,maxTier,merges));
     }
     static int pointsForMerge(int fromTier) {
         double value=100.0*Math.pow(1.6,Math.max(0,fromTier));
