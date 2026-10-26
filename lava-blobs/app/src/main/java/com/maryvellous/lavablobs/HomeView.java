@@ -24,7 +24,8 @@ public final class HomeView extends View {
     private final Paint letter=new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path path=new Path(), glyph=new Path(), warped=new Path();
     private int page=0;
-    private boolean chooseEndless=false;
+    // 0 = regular levels, 1 = endless, 2 = vessel-height lab.
+    private int section=0;
     private long start=System.nanoTime();
     private float downX,downY;
 
@@ -37,7 +38,7 @@ public final class HomeView extends View {
         letter.setTextAlign(Paint.Align.LEFT);
     }
 
-    private float scale(){return Math.min(getWidth()/420f,getHeight()/620f);}
+    private float scale(){return Math.min(getWidth()/420f,getHeight()/780f);}
     private float offX(){return(getWidth()-420f*scale())*.5f;}
 
     @Override protected void onDraw(Canvas raw) {
@@ -49,31 +50,37 @@ public final class HomeView extends View {
         float t=(System.nanoTime()-start)/1_000_000_000f;
         drawTitle(raw,t);
         label(raw,"Un piccolo gioco tutto morbido",210,155,13,0xFFA5ABB9,false);
-        rounded(raw,70,170,350,217,24,0xFF233645);
-        label(raw,chooseEndless?"←  TORNA AI LIVELLI":"∞  MODALITÀ INFINITA",210,200,15,0xFFDAE9E4,true);
-        int count=chooseEndless?3:6;
-        float cardH=Math.min(145f,Math.max(95f,(h-330f)/3f));
+        rounded(raw,24,174,204,218,20,section==1?0xFF275F5A:0xFF233645);
+        rounded(raw,216,174,396,218,20,section==2?0xFF275F5A:0xFF233645);
+        label(raw,section==1?"←  LIVELLI":"∞  INFINITA",114,202,13,0xFFDAE9E4,true);
+        label(raw,section==2?"←  LIVELLI":"TEST VASETTI",306,202,13,0xFFDAE9E4,true);
+        int count=section==0?6:3;
+        float cardH=Math.min(136f,Math.max(88f,(h-430f)/3f));
         float gap=10f,cardW=172f;
         for(int index=0;index<count;index++){
             int row=index/2,col=index%2;
             int levelId=page*6+index;
-            GameSpec spec=chooseEndless?GameSpec.ENDLESS[index]:
+            GameSpec spec=section==1?GameSpec.ENDLESS[index]:
+                    section==2?GameSpec.TRIALS[index]:
                     (levelId<GameSpec.LEVELS.length?GameSpec.LEVELS[levelId]:null);
             if(spec==null)continue;
             float x=32+col*(cardW+12),y=239+row*(cardH+gap);
-            boolean locked=!spec.endless&&levelId>progress.highestUnlocked();
+            boolean locked=!spec.endless&&!spec.trial&&levelId>progress.highestUnlocked();
             drawCard(raw,spec,x,y,cardW,cardH,locked);
         }
         float dotsY=239+3*(cardH+gap)+14;
-        if(!chooseEndless) {
+        if(section==0) {
             for(int p=0;p<(GameSpec.LEVELS.length+5)/6;p++){
                 paint.setStyle(Paint.Style.FILL);
                 paint.setColor(p==page?0xFFDB5461:0xFF50586B);
                 raw.drawCircle(199+(p-(GameSpec.LEVELS.length+5)/12f)*18,dotsY,4.5f,paint);
             }
             label(raw,"Scorri lateralmente per gli altri livelli",210,dotsY+25,11,0xFF8C96A7,false);
+        }else if(section==1){
+            label(raw,"Tre contenitori · Erase ogni 20.000 punti",210,dotsY+21,11,0xFFA5ABB9,false);
         }else{
-            label(raw,"Scegli il contenitore · Erase ogni 20.000 punti",210,dotsY+21,11,0xFFA5ABB9,false);
+            label(raw,"STESSA LARGHEZZA · STESSA FISICA",210,dotsY+17,12,0xFFD6DFDD,true);
+            label(raw,"Confronta durata, punti e numero di drop.",210,dotsY+36,11,0xFFA5ABB9,false);
         }
         rounded(raw,118,h-63,302,h-24,18,0xFF263747);
         label(raw,"COPIA DATI PARTITE",210,h-38,11,0xFFD7E5E8,true);
@@ -127,8 +134,7 @@ public final class HomeView extends View {
         paint.setColor(locked?0xFF34414F:0xFF416775);
         c.drawRoundRect(new RectF(x,y,x+w,y+h),20,20,paint);
         Vessel vessel=new Vessel(spec.shape,850f);
-        float factor=(h-33f)/(vessel.bottom-vessel.top);
-        factor=Math.min(factor,.31f);
+        float factor=spec.trial?.22f:Math.min((h-33f)/(vessel.bottom-vessel.top),.31f);
         float iconCenter=x+43f;
         float baseline=y+(h-(vessel.bottom-vessel.top)*factor)*.5f;
         path.reset();
@@ -146,6 +152,15 @@ public final class HomeView extends View {
         paint.setColor(locked?0xFF5E6873:Palette.COLORS[Math.abs(spec.shape)%9]);
         c.drawPath(path,paint);
         float lx=x+82;
+        if(spec.trial) {
+            String[] letters={"A","B","C"};
+            String[] heights={"285","340","400"};
+            int i=-10-spec.id;
+            label(c,"PROVA "+letters[i],lx+28,y+h*.34f,15,0xFFECF4EF,true);
+            label(c,heights[i]+" unità",lx+28,y+h*.57f,12,0xFFBDD9DB,true);
+            label(c,"Gioca liberamente",lx+28,y+h*.77f,9,0xFFAED0C0,false);
+            return;
+        }
         if(spec.endless) {
             label(c,"∞",lx+25,y+h*.34f,30,0xFFE6E9E9,true);
             label(c,spec.name.substring(11),lx+30,y+h*.66f,13,0xFFE6E9E9,true);
@@ -184,21 +199,24 @@ public final class HomeView extends View {
         switch(e.getActionMasked()){
             case MotionEvent.ACTION_DOWN:downX=x;downY=y;return true;
             case MotionEvent.ACTION_UP:
-                if(Math.abs(x-downX)>48f&&!chooseEndless) {
+                if(Math.abs(x-downX)>48f&&section==0) {
                     page=Math.max(0,Math.min((GameSpec.LEVELS.length-1)/6,
                             page+(x<downX?1:-1)));
                     invalidate();return true;
                 }
-                if(y>=170&&y<=220) {
-                    chooseEndless=!chooseEndless;page=0;invalidate();return true;
+                if(y>=174&&y<=218) {
+                    if(x>=24&&x<=204)section=section==1?0:1;
+                    else if(x>=216&&x<=396)section=section==2?0:2;
+                    page=0;invalidate();return true;
                 }
                 if(y>=h-71) {progress.copyReport();return true;}
-                float cardH=Math.min(145f,Math.max(95f,(h-330f)/3f));
-                for(int i=0;i<(chooseEndless?3:6);i++){
+                float cardH=Math.min(136f,Math.max(88f,(h-430f)/3f));
+                for(int i=0;i<(section==0?6:3);i++){
                     float lx=32+(i%2)*184f,ly=239+(i/2)*(cardH+10f);
                     if(x>=lx&&x<=lx+172&&y>=ly&&y<=ly+cardH) {
                         int id=page*6+i;
-                        if(chooseEndless)listener.start(GameSpec.ENDLESS[i]);
+                        if(section==1)listener.start(GameSpec.ENDLESS[i]);
+                        else if(section==2)listener.start(GameSpec.TRIALS[i]);
                         else if(id<GameSpec.LEVELS.length&&id<=progress.highestUnlocked())
                             listener.start(GameSpec.LEVELS[id]);
                         return true;

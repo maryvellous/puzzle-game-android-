@@ -92,7 +92,7 @@ public final class LavaView extends View {
     }
 
     private float scale() {
-        return Math.min(getWidth() / W, getHeight() / 620f);
+        return Math.min(getWidth() / W, getHeight() / 780f);
     }
 
     private float offsetX() {
@@ -292,7 +292,9 @@ public final class LavaView extends View {
 
     private void drawHUD(Canvas c,float h) {
         label(c,"LAVA BLOB",128,53,25,0xFFEDF4EE,true);
-        label(c,spec.endless?"Modalità infinita":("Livello "+(spec.id+1)+" · "+spec.name),
+        label(c,spec.endless?"Modalità infinita":
+                (spec.trial?spec.name+" · confronto altezza":
+                "Livello "+(spec.id+1)+" · "+spec.name),
                 160,77,12,0xFFB1CDD0,false);
         label(c,"PUNTI",73,105,10,0xFF9EB0B4,true);
         label(c,Long.toString(world.score),73,133,22,0xFFFFFFFF,true);
@@ -309,6 +311,10 @@ public final class LavaView extends View {
             paint.setColor(eraseMode?0xFFDB5461:0xFF275F5A);
             c.drawRoundRect(new RectF(273,97,398,143),17,17,paint);
             label(c,"ERASE · "+world.eraseCount,335,125,14,0xFFFFFFFF,true);
+        }else if(spec.trial) {
+            label(c,"TEST VASETTO",327,108,12,0xFFB0D1C6,true);
+            label(c,Math.round(world.bottom()-world.vessel.top)+" UNITÀ",327,127,12,0xFFE2CAD0,true);
+            label(c,"DROP "+world.dropCount,327,147,12,0xFFE2CAD0,false);
         }else{
             label(c,"OBIETTIVO "+spec.minScore,328,110,11,0xFFB0D1C6,true);
             label(c,"EXTRA "+spec.extras(world.score,world.maxTierReached,
@@ -331,7 +337,9 @@ public final class LavaView extends View {
             label(c,"TOCCA IL BLOB DA ELIMINARE",210,190,12,0xFFFFBBC9,true);
         }
 
-        float nextY=world.bottom()+80;
+        float deckTop=world.bottom()+22f;
+        float deckBottom=deckTop+100f;
+        float nextY=deckTop+43f;
         if(aiming) {
             line.setColor(0x6679A6B1);line.setStrokeWidth(1.6f);
             line.setPathEffect(new android.graphics.DashPathEffect(new float[]{7,11},0f));
@@ -340,9 +348,9 @@ public final class LavaView extends View {
         }
         paint.setStyle(Paint.Style.FILL);paint.setShader(null);
         paint.setColor(0xFF24333F);
-        c.drawRoundRect(new RectF(43,world.bottom()+32,377,h-22),21,21,paint);
+        c.drawRoundRect(new RectF(43,deckTop,377,deckBottom),21,21,paint);
         drawNextBubble(c,aimX,nextY);
-        label(c,"TRASCINA · RILASCIA · SCUOTI",210,h-29,11,0xFFC3D3D4,true);
+        label(c,"TRASCINA · RILASCIA · SCUOTI",210,deckBottom-12f,11,0xFFC3D3D4,true);
         if(blockedFlash>0f)
             label(c,"QUESTO INGRESSO È OCCUPATO",210,world.bottom()+22,11,
                 0xFFFFAAB1,true);
@@ -362,10 +370,10 @@ public final class LavaView extends View {
         paint.setColor(0xEB141C29);
         c.drawRoundRect(new RectF(34,h*.36f,386,h*.71f),29,29,paint);
         boolean won=spec.passed(world.score);
-        label(c,spec.endless?"PARTITA FINITA":(won?"LIVELLO SUPERATO":"RIPROVA"),
+        label(c,spec.trial?"PROVA CONCLUSA":spec.endless?"PARTITA FINITA":(won?"LIVELLO SUPERATO":"RIPROVA"),
                 210,h*.44f,22,0xFFF2F5F1,true);
-        label(c,world.score+" punti",210,h*.495f,19,0xFFC6DCD7,false);
-        if(!spec.endless)label(c,"Extra "+spec.extras(world.score,
+        label(c,world.score+" punti · "+world.dropCount+" drop",210,h*.495f,19,0xFFC6DCD7,false);
+        if(!spec.endless&&!spec.trial)label(c,"Extra "+spec.extras(world.score,
                 world.maxTierReached,world.mergeCount)+"/"+spec.totalExtras(),
                 210,h*.537f,14,0xFFD9BFC9,false);
         paint.setColor(0xFF275F5A);
