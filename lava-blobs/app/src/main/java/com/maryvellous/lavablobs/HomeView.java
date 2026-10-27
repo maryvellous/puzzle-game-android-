@@ -19,6 +19,8 @@ public final class HomeView extends View {
     interface Listener { void start(GameSpec spec); }
 
     private final Listener listener;
+    private final Runnable resume;
+    private final GameSave.Snapshot saved;
     private final ProgressStore progress;
     private final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint letter=new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -29,10 +31,13 @@ public final class HomeView extends View {
     private long start=System.nanoTime();
     private float downX,downY;
 
-    HomeView(Context context,ProgressStore progress,Listener listener) {
+    HomeView(Context context,ProgressStore progress,Listener listener,
+             Runnable resume,GameSave gameSave) {
         super(context);
         this.progress=progress;
         this.listener=listener;
+        this.resume=resume;
+        this.saved=gameSave.peek();
         setLayerType(View.LAYER_TYPE_HARDWARE,null);
         letter.setTypeface(Typeface.create("sans-serif-black",Typeface.BOLD));
         letter.setTextAlign(Paint.Align.LEFT);
@@ -41,49 +46,69 @@ public final class HomeView extends View {
     private float scale(){return Math.min(getWidth()/420f,getHeight()/780f);}
     private float offX(){return(getWidth()-420f*scale())*.5f;}
 
+    private float shift(){return saved==null?0f:56f;}
+    private float cardsTop(){return 239f+shift();}
+    private float cardHeight(float h){
+        return Math.min(134f,Math.max(88f,(h-430f-shift())/3f));
+    }
+
     @Override protected void onDraw(Canvas raw) {
         super.onDraw(raw);
         if(getWidth()==0||getHeight()==0)return;
         float sc=scale(),h=getHeight()/sc;
-        raw.drawColor(0xFF111427);
+        raw.drawColor(0xFF11111F);
         raw.save();raw.translate(offX(),0);raw.scale(sc,sc);
         float t=(System.nanoTime()-start)/1_000_000_000f;
         drawTitle(raw,t);
-        label(raw,"Un piccolo gioco tutto morbido",210,155,13,0xFFA5ABB9,false);
-        rounded(raw,24,174,204,218,20,section==1?0xFF275F5A:0xFF233645);
-        rounded(raw,216,174,396,218,20,section==2?0xFF275F5A:0xFF233645);
-        label(raw,section==1?"←  LIVELLI":"∞  INFINITA",114,202,13,0xFFDAE9E4,true);
-        label(raw,section==2?"←  LIVELLI":"TEST VASETTI",306,202,13,0xFFDAE9E4,true);
+        label(raw,"Un piccolo gioco tutto morbido",210,151,12,0xFFC5B8CC,false);
+
+        if(saved!=null){
+            rounded(raw,32,162,388,208,17,0xFF53334A);
+            paint.setColor(0xFFDB5461);
+            raw.drawCircle(52,185,5,paint);
+            labelLeft(raw,"CONTINUA · "+saved.spec.name,68,183,13,0xFFF6E8EE,true,292);
+            labelLeft(raw,saved.points()+" punti · "+saved.drops()+" drop",68,200,10,0xFFE6BDCB,false,288);
+        }
+
+        float navY=174+shift();
+        rounded(raw,32,navY,204,navY+44,17,section==1?0xFF683851:0xFF252A3A);
+        rounded(raw,216,navY,388,navY+44,17,section==2?0xFF683851:0xFF252A3A);
+        label(raw,section==1?"← LIVELLI":"∞  INFINITA",118,navY+28,13,0xFFF1DEE6,true);
+        label(raw,section==2?"← LIVELLI":"PROVE",302,navY+28,13,0xFFF1DEE6,true);
+
         int count=section==0?6:3;
-        float cardH=Math.min(136f,Math.max(88f,(h-430f)/3f));
-        float gap=10f,cardW=172f;
+        float cardH=cardHeight(h);
+        float top=cardsTop();
         for(int index=0;index<count;index++){
-            int row=index/2,col=index%2;
             int levelId=page*6+index;
             GameSpec spec=section==1?GameSpec.ENDLESS[index]:
                     section==2?GameSpec.TRIALS[index]:
                     (levelId<GameSpec.LEVELS.length?GameSpec.LEVELS[levelId]:null);
             if(spec==null)continue;
-            float x=32+col*(cardW+12),y=239+row*(cardH+gap);
+            float x=31+(index%2)*184f,y=top+(index/2)*(cardH+10f);
             boolean locked=!spec.endless&&!spec.trial&&levelId>progress.highestUnlocked();
-            drawCard(raw,spec,x,y,cardW,cardH,locked);
+            drawCard(raw,spec,x,y,172,cardH,locked);
         }
-        float dotsY=239+3*(cardH+gap)+14;
-        if(section==0) {
-            for(int p=0;p<(GameSpec.LEVELS.length+5)/6;p++){
+
+        float infoY=top+3*(cardH+10f)+4;
+        if(section==0){
+            int pages=(GameSpec.LEVELS.length+5)/6;
+            for(int i=0;i<pages;i++){
                 paint.setStyle(Paint.Style.FILL);
-                paint.setColor(p==page?0xFFDB5461:0xFF50586B);
-                raw.drawCircle(199+(p-(GameSpec.LEVELS.length+5)/12f)*18,dotsY,4.5f,paint);
+                paint.setColor(page==i?0xFFDB5461:0xFF555366);
+                raw.drawCircle(210+(i-(pages-1)*.5f)*17,infoY,4.5f,paint);
             }
-            label(raw,"Scorri lateralmente per gli altri livelli",210,dotsY+25,11,0xFF8C96A7,false);
+            label(raw,"Scorri per altri livelli",210,infoY+25,11,0xFFAFA5B8,false);
         }else if(section==1){
-            label(raw,"Tre contenitori · Erase ogni 20.000 punti",210,dotsY+21,11,0xFFA5ABB9,false);
+            label(raw,"Scegli un recipiente · Erase ogni 20.000 punti",210,infoY+21,
+                    11,0xFFB8B1C5,false);
         }else{
-            label(raw,"STESSA LARGHEZZA · STESSA FISICA",210,dotsY+17,12,0xFFD6DFDD,true);
-            label(raw,"Confronta durata, punti e numero di drop.",210,dotsY+36,11,0xFFA5ABB9,false);
+            label(raw,"Confronta dimensioni e durata delle partite",210,infoY+21,
+                    11,0xFFB8B1C5,false);
         }
-        rounded(raw,118,h-63,302,h-24,18,0xFF263747);
-        label(raw,"COPIA DATI PARTITE",210,h-38,11,0xFFD7E5E8,true);
+
+        rounded(raw,118,h-64,302,h-25,17,0xFF242939);
+        label(raw,"COPIA DATI PARTITE",210,h-39,11,0xFFD3C6D5,true);
         raw.restore();
         postInvalidateOnAnimation();
     }
@@ -127,58 +152,78 @@ public final class HomeView extends View {
         }
     }
 
-    private void drawCard(Canvas c,GameSpec spec,float x,float y,float w,float h,boolean locked) {
-        rounded(c,x,y,x+w,y+h,20,locked?0xFF202A37:0xFF253845);
+    private void drawCard(Canvas c,GameSpec spec,float x,float y,
+            float width,float height,boolean locked){
+        rounded(c,x,y,x+width,y+height,16,locked?0xFF1B202C:0xFF202938);
         paint.setStyle(Paint.Style.STROKE);
-        paint.setStrokeWidth(1.2f);
-        paint.setColor(locked?0xFF34414F:0xFF416775);
-        c.drawRoundRect(new RectF(x,y,x+w,y+h),20,20,paint);
-        Vessel vessel=new Vessel(spec.shape,850f);
-        float factor=spec.trial?.22f:Math.min((h-33f)/(vessel.bottom-vessel.top),.31f);
-        float iconCenter=x+43f;
-        float baseline=y+(h-(vessel.bottom-vessel.top)*factor)*.5f;
+        paint.setStrokeWidth(1.1f);
+        paint.setColor(locked?0xFF414353:0xFF515165);
+        c.drawRoundRect(new RectF(x,y,x+width,y+height),16,16,paint);
+        paint.setStyle(Paint.Style.FILL);
+
+        // Entire preview is fitted and clipped to its own miniature panel.
+        float iconLeft=x+10,iconTop=y+10,iconRight=x+77,iconBottom=y+height-10;
+        c.save();
+        c.clipRect(iconLeft,iconTop,iconRight,iconBottom);
+        rounded(c,iconLeft,iconTop,iconRight,iconBottom,11,0xFF162A32);
+        Vessel v=new Vessel(spec.shape,850f);
+        float minX=Float.MAX_VALUE,maxX=-Float.MAX_VALUE;
+        for(float px:v.xs){minX=Math.min(minX,px);maxX=Math.max(maxX,px);}
+        float factor=Math.min((iconRight-iconLeft-12)/(maxX-minX),
+                (iconBottom-iconTop-12)/(v.bottom-v.top));
+        float cx=(iconLeft+iconRight)*.5f,cy=(iconTop+iconBottom)*.5f;
         path.reset();
-        for(int i=0;i<vessel.xs.length;i++) {
-            float px=iconCenter+(vessel.xs[i]-210f)*factor;
-            float py=baseline+(vessel.ys[i]-vessel.top)*factor;
+        for(int i=0;i<v.xs.length;i++){
+            float px=cx+(v.xs[i]-(maxX+minX)*.5f)*factor;
+            float py=cy+(v.ys[i]-(v.top+v.bottom)*.5f)*factor;
             if(i==0)path.moveTo(px,py);else path.lineTo(px,py);
         }
         path.close();
-        paint.setStyle(Paint.Style.FILL);
-        paint.setColor(locked?0xFF344351:0xFF19363D);
+        paint.setColor(0xFF1E3640);paint.setStyle(Paint.Style.FILL);
         c.drawPath(path,paint);
-        paint.setStyle(Paint.Style.STROKE);
-        paint.setStrokeWidth(2.4f);
-        paint.setColor(locked?0xFF5E6873:Palette.COLORS[Math.abs(spec.shape)%9]);
-        c.drawPath(path,paint);
-        float lx=x+82;
-        if(spec.trial) {
-            String[] letters={"A","B","C"};
-            String[] heights={"285","340","400"};
-            int i=-10-spec.id;
-            label(c,"PROVA "+letters[i],lx+28,y+h*.34f,15,0xFFECF4EF,true);
-            label(c,heights[i]+" unità",lx+28,y+h*.57f,12,0xFFBDD9DB,true);
-            label(c,"Gioca liberamente",lx+28,y+h*.77f,9,0xFFAED0C0,false);
-            return;
-        }
-        if(spec.endless) {
-            label(c,"∞",lx+25,y+h*.34f,30,0xFFE6E9E9,true);
-            label(c,spec.name.substring(11),lx+30,y+h*.66f,13,0xFFE6E9E9,true);
-            label(c,"Senza limite",lx+30,y+h*.83f,10,0xFFA0B1B9,false);
-            return;
-        }
-        String name=spec.name;
-        label(c,""+(spec.id+1),lx+30,y+h*.31f,25,locked?0xFF737E88:0xFFECF4EF,true);
-        label(c,name,lx+30,y+h*.52f,12,locked?0xFF78858D:0xFFBDD9DB,true);
-        if(locked) {
-            label(c,"Da sbloccare",lx+30,y+h*.72f,10,0xFF77858C,false);
+        c.save();c.clipPath(path);
+        // Keep the interior glass tint and its little floating specks.
+        paint.setColor(0x665B89A2);
+        for(int i=0;i<7;i++)c.drawCircle(iconLeft+13+i*8f,
+                iconTop+12+(i*29)%(int)Math.max(1,height-22),
+                1.05f,paint);
+        c.restore();
+        paint.setColor(locked?0xFF555665:Palette.forTier(Math.abs(spec.shape)%9));
+        paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(2.1f);
+        c.drawPath(path,paint);paint.setStyle(Paint.Style.FILL);
+        c.restore();
+
+        float tx=x+87,ty=y+height*.25f;
+        if(spec.trial){
+            labelLeft(c,"PROVA "+(-9-spec.id),tx,ty+3,15,0xFFEEDDE6,true,74);
+            labelLeft(c,""+Math.round(v.bottom-v.top)+" unità",tx,ty+24,11,0xFFC9BCCB,false,75);
+            labelLeft(c,"Gioca",tx,y+height-15,10,0xFFDD8FAD,true,73);
+        }else if(spec.endless){
+            labelLeft(c,"INFINITA",tx,ty+3,14,0xFFF0DDE6,true,76);
+            labelLeft(c,spec.name.substring(11),tx,ty+24,11,0xFFCCC0D0,false,76);
+            labelLeft(c,"Senza limite",tx,y+height-15,10,0xFFBCAEC5,false,77);
         }else{
-            label(c,progress.cleared(spec.id)?"Completato ✓":"Obiettivo "+spec.minScore,
-                    lx+30,y+h*.70f,10,0xFFAED0C0,false);
-            if(progress.cleared(spec.id))label(c,
-                    "Extra "+progress.extras(spec.id)+"/"+spec.totalExtras(),
-                    lx+30,y+h*.84f,10,0xFFDBB7B9,false);
+            labelLeft(c,""+(spec.id+1),tx,ty+5,24,
+                    locked?0xFF8C8995:0xFFF0E3EA,true,75);
+            labelLeft(c,spec.name,tx,ty+25,12,
+                    locked?0xFF8C8995:0xFFE7DCE7,true,76);
+            labelLeft(c,locked?"Bloccato":
+                    progress.cleared(spec.id)?"Completato ✓":"Da giocare",
+                    tx,y+height-28,10,locked?0xFF8D8B9A:0xFFB9CAC9,false,75);
+            if(!locked&&progress.cleared(spec.id))
+                labelLeft(c,"Extra "+progress.extras(spec.id)+"/"+spec.totalExtras(),
+                        tx,y+height-13,10,0xFFE0A5C0,false,75);
         }
+    }
+
+    private void labelLeft(Canvas canvas,String text,float x,float y,float font,
+            int color,boolean bold,float maxWidth) {
+        letter.setTypeface(Typeface.create("sans-serif",bold?Typeface.BOLD:Typeface.NORMAL));
+        letter.setTextAlign(Paint.Align.LEFT);letter.setTextSize(font);
+        float width=letter.measureText(text);
+        if(width>maxWidth)letter.setTextSize(Math.max(8f,font*maxWidth/width));
+        letter.setColor(color);
+        canvas.drawText(text,x,y,letter);
     }
 
     private static void rounded(Canvas c,float l,float t,float r,float b,float radius,int color) {
@@ -199,21 +244,25 @@ public final class HomeView extends View {
         switch(e.getActionMasked()){
             case MotionEvent.ACTION_DOWN:downX=x;downY=y;return true;
             case MotionEvent.ACTION_UP:
-                if(Math.abs(x-downX)>48f&&section==0) {
+                if(Math.abs(x-downX)>47f&&section==0){
                     page=Math.max(0,Math.min((GameSpec.LEVELS.length-1)/6,
                             page+(x<downX?1:-1)));
                     invalidate();return true;
                 }
-                if(y>=174&&y<=218) {
-                    if(x>=24&&x<=204)section=section==1?0:1;
-                    else if(x>=216&&x<=396)section=section==2?0:2;
+                if(saved!=null&&y>=158f&&y<=210f){
+                    resume.run();return true;
+                }
+                float nav=174+shift();
+                if(y>=nav&&y<=nav+44){
+                    if(x>=32&&x<=204)section=section==1?0:1;
+                    else if(x>=216&&x<=388)section=section==2?0:2;
                     page=0;invalidate();return true;
                 }
-                if(y>=h-71) {progress.copyReport();return true;}
-                float cardH=Math.min(136f,Math.max(88f,(h-430f)/3f));
+                if(y>=h-72&&y<=h-20){progress.copyReport();return true;}
+                float cardH=cardHeight(h),top=cardsTop();
                 for(int i=0;i<(section==0?6:3);i++){
-                    float lx=32+(i%2)*184f,ly=239+(i/2)*(cardH+10f);
-                    if(x>=lx&&x<=lx+172&&y>=ly&&y<=ly+cardH) {
+                    float lx=31+(i%2)*184f,ly=top+(i/2)*(cardH+10);
+                    if(x>=lx&&x<=lx+172&&y>=ly&&y<=ly+cardH){
                         int id=page*6+i;
                         if(section==1)listener.start(GameSpec.ENDLESS[i]);
                         else if(section==2)listener.start(GameSpec.TRIALS[i]);
