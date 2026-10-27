@@ -102,12 +102,16 @@ public final class MainActivity extends Activity implements SensorEventListener 
         if(sensorManager!=null)sensorManager.unregisterListener(this);
     }
     @Override protected void onPause(){
-        if(game!=null)game.saveCheckpoint();
+        if(game!=null) {
+            game.saveCheckpoint();
+            game.pauseClock();
+        }
         stopSensor();
         super.onPause();
     }
     @Override protected void onResume(){
         super.onResume();
+        if(game!=null)game.pauseClock();
         shakeDetector.reset();
         startSensor();
     }
