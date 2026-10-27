@@ -1,4 +1,4 @@
-# Lava Blob 1.0.1 — Android
+# Lava Blob 1.0.2 — Android
 
 Un cozy merge puzzle personale. Le bolle salgono e si ammassano nel recipiente, deformandosi come slime. La **fisica approvata nella 0.5.0** (membrana di 24 particelle, pressione interna, molle, adesione temporanea) resta il nucleo del gioco.
 
@@ -38,3 +38,13 @@ Dalla Home premi **TEST VASETTI**. Tre varianti della stessa forma e larghezza s
 I contenitori dei livelli hanno altezze fisse per forma, non crescono in altezza a seconda del dispositivo. Contenitore e pannello di lancio vengono centrati come blocco unitario sotto l'HUD; il pannello è alto 100 unità invece di estendersi fino al bordo inferiore. Le viste sono ospitate in un contenitore che applica l'inset inferiore della barra di navigazione Android; tutto il contenuto interattivo rimane in area sicura. Le molle, il pressure solver, l'adesione e il movimento dei blob della 0.5.0 non sono modificati.
 
 Le soglie-obiettivo restano quelle provvisorie della 1.0.0 finché non saranno disponibili le misure delle prove; non adattarle arbitrariamente in base al solo screenshot con vasetto sproporzionato.
+
+## 1.0.2 — partita riprendibile, forme e Home
+
+- **Un solo salvataggio di partita in corso**: snapshot locale completo e atomico delle posizioni/velocità delle 24 particelle per blob, livelli, stato della membrana, legami viscosi, RNG, prossimo lancio, punti, record, Erase e conto alla rovescia di Game Over. Home → Continua riprende la stessa partita. Al ritorno alla Home e durante il ciclo di vita Android viene salvato automaticamente; una nuova partita sovrascrive la precedente **dopo una conferma**.
+- Il salvataggio dello stato di gioco è separato dai progressi sbloccati e dal report `COPIA DATI PARTITE`; mettere in pausa non crea una nuova sessione di playtest.
+- **Colori originali HEX pieni e opachi**, senza shader o filtri sul riempimento; la palette non è stata arbitrariamente alterata. Su display diversi i blu possono comunque apparire simili poiché alcuni valori di partenza sono affini.
+- **Geometrie più caratteristiche**: maggiori rientranze, strozzature e asimmetrie, senza cambiare il solver approvato.
+- **Home riprogettata**: pulsante Continua, cards con miniatura separata dai testi, coordinate di clipping della miniatura e nuovo contrasto cromatico. Conservato l'effetto visivo all'interno del vetro.
+- **Firma APK**: le build debug prodotte da runner GitHub differenti possono essere firmate con chiavi differenti; finché non si collega una chiave di firma persistente, Android non permetterà sempre l'installazione sopra la 1.0.1 conservando i dati. Non chiedere mai di disinstallare senza avvertire del rischio di perdita dei progressi.
+- **Test**: roundtrip completo delle membrane, RNG, progressi di gioco, geometrie e regressioni fisiche; richiede ancora collaudo visivo reale sul telefono.

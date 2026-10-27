@@ -109,6 +109,8 @@ public final class LavaView extends View {
         invalidate();
     }
 
+    void pauseClock() {previousFrame=0L;}
+
     private float scale() {
         return Math.min(getWidth() / W, getHeight() / 780f);
     }
@@ -240,7 +242,10 @@ public final class LavaView extends View {
         // translucent collision halos. The elastic outline is the entire blob.
         paint.setStyle(Paint.Style.FILL);
         paint.setShader(null);
+        // HEX is applied without alpha, tint or shader.
         paint.setColor(Palette.forTier(b.tier));
+        paint.setAlpha(255);
+        paint.setColorFilter(null);
         canvas.drawPath(blobPath, paint);
 
         line.setColor(blend(Palette.forTier(b.tier), 0xFFF1E9FF, .23f));

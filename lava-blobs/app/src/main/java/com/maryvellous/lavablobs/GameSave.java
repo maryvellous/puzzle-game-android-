@@ -2,7 +2,7 @@ package com.maryvellous.lavablobs;
 
 import android.content.Context;
 import android.util.AtomicFile;
-import android.util.Base64;
+import java.util.Base64;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.io.ByteArrayInputStream;
@@ -96,7 +96,7 @@ final class GameSave {
         ByteArrayOutputStream bytes=new ByteArrayOutputStream();
         ObjectOutputStream stream=new ObjectOutputStream(bytes);
         stream.writeObject(w.random);stream.close();
-        state.put("rng",Base64.encodeToString(bytes.toByteArray(),Base64.NO_WRAP));
+        state.put("rng",Base64.getEncoder().encodeToString(bytes.toByteArray()));
 
         JSONArray particles=new JSONArray();
         for(Blob b:w.blobs){
@@ -150,7 +150,7 @@ final class GameSave {
         JSONArray tiers=state.getJSONArray("byTier");
         for(int i=0;i<Math.min(tiers.length(),w.mergesByTier.length);i++)
             w.mergesByTier[i]=tiers.getInt(i);
-        byte[] raw=Base64.decode(state.getString("rng"),Base64.DEFAULT);
+        byte[] raw=Base64.getDecoder().decode(state.getString("rng"));
         if(raw.length>2048)throw new IllegalArgumentException("Invalid RNG");
         ObjectInputStream stream=new ObjectInputStream(new ByteArrayInputStream(raw));
         Object rng=stream.readObject();stream.close();
