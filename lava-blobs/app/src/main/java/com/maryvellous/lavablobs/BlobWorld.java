@@ -39,7 +39,7 @@ final class BlobWorld {
     final ArrayList<Blob> blobs = new ArrayList<>();
     final ArrayList<Merge> merges = new ArrayList<>();
     final ArrayList<Adhesion> adhesions = new ArrayList<>();
-    private final Random random;
+    Random random;
     final GameSpec spec;
     Vessel vessel;
     float height=850f, time, blockedTime,checkClock;
