@@ -26,7 +26,7 @@ public final class HomeView extends View {
     private final Paint letter=new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path path=new Path(), glyph=new Path(), warped=new Path();
     private int page=0;
-    // 0 = regular levels, 1 = endless, 2 = vessel-height lab.
+    // The comparison screen has served its purpose: normal play has two tabs.
     private int section=0;
     private long start=System.nanoTime();
     private float downX,downY;
@@ -71,10 +71,10 @@ public final class HomeView extends View {
         }
 
         float navY=174+shift();
-        rounded(raw,32,navY,204,navY+44,17,section==1?0xFF683851:0xFF252A3A);
-        rounded(raw,216,navY,388,navY+44,17,section==2?0xFF683851:0xFF252A3A);
-        label(raw,section==1?"← LIVELLI":"∞  INFINITA",118,navY+28,13,0xFFF1DEE6,true);
-        label(raw,section==2?"← LIVELLI":"PROVE",302,navY+28,13,0xFFF1DEE6,true);
+        rounded(raw,32,navY,204,navY+44,17,section==0?0xFF683851:0xFF252A3A);
+        rounded(raw,216,navY,388,navY+44,17,section==1?0xFF683851:0xFF252A3A);
+        label(raw,"LIVELLI",118,navY+28,13,0xFFF1DEE6,true);
+        label(raw,"∞ INFINITA",302,navY+28,13,0xFFF1DEE6,true);
 
         int count=section==0?6:3;
         float cardH=cardHeight(h);
@@ -82,7 +82,6 @@ public final class HomeView extends View {
         for(int index=0;index<count;index++){
             int levelId=page*6+index;
             GameSpec spec=section==1?GameSpec.ENDLESS[index]:
-                    section==2?GameSpec.TRIALS[index]:
                     (levelId<GameSpec.LEVELS.length?GameSpec.LEVELS[levelId]:null);
             if(spec==null)continue;
             float x=31+(index%2)*184f,y=top+(index/2)*(cardH+10f);
@@ -99,11 +98,8 @@ public final class HomeView extends View {
                 raw.drawCircle(210+(i-(pages-1)*.5f)*17,infoY,4.5f,paint);
             }
             label(raw,"Scorri per altri livelli",210,infoY+25,11,0xFFAFA5B8,false);
-        }else if(section==1){
-            label(raw,"Scegli un recipiente · Erase ogni 20.000 punti",210,infoY+21,
-                    11,0xFFB8B1C5,false);
         }else{
-            label(raw,"Confronta dimensioni e durata delle partite",210,infoY+21,
+            label(raw,"Scegli un recipiente · Erase ogni 20.000 punti",210,infoY+21,
                     11,0xFFB8B1C5,false);
         }
 
@@ -254,8 +250,8 @@ public final class HomeView extends View {
                 }
                 float nav=174+shift();
                 if(y>=nav&&y<=nav+44){
-                    if(x>=32&&x<=204)section=section==1?0:1;
-                    else if(x>=216&&x<=388)section=section==2?0:2;
+                    if(x>=32&&x<=204)section=0;
+                    else if(x>=216&&x<=388)section=1;
                     page=0;invalidate();return true;
                 }
                 if(y>=h-72&&y<=h-20){progress.copyReport();return true;}
@@ -265,7 +261,6 @@ public final class HomeView extends View {
                     if(x>=lx&&x<=lx+172&&y>=ly&&y<=ly+cardH){
                         int id=page*6+i;
                         if(section==1)listener.start(GameSpec.ENDLESS[i]);
-                        else if(section==2)listener.start(GameSpec.TRIALS[i]);
                         else if(id<GameSpec.LEVELS.length&&id<=progress.highestUnlocked())
                             listener.start(GameSpec.LEVELS[id]);
                         return true;
