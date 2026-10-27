@@ -76,24 +76,37 @@ final class Vessel {
         switch(kind) {
             case -1:return 181f;
             case 0:case 11:case 12:case 13:return 138f-14f*bell;
-            case 1:return 105f+41f*bell-10f*t;
-            case 2:return 154f-50f*t-9f*bell;
-            case 3:return 139f-44f*(float)Math.pow(Math.sin(Math.PI*t),2);
-            case 4:return 116f+23f*bell-13f*t;
-            case 5:return 128f+13f*(float)Math.sin(Math.PI*2*t+.5f);
-            case 6:return 99f+49f*bell;
-            case 7:return 108f-18f*bell;
-            case 8:return 121f+24f*bell+6f*t;
-            case 9:return 132f-29f*(float)Math.pow(Math.sin(Math.PI*t),4);
-            case 10:return 119f+19f*(float)Math.sin(3*Math.PI*t);
+            // Strong silhouettes, similar overall volume: gameplay variety
+            // comes from necks, lobes and asymmetry, not from huge vessels.
+            case 1:return 126f+29f*bell-37f*bump(t,.30f,.11f);
+            case 2:return 154f-39f*t+11f*(float)Math.sin(2*Math.PI*t);
+            case 3:return 138f-59f*bump(t,.52f,.16f);
+            case 4:return 109f+43f*bell-9f*(float)Math.cos(3*Math.PI*t);
+            case 5:return 132f+25f*(float)Math.sin(4*Math.PI*t+.18f);
+            case 6:return 96f+60f*bell*bell;
+            case 7:return 128f-30f*t+32f*bell*bell;
+            case 8:return 137f+17f*bell-30f*bump(t,.74f,.12f);
+            case 9:return 132f-45f*bump(t,.28f,.12f)-43f*bump(t,.70f,.11f);
+            case 10:return 127f+24f*(float)Math.sin(3*Math.PI*t+.35f)
+                              +14f*(float)Math.sin(5*Math.PI*t);
             default:return 125f;
         }
     }
     private static float offset(int kind,float t) {
-        if(kind==5)return 17f*(float)Math.sin(t*2.0*Math.PI);
-        if(kind==10)return 16f*(float)Math.sin(t*Math.PI*2.0+.5);
-        if(kind==8)return -14f*(float)Math.sin(Math.PI*t);
+        if(kind==1)return 11f*(float)Math.sin(Math.PI*t);
+        if(kind==3)return 12f*(float)Math.sin(2*Math.PI*t);
+        if(kind==4)return -9f*(float)Math.sin(Math.PI*t);
+        if(kind==5)return 20f*(float)Math.sin(3*Math.PI*t);
+        if(kind==6)return 10f*(float)Math.sin(Math.PI*t);
+        if(kind==8)return -22f*(float)Math.sin(Math.PI*t);
+        if(kind==9)return 18f*(float)Math.sin(2*Math.PI*t);
+        if(kind==10)return 20f*(float)Math.sin(2*Math.PI*t+.35f);
         return 0f;
+    }
+
+    private static float bump(float t,float center,float spread) {
+        float d=(t-center)/spread;
+        return (float)Math.exp(-d*d);
     }
 
     boolean contains(float x,float y) {
