@@ -29,6 +29,8 @@ public final class LavaView extends View {
     private final GameSpec spec;
     private final ProgressStore progress;
     private final Runnable onHome;
+    private final GameSave session;
+    private float lastCheckpoint;
     private final BlobWorld world;
     private final Random random = new Random();
     private final SharedPreferences prefs;
@@ -66,10 +68,24 @@ public final class LavaView extends View {
         }
     }
 
-    LavaView(Context context, GameSpec spec, ProgressStore progress, Runnable onHome) {
+    LavaView(Context context, GameSpec spec, ProgressStore progress,
+            Runnable onHome,GameSave session,GameSave.Snapshot resume) {
         super(context);
         this.spec=spec;this.progress=progress;this.onHome=onHome;
+        this.session=session;
         world=new BlobWorld(new Random(),spec);
+        if(resume!=null) {
+            try {
+                GameSave.restore(world,resume.data);
+                aimX=(float)resume.data.optDouble("aimX",W/2);
+                eraseMode=resume.data.optBoolean("eraseMode",false);
+                lastCheckpoint=world.time;
+            }catch(Exception ignored){
+                // A corrupted save must not crash startup. Keep the old slot
+                // until the next successful checkpoint replaces it.
+                world.reset();
+            }
+        }
         setLayerType(View.LAYER_TYPE_HARDWARE,null);
         setHapticFeedbackEnabled(true);
         prefs=context.getSharedPreferences("lava_blobs",Context.MODE_PRIVATE);
@@ -78,11 +94,13 @@ public final class LavaView extends View {
         line.setStyle(Paint.Style.STROKE);
     }
 
-    void leave() {
-        if(!finalized&&(world.dropCount>0||world.mergeCount>0)){
-            progress.save(spec,world,false);
-            finalized=true;
-        }
+    /** Preserve game without counting a pause as a completed playtest. */
+    void leave() { saveCheckpoint(); }
+
+    void saveCheckpoint() {
+        if(world.gameOver) {session.clear();return;}
+        if(session.save(spec,world,aimX,eraseMode))
+            lastCheckpoint=world.time;
     }
 
     /** Called by the activity's sensor listener on the UI thread. */
@@ -126,7 +144,10 @@ public final class LavaView extends View {
         if (world.score > best) best=world.score;
         if(world.gameOver&&!finalized) {
             progress.save(spec,world,true);
+            session.clear();
             finalized=true;
+        }else if(!world.gameOver&&world.time-lastCheckpoint>1.5f){
+            saveCheckpoint();
         }
         Canvas canvas = raw;
         canvas.save();
@@ -427,6 +448,7 @@ public final class LavaView extends View {
                     if(world.eraseAt(x,y)){
                         performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
                         eraseMode=false;
+                        saveCheckpoint();
                     }
                     return true;
                 }
@@ -437,9 +459,10 @@ public final class LavaView extends View {
             case MotionEvent.ACTION_UP:
                 if(aiming){
                     aimX=BlobWorld.clamp(x,49f,371f);
-                    if(world.launch(aimX))
+                    if(world.launch(aimX)) {
                         performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
-                    else blockedFlash=.9f;
+                        saveCheckpoint();
+                    } else blockedFlash=.9f;
                 }
                 aiming=false;return true;
             case MotionEvent.ACTION_CANCEL:
@@ -449,11 +472,13 @@ public final class LavaView extends View {
     }
 
     private void restart() {
-        leave();
+        if(world.dropCount>0&&!world.gameOver)progress.save(spec,world,false);
+        session.clear();
         world.reset();
         waves.clear();droplets.clear();
         blockedFlash=0f;eraseMode=false;aiming=false;
-        aimX=W*.5f;previousFrame=0;finalized=false;
+        aimX=W*.5f;previousFrame=0;finalized=false;lastCheckpoint=0f;
+        saveCheckpoint();
         invalidate();
     }
 }

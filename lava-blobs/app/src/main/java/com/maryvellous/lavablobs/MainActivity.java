@@ -1,6 +1,7 @@
 package com.maryvellous.lavablobs;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -19,6 +20,7 @@ public final class MainActivity extends Activity implements SensorEventListener 
     private Sensor accelerometer;
     private LavaView game;
     private ProgressStore progress;
+    private GameSave session;
     private FrameLayout root;
 
     @Override public void onCreate(Bundle state) {
@@ -30,6 +32,7 @@ public final class MainActivity extends Activity implements SensorEventListener 
         if(Build.VERSION.SDK_INT>=30)getWindow().setDecorFitsSystemWindows(false);
 
         progress=new ProgressStore(this);
+        session=new GameSave(this);
         sensorManager=(SensorManager)getSystemService(SENSOR_SERVICE);
         if(sensorManager!=null)accelerometer=sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
         root=new FrameLayout(this);
@@ -56,12 +59,36 @@ public final class MainActivity extends Activity implements SensorEventListener 
     void showHome() {
         if(game!=null){game.leave();game=null;}
         stopSensor();
-        display(new HomeView(this,progress,this::play));
+        display(new HomeView(this,progress,this::play,this::resume,session));
     }
 
     private void play(GameSpec spec) {
-        if(game!=null)game.leave();
-        game=new LavaView(this,spec,progress,this::showHome);
+        // Exactly one active game: never overwrite without an explicit choice.
+        if(session.exists()) {
+            new AlertDialog.Builder(this)
+                    .setTitle("Sostituire la partita?")
+                    .setMessage("La partita in pausa verrà sostituita da quella nuova.")
+                    .setNegativeButton("Annulla",null)
+                    .setPositiveButton("Nuova partita",(dialog,which)->startNew(spec))
+                    .show();
+        } else startNew(spec);
+    }
+
+    private void startNew(GameSpec spec) {
+        if(game!=null){game.leave();game=null;}
+        session.clear();
+        game=new LavaView(this,spec,progress,this::showHome,session,null);
+        display(game);
+        game.saveCheckpoint();
+        shakeDetector.reset();
+        startSensor();
+    }
+
+    private void resume() {
+        GameSave.Snapshot active=session.peek();
+        if(active==null){showHome();return;}
+        if(game!=null){game.leave();game=null;}
+        game=new LavaView(this,active.spec,progress,this::showHome,session,active);
         display(game);
         shakeDetector.reset();
         startSensor();
@@ -75,6 +102,7 @@ public final class MainActivity extends Activity implements SensorEventListener 
         if(sensorManager!=null)sensorManager.unregisterListener(this);
     }
     @Override protected void onPause(){
+        if(game!=null)game.saveCheckpoint();
         stopSensor();
         super.onPause();
     }
