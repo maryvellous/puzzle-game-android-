@@ -79,12 +79,17 @@ final class BlobWorld {
         float r=Blob.RADII[nextTier],launchRadius=r*.76f;
         float cx=clamp(x,LEFT+r,RIGHT-r),cy=bottom()-r-7f;
         if(!vessel.fits(cx,cy,launchRadius))return false;
+        float nodeClearance=launchRadius+2f;
+        float nodeClearanceSq=nodeClearance*nodeClearance;
         for(Blob b:blobs) {
             if(pointInside(b,cx,cy))return false;
             for(int i=0;i<Blob.NODES;i++) {
-                if(Math.hypot(b.px[i]-cx,b.py[i]-cy)<launchRadius+2f)return false;
+                float dx=b.px[i]-cx,dy=b.py[i]-cy;
+                if(dx*dx+dy*dy<nodeClearanceSq)return false;
             }
-            if(Math.hypot(b.x-cx,b.y-cy)<launchRadius+b.radius()*.56f)return false;
+            float dx=b.x-cx,dy=b.y-cy;
+            float limit=launchRadius+b.radius()*.56f;
+            if(dx*dx+dy*dy<limit*limit)return false;
         }
         return true;
     }
@@ -204,8 +209,9 @@ final class BlobWorld {
     private boolean nearEnough(Blob a,Blob b,float scale) {
         // Broad-phase filter only. The shape and collision are evaluated
         // entirely from membrane vertices and line segments below.
-        return Math.hypot(a.x-b.x,a.y-b.y)
-                < (a.radiusTarget+b.radiusTarget)*scale+5f;
+        float dx=a.x-b.x,dy=a.y-b.y;
+        float limit=(a.radiusTarget+b.radiusTarget)*scale+5f;
+        return dx*dx+dy*dy < limit*limit;
     }
 
     private void fuse(int i,int j,Blob a,Blob b) {
@@ -246,8 +252,12 @@ final class BlobWorld {
         int start; float t,distance,qx,qy;
     }
 
+    // Collision checks run sequentially on the UI thread. Reusing the
+    // temporary result avoids thousands of short-lived objects per frame.
+    private final Edge edgeScratch=new Edge();
+
     private Edge closestEdge(Blob polygon,float x,float y) {
-        Edge found=new Edge();
+        Edge found=edgeScratch;
         float minSq=Float.MAX_VALUE;
         for(int j=0;j<Blob.NODES;j++) {
             int k=(j+1)%Blob.NODES;
