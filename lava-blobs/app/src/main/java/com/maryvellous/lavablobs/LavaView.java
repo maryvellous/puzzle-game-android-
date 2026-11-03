@@ -1,6 +1,7 @@
 package com.maryvellous.lavablobs;
 
 import android.content.Context;
+import android.content.pm.ApplicationInfo;
 import android.content.SharedPreferences;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -10,12 +11,14 @@ import android.graphics.Path;
 import android.graphics.RectF;
 import android.graphics.Shader;
 import android.graphics.Typeface;
+import android.util.Log;
 import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
 import android.view.View;
 
 import java.util.ArrayList;
 import java.util.Random;
+import java.util.Locale;
 
 /**
  * Portrait, resolution-independent Android Canvas game.
@@ -24,6 +27,11 @@ import java.util.Random;
 public final class LavaView extends View {
     private static final float W = BlobWorld.WIDTH;
     private static final int BACKGROUND = Color.rgb(10, 9, 31);
+    private static final float PHYSICS_STEP = 1f / 60f;
+    private static final int MAX_STEPS_PER_FRAME = 4;
+    private static final int PERF_REPORT_FRAMES = 180;
+    private static final Typeface FONT_REGULAR = Typeface.create("sans-serif",Typeface.NORMAL);
+    private static final Typeface FONT_MEDIUM = Typeface.create("sans-serif-medium",Typeface.NORMAL);
     // Solid, saturated, intentionally distinguishable hues from blue-indigo
     // through lavender and violet, never red/yellow/green.
     private final GameSpec spec;
@@ -38,6 +46,11 @@ public final class LavaView extends View {
     private final Paint letters = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint line = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path blobPath = new Path();
+    private final Path cachedGlassPath = new Path();
+    private Vessel cachedGlassVessel;
+    private Shader cachedBackgroundShader;
+    private float cachedShaderHeight = -1f;
+    private final boolean perfLogging;
     private final float[] xx = new float[Blob.NODES];
     private final float[] yy = new float[Blob.NODES];
     private final ArrayList<Wave> waves = new ArrayList<>();
@@ -45,6 +58,10 @@ public final class LavaView extends View {
 
     private float aimX = W / 2;
     private long previousFrame;
+    private float physicsAccumulator;
+    private int perfFrames,perfSteps,perfSaveCount;
+    private long perfGapNs,perfWorstGapNs,perfPhysicsNs,perfCanvasNs,perfCpuNs;
+    private long perfSaveNs,perfWorstSaveNs;
     private boolean aiming;
     private float blockedFlash;
     private long best;
@@ -73,6 +90,7 @@ public final class LavaView extends View {
         super(context);
         this.spec=spec;this.progress=progress;this.onHome=onHome;
         this.session=session;
+        perfLogging=(context.getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE)!=0;
         world=new BlobWorld(new Random(),spec);
         if(resume!=null) {
             try {
@@ -99,8 +117,15 @@ public final class LavaView extends View {
 
     void saveCheckpoint() {
         if(world.gameOver) {session.clear();return;}
-        if(session.save(spec,world,aimX,eraseMode))
-            lastCheckpoint=world.time;
+        long started=perfLogging?System.nanoTime():0L;
+        boolean saved=session.save(spec,world,aimX,eraseMode);
+        if(perfLogging) {
+            long spent=System.nanoTime()-started;
+            perfSaveNs+=spent;
+            perfWorstSaveNs=Math.max(perfWorstSaveNs,spent);
+            perfSaveCount++;
+        }
+        if(saved)lastCheckpoint=world.time;
     }
 
     /** Called by the activity's sensor listener on the UI thread. */
@@ -109,7 +134,7 @@ public final class LavaView extends View {
         invalidate();
     }
 
-    void pauseClock() {previousFrame=0L;}
+    void pauseClock() {previousFrame=0L;physicsAccumulator=0f;}
 
     private float scale() {
         return Math.min(getWidth() / W, getHeight() / 780f);
@@ -127,10 +152,22 @@ public final class LavaView extends View {
         float h = getHeight() / scale;
         world.setHeight(h);
         long now = System.nanoTime();
-        float dt = previousFrame == 0 ? 0f : Math.min(.042f, (now - previousFrame) / 1_000_000_000f);
+        long gapNs = previousFrame == 0L ? 0L : Math.max(0L,now-previousFrame);
+        float elapsed = Math.min(.10f,gapNs / 1_000_000_000f);
         previousFrame = now;
-        world.tick(dt);
-        advanceEffects(dt);
+        // Fixed-size physics steps keep membrane stiffness independent of FPS.
+        // Bound catch-up work: never try to simulate unlimited missed frames.
+        physicsAccumulator=Math.min(PHYSICS_STEP*MAX_STEPS_PER_FRAME,
+                physicsAccumulator+elapsed);
+        long physicsStart=System.nanoTime();
+        int steps=0;
+        while(physicsAccumulator+1e-7f>=PHYSICS_STEP&&steps<MAX_STEPS_PER_FRAME) {
+            world.tick(PHYSICS_STEP);
+            physicsAccumulator=Math.max(0f,physicsAccumulator-PHYSICS_STEP);
+            steps++;
+        }
+        long physicsNs=System.nanoTime()-physicsStart;
+        advanceEffects(elapsed);
         for (BlobWorld.Merge merge : world.consumeMerges()) {
             waves.add(new Wave(merge.x, merge.y, merge.radius, merge.tier));
             for (int i = 0; i < 16; i++) {
@@ -151,6 +188,7 @@ public final class LavaView extends View {
         }else if(!world.gameOver&&world.time-lastCheckpoint>1.5f){
             saveCheckpoint();
         }
+        long canvasStart=System.nanoTime();
         Canvas canvas = raw;
         canvas.save();
         canvas.translate(offsetX(), 0f);
@@ -172,13 +210,43 @@ public final class LavaView extends View {
         if(world.gameOver)drawGameOver(canvas,h);
 
         canvas.restore();
+        long canvasNs=System.nanoTime()-canvasStart;
+        recordPerformance(gapNs,physicsNs,canvasNs,System.nanoTime()-now,steps);
         postInvalidateOnAnimation();
+    }
+
+    private void recordPerformance(long gapNs,long physicsNs,long canvasNs,long cpuNs,int steps) {
+        if(!perfLogging)return;
+        perfFrames++;
+        perfGapNs+=gapNs;
+        perfWorstGapNs=Math.max(perfWorstGapNs,gapNs);
+        perfPhysicsNs+=physicsNs;
+        perfCanvasNs+=canvasNs;
+        perfCpuNs+=cpuNs;
+        perfSteps+=steps;
+        if(perfFrames<PERF_REPORT_FRAMES)return;
+        double fps=perfGapNs==0?0:perfFrames*1e9/(double)perfGapNs;
+        double simRate=perfGapNs==0?0:perfSteps*PHYSICS_STEP*1e9/perfGapNs;
+        Log.d("LavaPerf",String.format(Locale.US,
+                "fps=%.1f worstGap=%.1fms simRate=%.2f physics=%.2fms canvas=%.2fms cpu=%.2fms saves=%d saveAvg=%.1fms saveMax=%.1fms blobs=%d",
+                fps,perfWorstGapNs/1e6,simRate,
+                perfPhysicsNs/(1e6*perfFrames),perfCanvasNs/(1e6*perfFrames),
+                perfCpuNs/(1e6*perfFrames),perfSaveCount,
+                perfSaveCount==0?0:perfSaveNs/(1e6*perfSaveCount),
+                perfWorstSaveNs/1e6,world.blobs.size()));
+        perfFrames=perfSteps=perfSaveCount=0;
+        perfGapNs=perfWorstGapNs=perfPhysicsNs=perfCanvasNs=perfCpuNs=0L;
+        perfSaveNs=perfWorstSaveNs=0L;
     }
 
     private void drawBackground(Canvas canvas, float h) {
         paint.setStyle(Paint.Style.FILL);
-        paint.setShader(new LinearGradient(0f, 0f, 0f, h,
-                0xFF101035, 0xFF080819, Shader.TileMode.CLAMP));
+        if(cachedBackgroundShader==null||cachedShaderHeight!=h) {
+            cachedBackgroundShader=new LinearGradient(0f,0f,0f,h,
+                    0xFF101035,0xFF080819,Shader.TileMode.CLAMP);
+            cachedShaderHeight=h;
+        }
+        paint.setShader(cachedBackgroundShader);
         canvas.drawRect(0, 0, W, h, paint);
         paint.setShader(null);
         for (int i = 0; i < 20; i++) {
@@ -190,12 +258,19 @@ public final class LavaView extends View {
     }
 
     private Path glassPath() {
-        Path shape=new Path();
-        for(int i=0;i<world.vessel.xs.length;i++){
-            float x=world.vessel.xs[i],y=world.vessel.ys[i];
-            if(i==0)shape.moveTo(x,y);else shape.lineTo(x,y);
+        // The physical vessel profile is immutable until world.setHeight()
+        // swaps the Vessel instance. Reuse one Path for all three draw passes.
+        if(cachedGlassVessel!=world.vessel) {
+            cachedGlassPath.reset();
+            for(int i=0;i<world.vessel.xs.length;i++){
+                float x=world.vessel.xs[i],y=world.vessel.ys[i];
+                if(i==0)cachedGlassPath.moveTo(x,y);
+                else cachedGlassPath.lineTo(x,y);
+            }
+            cachedGlassPath.close();
+            cachedGlassVessel=world.vessel;
         }
-        shape.close();return shape;
+        return cachedGlassPath;
     }
 
     private void drawVessel(Canvas canvas) {
@@ -415,8 +490,7 @@ public final class LavaView extends View {
         letters.setShader(null);
         letters.setColor(color);
         letters.setTextSize(size);
-        letters.setTypeface(Typeface.create(
-                bold ? "sans-serif-medium" : "sans-serif", Typeface.NORMAL));
+        letters.setTypeface(bold?FONT_MEDIUM:FONT_REGULAR);
         c.drawText(value, x, y, letters);
     }
 
