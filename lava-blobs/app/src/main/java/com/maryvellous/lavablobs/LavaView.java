@@ -96,7 +96,7 @@ public final class LavaView extends View {
             try {
                 GameSave.restore(world,resume.data);
                 aimX=(float)resume.data.optDouble("aimX",W/2);
-                eraseMode=resume.data.optBoolean("eraseMode",false);
+                eraseMode=world.eraseCount>0&&resume.data.optBoolean("eraseMode",false);
                 lastCheckpoint=world.time;
             }catch(Exception ignored){
                 // A corrupted save must not crash startup. Keep the old slot
@@ -409,9 +409,11 @@ public final class LavaView extends View {
         label(c,"⌂",376,66,24,0xFFD7EDE4,false);
 
         if(spec.endless) {
-            paint.setColor(eraseMode?0xFFDB5461:0xFF275F5A);
+            paint.setColor(world.eraseCount==0?0xFF2A3B43:
+                    (eraseMode?0xFFDB5461:0xFF275F5A));
             c.drawRoundRect(new RectF(273,97,398,143),17,17,paint);
-            label(c,"ERASE · "+world.eraseCount,335,125,14,0xFFFFFFFF,true);
+            label(c,"ERASE · "+world.eraseCount,335,125,14,
+                    world.eraseCount==0?0xFF9EB0B4:0xFFFFFFFF,true);
         }else if(spec.trial) {
             label(c,"TEST VASETTO",327,108,12,0xFFB0D1C6,true);
             label(c,Math.round(world.bottom()-world.vessel.top)+" UNITÀ",327,127,12,0xFFE2CAD0,true);
@@ -521,7 +523,8 @@ public final class LavaView extends View {
                 if(y<94f&&x>345f){onHome.run();return true;}
                 if(y<94f&&x>287f){restart();return true;}
                 if(spec.endless&&x>266f&&y>96f&&y<149f) {
-                    eraseMode=!eraseMode;invalidate();return true;
+                    eraseMode=world.eraseCount>0&&!eraseMode;
+                    invalidate();return true;
                 }
                 if(eraseMode){
                     if(world.eraseAt(x,y)){
