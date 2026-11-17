@@ -31,6 +31,52 @@ public class VesselFastPathTest {
         }
     }
 
+
+    /**
+     * Stress every vessel shape at multiple display heights. Include off-grid
+     * points and sub-pixel positions around actual polygon edges: a too-wide
+     * fast interior corridor must never skip an exact wall correction.
+     */
+    @Test public void offGridAndNearWallSamplesMatchOriginalSolver() {
+        java.util.Random random=new java.util.Random(20261117L);
+        for(float screenHeight:new float[]{680f,850f,1080f}) {
+            for(int shape=-1;shape<=13;shape++) {
+                Vessel vessel=new Vessel(shape,screenHeight);
+                for(int sample=0;sample<48;sample++) {
+                    Blob optimized=new Blob(210f,420f,0,1f);
+                    Blob reference=new Blob(210f,420f,0,1f);
+                    for(int i=0;i<Blob.NODES;i++) {
+                        float x=15f+random.nextFloat()*390f;
+                        float y=vessel.top-8f+random.nextFloat()*
+                                (vessel.bottom-vessel.top+16f);
+                        if((i&3)==0) {
+                            // Probe close to top, bottom and slanted side edges.
+                            int edge=random.nextInt(vessel.xs.length);
+                            int next=(edge+1)%vessel.xs.length;
+                            float t=random.nextFloat();
+                            x=vessel.xs[edge]+(vessel.xs[next]-vessel.xs[edge])*t+
+                                    (random.nextFloat()-.5f)*2.4f;
+                            y=vessel.ys[edge]+(vessel.ys[next]-vessel.ys[edge])*t+
+                                    (random.nextFloat()-.5f)*2.4f;
+                        }
+                        optimized.px[i]=reference.px[i]=x;
+                        optimized.py[i]=reference.py[i]=y;
+                    }
+                    optimized.recenter();
+                    reference.recenter();
+                    vessel.confine(optimized);
+                    originalConfine(vessel,reference);
+                    for(int i=0;i<Blob.NODES;i++) {
+                        String label="height="+screenHeight+" vessel="+shape+
+                                " sample="+sample+" node="+i;
+                        assertEquals(label,reference.px[i],optimized.px[i],.0001f);
+                        assertEquals(label,reference.py[i],optimized.py[i],.0001f);
+                    }
+                }
+            }
+        }
+    }
+
     /** The unchanged pre-optimization implementation, kept as a test oracle. */
     private static void originalConfine(Vessel vessel,Blob blob) {
         for(int i=0;i<Blob.NODES;i++) {
