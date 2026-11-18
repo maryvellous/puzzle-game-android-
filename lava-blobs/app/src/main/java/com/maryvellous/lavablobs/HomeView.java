@@ -116,11 +116,11 @@ public final class HomeView extends View {
         final float l=MARGIN,t=142f,r=W-MARGIN,b=214f;
         panel(c,l,t,r,b,19f,theme.surfaceRaised,Palette.mix(theme.surface,theme.border,.58f),1.2f);
         drawPreview(c,saved.spec.shape,l+11,t+8,l+75,b-8,false);
-        text(c,"PARTITA SALVATA",l+87,t+19,10f,theme.muted,false,243f);
-        text(c,"Continua",l+87,t+43,22f,theme.text,true,230f);
+        text(c,"PARTITA SALVATA",l+87,t+19,10f,theme.onSurfaceMuted,false,243f);
+        text(c,"Continua",l+87,t+43,22f,theme.onSurface,true,230f);
         String detail=(saved.spec.endless?"Infinita":saved.spec.trial?"Prova":"Livello "+(saved.spec.id+1))
                 +" · "+saved.points()+" punti";
-        text(c,detail,l+87,t+61,11.5f,theme.muted,false,235f);
+        text(c,detail,l+87,t+61,11.5f,theme.onSurfaceMuted,false,235f);
         textCentered(c,"›",r-17,t+46,34,theme.primary,true);
     }
 
@@ -129,10 +129,11 @@ public final class HomeView extends View {
         panel(c,MARGIN,y,W-MARGIN,y+43f,22f,theme.surface,
                 Palette.mix(theme.surface,theme.border,.46f),1f);
         float l=section==0?MARGIN+3:W/2f+1;
-        panel(c,l,y+3,l+W/2f-MARGIN-4,y+40f,19f,theme.surfaceRaised,
-                Palette.alpha(theme.primary,225),1.65f);
-        textCentered(c,"LIVELLI",118,y+28,13,section==0?theme.text:theme.muted,true);
-        textCentered(c,"∞  INFINITA",302,y+28,13,section==1?theme.text:theme.muted,true);
+        panel(c,l,y+3,l+W/2f-MARGIN-4,y+40f,19f,theme.primary,theme.primary,0f);
+        int activeInk=Palette.relativeLuminance(theme.primary)>.43f?
+                0xFF211A26:0xFFF7F1F3;
+        textCentered(c,"LIVELLI",118,y+28,13,section==0?activeInk:theme.onSurface,true);
+        textCentered(c,"∞  INFINITA",302,y+28,13,section==1?activeInk:theme.onSurface,true);
     }
 
     private void drawLevels(Canvas c){
@@ -166,33 +167,31 @@ public final class HomeView extends View {
 
     private void drawCard(Canvas c,GameSpec spec,float x,float y,float width,float height,
                           boolean locked,boolean next){
-        int face=locked?Palette.mix(theme.surface,Palette.BACKGROUND_TOP,.35f):theme.surface;
-        int border=locked?Palette.alpha(theme.border,100):
-            next?theme.primary:Palette.mix(theme.surface,theme.border,.55f);
-        panel(c,x,y,x+width,y+height,17f,face,border,next?1.8f:1.0f);
+        int face=locked?Palette.mix(theme.surface,Palette.BACKGROUND_TOP,.16f):theme.surface;
+        panel(c,x,y,x+width,y+height,17f,face,face,0f);
         drawPreview(c,spec.shape,x+8,y+10,x+69,y+height-10,locked);
 
         float tx=x+77f,available=width-85f;
         if(spec.endless){
-            text(c,"∞  INFINITA",tx,y+25,9.8f,theme.muted,true,available);
-            text(c,spec.name.replace("Infinita · ",""),tx,y+49,15f,theme.text,true,available);
-            text(c,"Gioca",tx,y+80,11f,theme.secondary,false,available);
+            text(c,"∞  INFINITA",tx,y+25,9.8f,theme.onSurfaceMuted,true,available);
+            text(c,spec.name.replace("Infinita · ",""),tx,y+49,15f,theme.onSurface,true,available);
+            text(c,"Gioca",tx,y+80,11f,theme.onSurfaceMuted,false,available);
             return;
         }
 
-        text(c,"LIVELLO "+(spec.id+1),tx,y+23,9.5f,theme.muted,true,available);
-        text(c,spec.name,tx,y+47,14f,locked?theme.muted:theme.text,true,available);
+        text(c,"LIVELLO "+(spec.id+1),tx,y+23,9.5f,theme.onSurfaceMuted,true,available);
+        text(c,spec.name,tx,y+47,14f,locked?theme.onSurfaceMuted:theme.onSurface,true,available);
         String status=locked?"Bloccato":progress.cleared(spec.id)?"Completato":"Da giocare";
-        int statusColor=locked?theme.muted:progress.cleared(spec.id)?theme.positive:theme.secondary;
+        int statusColor=locked?theme.onSurfaceMuted:progress.cleared(spec.id)?theme.positive:theme.secondary;
         paint.setColor(statusColor);
         paint.setStyle(Paint.Style.FILL);
         c.drawCircle(tx+3,y+69,2.8f,paint);
-        text(c,status,tx+10,y+73,10.4f,statusColor,false,available-10);
+        text(c,status,tx+10,y+73,10.4f,theme.onSurfaceMuted,false,available-10);
         if(progress.cleared(spec.id)&&!locked)
             text(c,"Extra "+progress.extras(spec.id)+"/"+spec.totalExtras(),
-                    tx,y+89,9.2f,theme.muted,false,available);
+                    tx,y+89,9.2f,theme.onSurfaceMuted,false,available);
         else if(next)
-            text(c,"Tocca per iniziare",tx,y+89,9.2f,theme.muted,false,available);
+            text(c,"Tocca per iniziare",tx,y+89,9.2f,theme.onSurfaceMuted,false,available);
     }
 
     private Vessel miniature(int shape) {
@@ -253,7 +252,7 @@ public final class HomeView extends View {
             panel(c,x,top,x+w,bottom,15f,chosen?theme.surfaceRaised:theme.surface,
                     chosen?theme.primary:Palette.mix(theme.surface,theme.border,.56f),
                     chosen?2f:1f);
-            text(c,swatch.name,x+11,top+18,11.5f,theme.text,chosen,65);
+            text(c,swatch.name,x+11,top+18,11.5f,theme.onSurface,chosen,65);
             if(chosen){
                 paint.setColor(theme.primary);
                 paint.setStyle(Paint.Style.FILL);
@@ -283,7 +282,7 @@ public final class HomeView extends View {
         float y=copyTop();
         panel(c,96f,y,324f,y+40f,20f,theme.surface,
                 Palette.mix(theme.surface,theme.border,.58f),1.0f);
-        textCentered(c,"COPIA DATI PARTITE",210,y+25,11f,theme.muted,true);
+        textCentered(c,"COPIA DATI PARTITE",210,y+25,11f,theme.onSurface,true);
     }
 
     private void panel(Canvas c,float l,float t,float r,float b,float radius,
@@ -291,12 +290,8 @@ public final class HomeView extends View {
         paint.setShader(null);
         paint.setStyle(Paint.Style.FILL);
         paint.setColor(fill);
+        // The Canva panels have flat colour with no decorative outline.
         c.drawRoundRect(l,t,r,b,radius,radius,paint);
-        paint.setStyle(Paint.Style.STROKE);
-        paint.setColor(stroke);
-        paint.setStrokeWidth(strokeSize);
-        c.drawRoundRect(l,t,r,b,radius,radius,paint);
-        paint.setStyle(Paint.Style.FILL);
     }
 
     private void text(Canvas c,String value,float x,float y,float size,
