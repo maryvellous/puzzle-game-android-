@@ -47,6 +47,8 @@ public final class LavaView extends View {
     private final Paint letters = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint line = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path blobPath = new Path();
+    private final Path titleGlyph = new Path(), titleWarped = new Path();
+    private final long titleStart = System.nanoTime();
     private final Path cachedGlassPath = new Path();
     private Vessel cachedGlassVessel;
     private Shader cachedBackgroundShader;
@@ -395,61 +397,56 @@ public final class LavaView extends View {
         c.drawPath(glassPath(),line);
     }
 
-    /** Compact status HUD with theme-derived surfaces and unchanged controls. */
+    /** In-game layout from the fourth Canva board, with colours from Theme. */
     private void drawHUD(Canvas c,float h) {
-        label(c,"LAVA BLOB",119,40,21,theme.text,true);
+        BlobTitle.draw(c,letters,paint,titleGlyph,titleWarped,theme,
+                (System.nanoTime()-titleStart)/1_000_000_000f,35f,61f);
         String location=spec.endless?"Modalità infinita":
                 spec.trial?spec.name:"Livello "+(spec.id+1)+" · "+spec.name;
-        label(c,location,145,65,11,theme.muted,false);
+        label(c,location,210,87,11,theme.muted,false);
 
-        // Exactly the same touch targets as before: reset and home.
-        hudPanel(c,299,32,339,74,20,theme.surfaceRaised);
-        hudPanel(c,355,32,395,74,20,theme.surfaceRaised);
-        label(c,"↻",319,61,24,theme.text,false);
-        label(c,"⌂",375,61,24,theme.text,false);
+        // Controls are now on opposite sides of the shared animated title.
+        hudPanel(c,29,32,75,76,18,theme.surfaceRaised);
+        hudPanel(c,345,32,391,76,18,theme.surfaceRaised);
+        label(c,"↻",52,63,26,theme.text,false);
+        label(c,"⌂",368,62,25,theme.text,false);
 
-        hudPanel(c,29,89,140,146,15,theme.surface);
-        hudPanel(c,146,89,257,146,15,theme.surface);
-        int actionFill=theme.surface;
-        if(spec.endless&&world.eraseCount>0)
-            actionFill=eraseMode?theme.tertiary:theme.primary;
-        hudPanel(c,263,89,392,146,15,actionFill);
+        // Canva page 4: two large, clearly separated counters.
+        int scoreFill=theme.forTier(0);
+        int goalFill=theme.primary;
+        hudPanel(c,29,109,195,169,22,scoreFill);
+        hudPanel(c,225,109,391,169,22,goalFill);
+        int scoreInk=contrastInk(scoreFill);
+        int goalInk=contrastInk(goalFill);
+        label(c,"PUNTI",112,130,11,scoreInk,true);
+        label(c,Long.toString(world.score),112,155,23,scoreInk,true);
+        String heading=spec.endless?"RECORD":spec.trial?"DROP":"OBIETTIVO";
+        String figure=spec.endless?Long.toString(Math.max(best,world.score)):
+                spec.trial?Integer.toString(world.dropCount):
+                Integer.toString(spec.minScore);
+        label(c,heading,308,130,11,goalInk,true);
+        label(c,figure,308,155,23,goalInk,true);
 
-        label(c,"PUNTI",84,106,9.5f,theme.muted,true);
-        label(c,Long.toString(world.score),84,132,22,theme.text,true);
-        label(c,"RECORD",201,106,9.5f,theme.muted,true);
-        label(c,Long.toString(best),201,132,20,theme.text,true);
-
-        if(spec.endless) {
-            // The same touch rectangle as the old Erase button.
-            label(c,"ERASE · "+world.eraseCount,327.5f,125,12.5f,
-                    world.eraseCount==0?theme.muted:
-                    eraseMode?theme.text:theme.onPrimary,true);
-        }else if(spec.trial){
-            label(c,"TEST VASETTO",327,106,10,theme.muted,true);
-            label(c,Math.round(world.bottom()-world.vessel.top)+" UNITÀ",
-                    327,124,11,theme.text,true);
-            label(c,world.dropCount+" DROP",327,140,9.5f,theme.secondary,false);
-        }else{
-            label(c,"OBIETTIVO",327,105,9.5f,theme.muted,true);
-            label(c,Integer.toString(spec.minScore),327,124,16,theme.text,true);
+        if(!spec.endless&&!spec.trial)
             label(c,"EXTRA "+spec.extras(world.score,world.maxTierReached,
                     world.mergeCount)+"/"+spec.totalExtras(),
-                    327,140,10,theme.secondary,true);
-        }
+                    308,186,10.5f,theme.secondary,true);
 
         if(world.blockedTime>.5f&&!world.gameOver) {
             label(c,"INGRESSO BLOCCATO · "+(int)Math.ceil(world.remainingSeconds())+"s",
-                    210,174,11.5f,theme.caution,true);
+                    210,211,11.5f,theme.caution,true);
             if(spec.endless&&world.eraseCount>0)
-                label(c,"Usa Erase per liberare spazio",210,192,10.5f,theme.muted,false);
+                label(c,"Usa Erase per liberare spazio",210,228,10.5f,theme.muted,false);
         }
         if(eraseMode)
-            label(c,"TOCCA IL BLOB DA ELIMINARE",210,192,11,theme.caution,true);
+            label(c,"TOCCA IL BLOB DA ELIMINARE",210,229,11f,theme.caution,true);
 
-        float deckTop=world.bottom()+22f;
-        float deckBottom=deckTop+100f;
-        float nextY=deckTop+43f;
+        // Narrow floating next-blob tray; both footer actions remain visible
+        // on short displays even when a taller vessel is being played.
+        float controlsTop=h-62f;
+        float deckTop=world.bottom()+13f;
+        float deckBottom=Math.max(deckTop+63f,controlsTop-9f);
+        float deckHeight=deckBottom-deckTop;
         if(aiming) {
             line.setColor(Palette.alpha(theme.secondary,150));
             line.setStrokeWidth(1.4f);
@@ -457,13 +454,30 @@ public final class LavaView extends View {
             c.drawLine(aimX,world.bottom()-8,aimX,world.vessel.top+10,line);
             line.setPathEffect(null);
         }
-        hudPanel(c,43,deckTop,377,deckBottom,20,theme.surfaceRaised);
-        drawNextBubble(c,aimX,nextY);
-        label(c,"TRASCINA  ·  RILASCIA  ·  SCUOTI",
-                210,deckBottom-12f,10.5f,theme.muted,true);
+        hudPanel(c,100,deckTop,320,deckBottom,29,theme.surfaceRaised);
+        float previewY=deckTop+Math.min(35f,deckHeight*.45f);
+        drawNextBubble(c,aimX,previewY,Math.max(14f,Math.min(1f,deckHeight/105f)));
+        label(c,"TRASCINA E RILASCIA",210,deckBottom-11f,10f,theme.muted,true);
+
+        // The purple buttons from the mockup: shaking remains available
+        // through the accelerometer; tapping the left button is an alternative.
+        int shakeFill=theme.tertiary;
+        int eraseFill=world.eraseCount>0&&spec.endless?
+                (eraseMode?theme.tertiary:theme.secondary):theme.surface;
+        hudPanel(c,32,controlsTop,193,h-10f,22,shakeFill);
+        hudPanel(c,227,controlsTop,388,h-10f,22,eraseFill);
+        label(c,"SCUOTI",112.5f,controlsTop+33,15,contrastInk(shakeFill),true);
+        String eraseText=spec.endless?"ERASE · "+world.eraseCount:"ERASE";
+        label(c,eraseText,307.5f,controlsTop+33,15,
+                world.eraseCount>0&&spec.endless?contrastInk(eraseFill):theme.muted,true);
+
         if(blockedFlash>0f)
-            label(c,"QUESTO INGRESSO È OCCUPATO",210,world.bottom()+20,11,
+            label(c,"QUESTO INGRESSO È OCCUPATO",210,world.bottom()+8f,11,
                     theme.caution,true);
+    }
+
+    private int contrastInk(int color) {
+        return Palette.relativeLuminance(color)>.43f ? 0xFF211A26 : 0xFFF7F1F3;
     }
 
     private void hudPanel(Canvas c,float l,float t,float r,float b,float radius,int fill){
@@ -476,15 +490,17 @@ public final class LavaView extends View {
         c.drawRoundRect(l,t,r,b,radius,radius,line);
     }
 
-    private void drawNextBubble(Canvas c,float x,float y) {
-        float r=Blob.RADII[world.nextTier];
+    private void drawNextBubble(Canvas c,float x,float y,float previewScale) {
+        float r=Blob.RADII[world.nextTier]*.76f*previewScale;
+        paint.setStyle(Paint.Style.FILL);
+        paint.setShader(null);
         paint.setColor(theme.forTier(world.nextTier));
-        c.drawCircle(x,y,r*.76f,paint);
+        c.drawCircle(x,y,r,paint);
         int nextColor=theme.forTier(world.nextTier);
         line.setColor(blend(nextColor,theme.text,
                 Palette.relativeLuminance(nextColor)<.12f?.66f:.28f));
         line.setStrokeWidth(1.3f);
-        c.drawCircle(x,y,r*.76f,line);
+        c.drawCircle(x,y,r,line);
     }
 
     private void drawGameOver(Canvas c,float h) {
@@ -541,10 +557,20 @@ public final class LavaView extends View {
                     }
                     return true;
                 }
-                if(y<94f&&x>345f){onHome.run();return true;}
-                if(y<94f&&x>287f){restart();return true;}
-                if(spec.endless&&x>266f&&y>96f&&y<149f) {
-                    eraseMode=world.eraseCount>0&&!eraseMode;
+                if(y>32f&&y<79f&&x>342f){onHome.run();return true;}
+                if(y>32f&&y<79f&&x<80f){restart();return true;}
+                float controlsTop=h-62f;
+                if(y>=controlsTop&&y<=h&&x>=227f) {
+                    if(spec.endless&&world.eraseCount>0)
+                        eraseMode=!eraseMode;
+                    invalidate();return true;
+                }
+                if(y>=controlsTop&&y<=h&&x<=193f) {
+                    if(!world.gameOver) {
+                        world.shake(5f,-6f,9f);
+                        performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+                        saveCheckpoint();
+                    }
                     invalidate();return true;
                 }
                 if(eraseMode){
