@@ -6,11 +6,12 @@ import static org.junit.Assert.*;
 
 public class ReleaseOneTest {
     @Test public void nineColoursCycleInCorrectUserOrder() {
-        assertEquals(0xFF065143,Palette.forTier(0));
-        assertEquals(0xFF4B748E,Palette.forTier(1));
-        assertEquals(0xFFDB5461,Palette.forTier(8));
-        assertEquals(0xFF065143,Palette.forTier(9));
-        assertEquals(0xFF4B748E,Palette.forTier(10));
+        Palette.Theme initial=Palette.at(0);
+        assertEquals(0xFFDAF301,initial.forTier(0));
+        assertEquals(0xFFE9AE08,initial.forTier(1));
+        assertEquals(0xFF2D2383,initial.forTier(8));
+        assertEquals(0xFFDAF301,initial.forTier(9));
+        assertEquals(0xFFE9AE08,initial.forTier(10));
     }
 
     @Test public void allFiveDropSizesOccurWithPlannedWeights() {
