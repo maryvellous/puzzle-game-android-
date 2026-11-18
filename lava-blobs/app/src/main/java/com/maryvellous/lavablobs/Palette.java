@@ -29,7 +29,7 @@ final class Palette {
             border=mix(VESSEL_OUTLINE,primary,.52f);
             text=mix(VESSEL_OUTLINE,primary,.05f);
             muted=mix(VESSEL_OUTLINE,secondary,.30f);
-            positive=mix(blobs[0],VESSEL_OUTLINE,.12f);
+            positive=mix(primary,VESSEL_OUTLINE,.12f);
             caution=mix(blobs[3],VESSEL_OUTLINE,.22f);
             vesselFill=mix(BACKGROUND_TOP,secondary,.17f);
             speck=mix(primary,VESSEL_OUTLINE,.22f);
