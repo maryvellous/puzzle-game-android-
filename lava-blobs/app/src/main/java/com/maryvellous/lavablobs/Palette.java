@@ -1,7 +1,5 @@
 package com.maryvellous.lavablobs;
 
-import android.graphics.Color;
-
 /**
  * Single source of truth for all visual themes.
  * Only the background and the vessel outline are independent of the theme.
@@ -69,13 +67,15 @@ final class Palette {
     }
     static int mix(int a,int b,float ratio){
         float t=Math.max(0f,Math.min(1f,ratio));
-        return Color.rgb(
-            (int)(Color.red(a)*(1-t)+Color.red(b)*t),
-            (int)(Color.green(a)*(1-t)+Color.green(b)*t),
-            (int)(Color.blue(a)*(1-t)+Color.blue(b)*t));
+        int red=(int)(((a>>>16)&255)*(1-t)+((b>>>16)&255)*t);
+        int green=(int)(((a>>>8)&255)*(1-t)+((b>>>8)&255)*t);
+        int blue=(int)((a&255)*(1-t)+(b&255)*t);
+        return 0xFF000000|(red<<16)|(green<<8)|blue;
     }
     static float relativeLuminance(int color){
-        float r=Color.red(color)/255f,g=Color.green(color)/255f,b=Color.blue(color)/255f;
+        float r=((color>>>16)&255)/255f;
+        float g=((color>>>8)&255)/255f;
+        float b=(color&255)/255f;
         return .2126f*r+.7152f*g+.0722f*b;
     }
 }
