@@ -325,7 +325,9 @@ public final class LavaView extends View {
         paint.setColorFilter(null);
         canvas.drawPath(blobPath, paint);
 
-        line.setColor(blend(theme.forTier(b.tier), Palette.VESSEL_OUTLINE, .23f));
+        int blobColor=theme.forTier(b.tier);
+        float rimBlend=Palette.relativeLuminance(blobColor)<.12f?.64f:.23f;
+        line.setColor(blend(blobColor,Palette.VESSEL_OUTLINE,rimBlend));
         line.setStrokeWidth(Math.max(1.0f, r * .020f));
         canvas.drawPath(blobPath, line);
     }
@@ -478,7 +480,9 @@ public final class LavaView extends View {
         float r=Blob.RADII[world.nextTier];
         paint.setColor(theme.forTier(world.nextTier));
         c.drawCircle(x,y,r*.76f,paint);
-        line.setColor(blend(theme.forTier(world.nextTier),theme.text,.28f));
+        int nextColor=theme.forTier(world.nextTier);
+        line.setColor(blend(nextColor,theme.text,
+                Palette.relativeLuminance(nextColor)<.12f?.66f:.28f));
         line.setStrokeWidth(1.3f);
         c.drawCircle(x,y,r*.76f,line);
     }
