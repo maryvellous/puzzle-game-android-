@@ -12,7 +12,7 @@ import java.util.Random;
  * rigid circular hitboxes in this class.
  */
 final class Blob {
-    static final float[] RADII = {18f, 23f, 29f, 36f, 45f, 56f, 69f, 84f, 99f};
+    static final float[] RADII = {20f, 26f, 32f, 40f, 50f, 63f, 77f, 94f, 111f};
     static final int NODES = 24;
     private static final float TWO_PI = (float) (Math.PI * 2);
     private static final float PERIMETER_FACTOR = (float) (2 * Math.sin(Math.PI / NODES));
@@ -46,7 +46,7 @@ final class Blob {
         if(tier<RADII.length)return RADII[tier];
         // Unlimited merge tiers: colour repeats after nine, size grows until
         // the finite playfield determines practical impossibility.
-        return (float)Math.min(160.0,99.0*Math.pow(1.15,tier-(RADII.length-1)));
+        return (float)Math.min(179.2,111.0*Math.pow(1.15,tier-(RADII.length-1)));
     }
 
     void recenter() {
