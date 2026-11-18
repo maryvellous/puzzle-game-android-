@@ -11,7 +11,7 @@ import java.util.Random;
  */
 final class BlobWorld {
     static final float WIDTH = 420f, LEFT = 29f, RIGHT = 391f, TOP = 155f;
-    static final int ERASE_EVERY_POINTS=20_000; // provisional: revise after playtests
+    static final int ERASE_EVERY_POINTS=2_000; // provisional old-scale equivalent; validate in endless playtests
 
     static final class Merge {
         final float x, y, radius;
