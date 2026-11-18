@@ -408,8 +408,8 @@ public final class LavaView extends View {
         // Controls are now on opposite sides of the shared animated title.
         hudPanel(c,29,32,75,76,18,theme.surfaceRaised);
         hudPanel(c,345,32,391,76,18,theme.surfaceRaised);
-        label(c,"↻",52,63,26,theme.text,false);
-        label(c,"⌂",368,62,25,theme.text,false);
+        label(c,"↻",52,63,26,theme.onSurface,false);
+        label(c,"⌂",368,62,25,theme.onSurface,false);
 
         // Canva page 4: two large, clearly separated counters.
         int scoreFill=theme.forTier(0);
@@ -457,7 +457,7 @@ public final class LavaView extends View {
         hudPanel(c,100,deckTop,320,deckBottom,29,theme.surfaceRaised);
         float previewY=deckTop+Math.min(35f,deckHeight*.45f);
         drawNextBubble(c,210f,previewY,Math.max(.45f,Math.min(1f,deckHeight/105f)));
-        label(c,"TRASCINA E RILASCIA",210,deckBottom-11f,10f,theme.muted,true);
+        label(c,"TRASCINA E RILASCIA",210,deckBottom-11f,10f,theme.onSurfaceMuted,true);
 
         // The purple buttons from the mockup: shaking remains available
         // through the accelerometer; tapping the left button is an alternative.
@@ -469,7 +469,7 @@ public final class LavaView extends View {
         label(c,"SCUOTI",112.5f,controlsTop+33,15,contrastInk(shakeFill),true);
         String eraseText=spec.endless?"ERASE · "+world.eraseCount:"ERASE";
         label(c,eraseText,307.5f,controlsTop+33,15,
-                world.eraseCount>0&&spec.endless?contrastInk(eraseFill):theme.muted,true);
+                world.eraseCount>0&&spec.endless?contrastInk(eraseFill):theme.onSurfaceMuted,true);
 
         if(blockedFlash>0f&&world.blockedTime<=.5f)
             label(c,"QUESTO INGRESSO È OCCUPATO",210,
@@ -485,9 +485,7 @@ public final class LavaView extends View {
         paint.setShader(null);
         paint.setColor(fill);
         c.drawRoundRect(l,t,r,b,radius,radius,paint);
-        line.setColor(Palette.mix(fill,theme.border,.58f));
-        line.setStrokeWidth(1f);
-        c.drawRoundRect(l,t,r,b,radius,radius,line);
+        // Flat Canva panels: no ornamental or contrasting button outlines.
     }
 
     private void drawNextBubble(Canvas c,float x,float y,float previewScale) {
@@ -509,19 +507,19 @@ public final class LavaView extends View {
         boolean won=spec.passed(world.score);
         String title=spec.trial?"PROVA CONCLUSA":spec.endless?"PARTITA FINITA":
                 won?"LIVELLO SUPERATO":"RIPROVA";
-        label(c,title,210,top+57,21,theme.text,true);
+        label(c,title,210,top+57,21,theme.onSurface,true);
         label(c,world.score+" punti  ·  "+world.dropCount+" drop",
-                210,top+99,17,theme.muted,false);
+                210,top+99,17,theme.onSurfaceMuted,false);
         if(!spec.endless&&!spec.trial)
             label(c,"Extra "+spec.extras(world.score,world.maxTierReached,
                     world.mergeCount)+"/"+spec.totalExtras(),
-                    210,top+125,13,theme.secondary,false);
+                    210,top+125,13,theme.onSurfaceMuted,false);
 
         float buttonsTop=h*.585f,buttonsBottom=h*.664f;
         hudPanel(c,55,buttonsTop,198,buttonsBottom,15,theme.primary);
         hudPanel(c,221,buttonsTop,365,buttonsBottom,15,theme.surface);
         label(c,"RIPROVA",127,h*.633f,13,theme.onPrimary,true);
-        label(c,"HOME",293,h*.633f,13,theme.text,true);
+        label(c,"HOME",293,h*.633f,13,theme.onSurface,true);
     }
 
     private void label(Canvas c, String value, float x, float y, float size,
