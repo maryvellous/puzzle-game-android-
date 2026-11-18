@@ -21,7 +21,9 @@ final class ProgressStore {
         this.context=context;
         prefs=context.getSharedPreferences(NAME,Context.MODE_PRIVATE);
     }
-    long record(int id) {return prefs.getLong("record_"+id,0L);}
+    // Old scoring records stay stored as history; comparisons are only
+    // between runs using the new base-10 curve.
+    long record(int id) {return prefs.getLong("record_v2_"+id,0L);}
     boolean cleared(int id) {return prefs.getBoolean("clear_"+id,false);}
     int extras(int id) {return Integer.bitCount(prefs.getInt("extras_mask_"+id,0));}
     int highestUnlocked() {
@@ -34,7 +36,7 @@ final class ProgressStore {
     void save(GameSpec spec,BlobWorld world,boolean finished) {
         int extraMask=spec.extrasMask(world.score,world.maxTierReached,world.mergeCount);
         SharedPreferences.Editor editor=prefs.edit();
-        if(world.score>record(spec.id))editor.putLong("record_"+spec.id,world.score);
+        if(world.score>record(spec.id))editor.putLong("record_v2_"+spec.id,world.score);
         if(!spec.endless&&!spec.trial) {
             if(finished&&spec.passed(world.score))editor.putBoolean("clear_"+spec.id,true);
             if(finished&&spec.passed(world.score))
@@ -44,7 +46,8 @@ final class ProgressStore {
         editor.apply();
         try{
             JSONObject session=new JSONObject();
-            session.put("version","1.0.1");
+            session.put("version","1.0.2");
+            session.put("scoringVersion",2);
             session.put("time",System.currentTimeMillis());
             session.put("mode",spec.trial?"vessel_trial":(spec.endless?"endless":"level"));
             session.put("vesselHeight",Math.round(world.vessel.bottom-world.vessel.top));
