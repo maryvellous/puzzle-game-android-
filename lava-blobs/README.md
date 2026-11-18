@@ -5,14 +5,14 @@ Un cozy merge puzzle personale. Le bolle salgono e si ammassano nel recipiente, 
 ## Nuova UI e temi — novembre 2026 (PR #3, in collaudo)
 
 - Titolo Home originale mantenuto: stessa animazione delle lettere gelatinose; eliminato il sottotitolo. Home ridisegnata con card minimali, miniature dei recipienti reali, ripresa partita, tab Livelli/Infinita, sei livelli per pagina, selettore Temi e Copia dati.
-- Tre temi selezionabili dalla Home: il tocco cambia subito l'anteprima e la preferenza resta salvata localmente tramite ThemeStore, senza modificare salvataggi e progressi. Colori di blob, effetti, card, controlli, HUD e finestra di fine partita derivano dal tema.
-- Colori costanti: sfondo #322E32 → #3D3D3D e contorno dei recipienti #E6DFE3.
+- Tre temi selezionabili dalla Home: la preferenza resta salvata localmente tramite ThemeStore, senza modificare salvataggi e progressi. I temi colorano blob, animazioni e soli accenti UI; le superfici neutre non ereditano il colore del tema.
+- Colori costanti dal mockup: sfondo #322E32 → #3D3D3D; contorno dei recipienti e superfici neutre #E6DFE3. I pannelli Home/HUD e il vassoio del prossimo blob hanno sfondo avorio senza bordino decorativo; i pulsanti intenzionalmente colorati mantengono i colori del tema.
 - Tema 1: #DAF301 #E9AE08 #EB8403 #F0420D #D23876 #B435A8 #9937C8 #5A29DA #2D2383.
 - Tema 2: #A72F38 #E2575A #EF8F55 #F8DEBB #49A1A5 #1D3058 #9985C2 #773661 #5B5398.
 - Tema 3: #FDA24B #FB6204 #CB3C06 #980203 #510207 #5F1564 #5B5398 #A20096 #0C0305 (conservato il nero, scartato #380842).
 - Ogni palette ha nove colori e ricomincia dal primo al tier 10. Le anteprime degli altri temi sono quelle reali, non alternative inventate.
 - La UI può scorrere su schermi compatti; il solver fisico, i contenitori e le condizioni di sconfitta restano invariati. In questa PR sono stati applicati anche la nuova formula (base 10), il primo obiettivo minimo di 1.500, i raggi maggiorati (+12% circa) e il nuovo HUD ispirato alla pagina 4 di Canva.
-- La schermata partita riprende **lo stesso titolo animato della Home** tramite `BlobTitle`, mostra PUNTI/OBIETTIVO in due riquadri, il prossimo blob nel vassoio inferiore, e i controlli SCUOTI/ERASE. Le azioni non disponibili restano disabilitate.
+- La schermata partita riprende **lo stesso titolo animato della Home** tramite `BlobTitle`, mostra PUNTI/OBIETTIVO in due riquadri accentati, il prossimo blob nel vassoio avorio e i controlli SCUOTI/ERASE. Le azioni non disponibili restano disabilitate. Interno recipiente #E6DFE3 a circa 17% di opacità; particelle sospese dello stesso bianco con **movimento, numero, distribuzione, dimensione e alpha originali invariati**.
 - Build CI e test visivo su dispositivo reale da verificare prima dell'adozione come versione definitiva.
 
 ## Gioco
