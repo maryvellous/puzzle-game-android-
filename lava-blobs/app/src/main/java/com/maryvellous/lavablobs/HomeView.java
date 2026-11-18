@@ -141,7 +141,11 @@ public final class HomeView extends View {
                 warped.close();
             }while(measure.nextContour());
             paint.setStyle(Paint.Style.FILL);
-            paint.setColor(theme.forTier(i%theme.blobs.length));
+            int titleColor=theme.forTier(i%theme.blobs.length);
+            // Theme 3 includes near-black as a blob. Keep the animated logo readable
+            // against the constant dark background without recolouring the blobs.
+            paint.setColor(Palette.relativeLuminance(titleColor)<.12f?
+                    theme.primary:titleColor);
             c.drawPath(warped,paint);
             x+=adv;
         }
