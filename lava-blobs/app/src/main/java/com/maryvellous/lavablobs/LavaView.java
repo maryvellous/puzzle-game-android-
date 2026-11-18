@@ -410,7 +410,10 @@ public final class LavaView extends View {
 
         hudPanel(c,29,89,140,146,15,theme.surface);
         hudPanel(c,146,89,257,146,15,theme.surface);
-        hudPanel(c,263,89,392,146,15,theme.surface);
+        int actionFill=theme.surface;
+        if(spec.endless&&world.eraseCount>0)
+            actionFill=eraseMode?theme.tertiary:theme.primary;
+        hudPanel(c,263,89,392,146,15,actionFill);
 
         label(c,"PUNTI",84,106,9.5f,theme.muted,true);
         label(c,Long.toString(world.score),84,132,22,theme.text,true);
@@ -419,10 +422,7 @@ public final class LavaView extends View {
 
         if(spec.endless) {
             // The same touch rectangle as the old Erase button.
-            int eraseFill=world.eraseCount==0?theme.surface:
-                    eraseMode?theme.tertiary:theme.primary;
-            hudPanel(c,272,97,396,142,14,eraseFill);
-            label(c,"ERASE · "+world.eraseCount,334,125,12.5f,
+            label(c,"ERASE · "+world.eraseCount,327.5f,125,12.5f,
                     world.eraseCount==0?theme.muted:
                     eraseMode?theme.text:theme.onPrimary,true);
         }else if(spec.trial){
