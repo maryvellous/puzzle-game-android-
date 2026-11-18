@@ -19,7 +19,7 @@ final class GameSpec {
     }
 
     static final GameSpec[] LEVELS = {
-        new GameSpec(0,"Primo vasetto",0,1200,2600,5,0,false),
+        new GameSpec(0,"Primo vasetto",0,1500,2600,5,0,false),
         new GameSpec(1,"La coppa",2,1700,3400,6,0,false),
         new GameSpec(2,"Anfora",1,2200,4500,6,0,false),
         new GameSpec(3,"Gola stretta",3,2800,5500,7,0,false),
@@ -61,9 +61,11 @@ final class GameSpec {
         return Integer.bitCount(extrasMask(score,maxTier,merges));
     }
     static int pointsForMerge(int fromTier) {
-        double value=100.0*Math.pow(1.6,Math.max(0,fromTier));
+        // New scoring scale: merge 1+1 => 2 is worth 10; each next
+        // size is worth 1.6x, rounded to the nearest integer.
+        double value=10.0*Math.pow(1.6,Math.max(0,fromTier));
         if(value>=2_000_000_000.0)return 2_000_000_000;
-        return (int)(Math.round(value/10.0)*10);
+        return (int)Math.round(value);
     }
     static int rollDrop(java.util.Random random) {
         int roll=random.nextInt(100);
