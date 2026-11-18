@@ -26,7 +26,7 @@ import java.util.Locale;
  */
 public final class LavaView extends View {
     private static final float W = BlobWorld.WIDTH;
-    private static final int BACKGROUND = Color.rgb(10, 9, 31);
+    private static final int BACKGROUND = Palette.BACKGROUND_TOP;
     private static final float PHYSICS_STEP = 1f / 60f;
     private static final int MAX_STEPS_PER_FRAME = 4;
     private static final int PERF_REPORT_FRAMES = 180;
@@ -34,6 +34,7 @@ public final class LavaView extends View {
     private static final Typeface FONT_MEDIUM = Typeface.create("sans-serif-medium",Typeface.NORMAL);
     // Solid, saturated, intentionally distinguishable hues from blue-indigo
     // through lavender and violet, never red/yellow/green.
+    private final Palette.Theme theme;
     private final GameSpec spec;
     private final ProgressStore progress;
     private final Runnable onHome;
@@ -90,6 +91,7 @@ public final class LavaView extends View {
         super(context);
         this.spec=spec;this.progress=progress;this.onHome=onHome;
         this.session=session;
+        theme=new ThemeStore(context).current();
         perfLogging=(context.getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE)!=0;
         world=new BlobWorld(new Random(),spec);
         if(resume!=null) {
@@ -243,7 +245,7 @@ public final class LavaView extends View {
         paint.setStyle(Paint.Style.FILL);
         if(cachedBackgroundShader==null||cachedShaderHeight!=h) {
             cachedBackgroundShader=new LinearGradient(0f,0f,0f,h,
-                    0xFF101035,0xFF080819,Shader.TileMode.CLAMP);
+                    Palette.BACKGROUND_TOP,Palette.BACKGROUND_BOTTOM,Shader.TileMode.CLAMP);
             cachedShaderHeight=h;
         }
         paint.setShader(cachedBackgroundShader);
@@ -252,7 +254,7 @@ public final class LavaView extends View {
         for (int i = 0; i < 20; i++) {
             float x = (i * 101 + 55) % 400 + 10;
             float y = (i * 163 + 89) % (int) h;
-            paint.setColor(0x385A52A4);
+            paint.setColor(Palette.alpha(theme.speck,54));
             canvas.drawCircle(x, y, (i % 3 + 1) * .60f, paint);
         }
     }
@@ -275,7 +277,7 @@ public final class LavaView extends View {
 
     private void drawVessel(Canvas canvas) {
         paint.setShader(null);paint.setStyle(Paint.Style.FILL);
-        paint.setColor(0xFF1B2B37);
+        paint.setColor(theme.vesselFill);
         canvas.drawPath(glassPath(),paint);
     }
 
@@ -285,7 +287,7 @@ public final class LavaView extends View {
             float x = 55 + (i * 79 % 305);
             float range = world.bottom() - world.vessel.top - 25;
             float y = world.bottom() - ((i * 63f + world.time * (8 + i % 5 * 4)) % Math.max(1,range));
-            paint.setColor(0x535D54BD);
+            paint.setColor(Palette.alpha(theme.speck,83));
             c.drawCircle(x + (float)Math.sin(world.time + i) * 2f, y, (i % 3 + 1) * .65f, paint);
         }
     }
@@ -318,12 +320,12 @@ public final class LavaView extends View {
         paint.setStyle(Paint.Style.FILL);
         paint.setShader(null);
         // HEX is applied without alpha, tint or shader.
-        paint.setColor(Palette.forTier(b.tier));
+        paint.setColor(theme.forTier(b.tier));
         paint.setAlpha(255);
         paint.setColorFilter(null);
         canvas.drawPath(blobPath, paint);
 
-        line.setColor(blend(Palette.forTier(b.tier), 0xFFF1E9FF, .23f));
+        line.setColor(blend(theme.forTier(b.tier), Palette.VESSEL_OUTLINE, .23f));
         line.setStrokeWidth(Math.max(1.0f, r * .020f));
         canvas.drawPath(blobPath, line);
     }
@@ -338,7 +340,7 @@ public final class LavaView extends View {
             float d=link.length();
             if(d<4.5f||d>25f)continue;
             float alpha=(1f-link.age/.36f)*(.85f-(d-4.5f)/50f);
-            paint.setColor(withAlpha(Palette.forTier(link.a.tier),(int)(220f*alpha)));
+            paint.setColor(withAlpha(theme.forTier(link.a.tier),(int)(220f*alpha)));
             paint.setStrokeWidth(Math.max(1.2f,4.1f-d*.12f));
             canvas.drawLine(link.a.px[link.ai],link.a.py[link.ai],
                     link.b.px[link.bi],link.b.py[link.bi],paint);
@@ -350,7 +352,7 @@ public final class LavaView extends View {
     private void drawWaves(Canvas c) {
         for (Wave w : waves) {
             float progress = w.age / .68f;
-            line.setColor(withAlpha(Palette.forTier(w.tier), (int) (155 * (1 - progress))));
+            line.setColor(withAlpha(theme.forTier(w.tier), (int) (155 * (1 - progress))));
             line.setStrokeWidth(2.8f * (1-progress) + .5f);
             c.drawCircle(w.x, w.y, w.r * (.55f + progress * 1.22f), line);
         }
@@ -360,7 +362,7 @@ public final class LavaView extends View {
         paint.setStyle(Paint.Style.FILL);
         paint.setShader(null);
         for (Droplet d : droplets) {
-            paint.setColor(withAlpha(Palette.forTier(d.tier), (int) (220 * (1f - d.age / .70f))));
+            paint.setColor(withAlpha(theme.forTier(d.tier), (int) (220 * (1f - d.age / .70f))));
             c.drawCircle(d.x, d.y, d.radius * (1f - d.age / .70f), paint);
         }
     }
@@ -383,108 +385,108 @@ public final class LavaView extends View {
     }
 
     private void drawVesselRim(Canvas c) {
-        line.setColor(0xFF688F95);
+        line.setColor(Palette.VESSEL_OUTLINE);
         line.setStrokeWidth(4.2f);
         c.drawPath(glassPath(),line);
-        line.setColor(0x886DA8A0);
+        line.setColor(Palette.alpha(Palette.VESSEL_OUTLINE,112));
         line.setStrokeWidth(1.1f);
         c.drawPath(glassPath(),line);
     }
 
     private void drawHUD(Canvas c,float h) {
-        label(c,"LAVA BLOB",128,53,25,0xFFEDF4EE,true);
+        label(c,"LAVA BLOB",128,53,25,theme.text,true);
         label(c,spec.endless?"Modalità infinita":
                 (spec.trial?spec.name+" · confronto altezza":
                 "Livello "+(spec.id+1)+" · "+spec.name),
-                160,77,12,0xFFB1CDD0,false);
-        label(c,"PUNTI",73,105,10,0xFF9EB0B4,true);
-        label(c,Long.toString(world.score),73,133,22,0xFFFFFFFF,true);
-        label(c,"RECORD",189,105,10,0xFF9EB0B4,true);
-        label(c,Long.toString(best),189,133,20,0xFFFFFFFF,true);
+                160,77,12,theme.muted,false);
+        label(c,"PUNTI",73,105,10,theme.muted,true);
+        label(c,Long.toString(world.score),73,133,22,theme.text,true);
+        label(c,"RECORD",189,105,10,theme.muted,true);
+        label(c,Long.toString(best),189,133,20,theme.text,true);
 
-        paint.setColor(0xFF263D45);paint.setStyle(Paint.Style.FILL);
+        paint.setColor(theme.surfaceRaised);paint.setStyle(Paint.Style.FILL);
         c.drawCircle(319,58,20,paint);
         c.drawCircle(376,58,20,paint);
-        label(c,"↻",319,66,25,0xFFD7EDE4,false);
-        label(c,"⌂",376,66,24,0xFFD7EDE4,false);
+        label(c,"↻",319,66,25,theme.text,false);
+        label(c,"⌂",376,66,24,theme.text,false);
 
         if(spec.endless) {
-            paint.setColor(world.eraseCount==0?0xFF2A3B43:
-                    (eraseMode?0xFFDB5461:0xFF275F5A));
+            paint.setColor(world.eraseCount==0?theme.surface:
+                    (eraseMode?theme.tertiary:theme.primary));
             c.drawRoundRect(new RectF(273,97,398,143),17,17,paint);
             label(c,"ERASE · "+world.eraseCount,335,125,14,
-                    world.eraseCount==0?0xFF9EB0B4:0xFFFFFFFF,true);
+                    world.eraseCount==0?theme.muted:(eraseMode?theme.text:theme.onPrimary),true);
         }else if(spec.trial) {
-            label(c,"TEST VASETTO",327,108,12,0xFFB0D1C6,true);
-            label(c,Math.round(world.bottom()-world.vessel.top)+" UNITÀ",327,127,12,0xFFE2CAD0,true);
-            label(c,"DROP "+world.dropCount,327,147,12,0xFFE2CAD0,false);
+            label(c,"TEST VASETTO",327,108,12,theme.muted,true);
+            label(c,Math.round(world.bottom()-world.vessel.top)+" UNITÀ",327,127,12,theme.muted,true);
+            label(c,"DROP "+world.dropCount,327,147,12,theme.muted,false);
         }else{
-            label(c,"OBIETTIVO "+spec.minScore,328,110,11,0xFFB0D1C6,true);
+            label(c,"OBIETTIVO "+spec.minScore,328,110,11,theme.muted,true);
             label(c,"EXTRA "+spec.extras(world.score,world.maxTierReached,
                     world.mergeCount)+"/"+spec.totalExtras(),
-                    327,132,11,0xFFE6B8C2,false);
+                    327,132,11,theme.secondary,false);
             label(c,""+spec.extraScore+" PT · BOLLA "+spec.goalTier,
-                    327,153,10,0xFFE2CAD0,false);
+                    327,153,10,theme.muted,false);
             if(spec.mergeGoal>0)
                 label(c,""+spec.mergeGoal+" FUSIONI",
-                    327,170,10,0xFFE2CAD0,false);
+                    327,170,10,theme.muted,false);
         }
 
         if(world.blockedTime>.5f&&!world.gameOver) {
             label(c,"INGRESSO BLOCCATO · "+(int)Math.ceil(world.remainingSeconds())+"s",
-                    210,188,12,0xFFFFAAB1,true);
+                    210,188,12,theme.caution,true);
             if(spec.endless&&world.eraseCount>0)
-                label(c,"Usa un Erase per liberare spazio",210,206,11,0xFFE8D9D9,false);
+                label(c,"Usa un Erase per liberare spazio",210,206,11,theme.muted,false);
         }
         if(eraseMode) {
-            label(c,"TOCCA IL BLOB DA ELIMINARE",210,190,12,0xFFFFBBC9,true);
+            label(c,"TOCCA IL BLOB DA ELIMINARE",210,190,12,theme.caution,true);
         }
 
         float deckTop=world.bottom()+22f;
         float deckBottom=deckTop+100f;
         float nextY=deckTop+43f;
         if(aiming) {
-            line.setColor(0x6679A6B1);line.setStrokeWidth(1.6f);
+            line.setColor(Palette.alpha(theme.muted,102));line.setStrokeWidth(1.6f);
             line.setPathEffect(new android.graphics.DashPathEffect(new float[]{7,11},0f));
             c.drawLine(aimX,world.bottom()-8,aimX,world.vessel.top+10,line);
             line.setPathEffect(null);
         }
         paint.setStyle(Paint.Style.FILL);paint.setShader(null);
-        paint.setColor(0xFF24333F);
+        paint.setColor(theme.surfaceRaised);
         c.drawRoundRect(new RectF(43,deckTop,377,deckBottom),21,21,paint);
         drawNextBubble(c,aimX,nextY);
-        label(c,"TRASCINA · RILASCIA · SCUOTI",210,deckBottom-12f,11,0xFFC3D3D4,true);
+        label(c,"TRASCINA · RILASCIA · SCUOTI",210,deckBottom-12f,11,theme.muted,true);
         if(blockedFlash>0f)
             label(c,"QUESTO INGRESSO È OCCUPATO",210,world.bottom()+22,11,
-                0xFFFFAAB1,true);
+                theme.caution,true);
     }
 
     private void drawNextBubble(Canvas c,float x,float y) {
         float r=Blob.RADII[world.nextTier];
-        paint.setColor(Palette.forTier(world.nextTier));
+        paint.setColor(theme.forTier(world.nextTier));
         c.drawCircle(x,y,r*.76f,paint);
-        line.setColor(blend(Palette.forTier(world.nextTier),0xFFFFFFFF,.28f));
+        line.setColor(blend(theme.forTier(world.nextTier),theme.text,.28f));
         line.setStrokeWidth(1.3f);
         c.drawCircle(x,y,r*.76f,line);
     }
 
     private void drawGameOver(Canvas c,float h) {
         paint.setStyle(Paint.Style.FILL);paint.setShader(null);
-        paint.setColor(0xEB141C29);
+        paint.setColor(Palette.alpha(theme.surfaceRaised,240));
         c.drawRoundRect(new RectF(34,h*.36f,386,h*.71f),29,29,paint);
         boolean won=spec.passed(world.score);
         label(c,spec.trial?"PROVA CONCLUSA":spec.endless?"PARTITA FINITA":(won?"LIVELLO SUPERATO":"RIPROVA"),
-                210,h*.44f,22,0xFFF2F5F1,true);
-        label(c,world.score+" punti · "+world.dropCount+" drop",210,h*.495f,19,0xFFC6DCD7,false);
+                210,h*.44f,22,theme.text,true);
+        label(c,world.score+" punti · "+world.dropCount+" drop",210,h*.495f,19,theme.muted,false);
         if(!spec.endless&&!spec.trial)label(c,"Extra "+spec.extras(world.score,
                 world.maxTierReached,world.mergeCount)+"/"+spec.totalExtras(),
-                210,h*.537f,14,0xFFD9BFC9,false);
-        paint.setColor(0xFF275F5A);
+                210,h*.537f,14,theme.secondary,false);
+        paint.setColor(theme.primary);
         c.drawRoundRect(new RectF(55,h*.585f,198,h*.664f),15,15,paint);
-        paint.setColor(0xFF3A4553);
+        paint.setColor(theme.surface);
         c.drawRoundRect(new RectF(221,h*.585f,365,h*.664f),15,15,paint);
-        label(c,"RIPROVA",127,h*.633f,13,0xFFF6F4F2,true);
-        label(c,"HOME",293,h*.633f,13,0xFFF6F4F2,true);
+        label(c,"RIPROVA",127,h*.633f,13,theme.onPrimary,true);
+        label(c,"HOME",293,h*.633f,13,theme.text,true);
     }
 
     private void label(Canvas c, String value, float x, float y, float size,
