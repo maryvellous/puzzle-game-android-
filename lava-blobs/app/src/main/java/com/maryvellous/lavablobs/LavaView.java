@@ -393,72 +393,85 @@ public final class LavaView extends View {
         c.drawPath(glassPath(),line);
     }
 
+    /** Compact status HUD with theme-derived surfaces and unchanged controls. */
     private void drawHUD(Canvas c,float h) {
-        label(c,"LAVA BLOB",128,53,25,theme.text,true);
-        label(c,spec.endless?"Modalità infinita":
-                (spec.trial?spec.name+" · confronto altezza":
-                "Livello "+(spec.id+1)+" · "+spec.name),
-                160,77,12,theme.muted,false);
-        label(c,"PUNTI",73,105,10,theme.muted,true);
-        label(c,Long.toString(world.score),73,133,22,theme.text,true);
-        label(c,"RECORD",189,105,10,theme.muted,true);
-        label(c,Long.toString(best),189,133,20,theme.text,true);
+        label(c,"LAVA BLOB",119,40,21,theme.text,true);
+        String location=spec.endless?"Modalità infinita":
+                spec.trial?spec.name:"Livello "+(spec.id+1)+" · "+spec.name;
+        label(c,location,145,65,11,theme.muted,false);
 
-        paint.setColor(theme.surfaceRaised);paint.setStyle(Paint.Style.FILL);
-        c.drawCircle(319,58,20,paint);
-        c.drawCircle(376,58,20,paint);
-        label(c,"↻",319,66,25,theme.text,false);
-        label(c,"⌂",376,66,24,theme.text,false);
+        // Exactly the same touch targets as before: reset and home.
+        hudPanel(c,299,32,339,74,20,theme.surfaceRaised);
+        hudPanel(c,355,32,395,74,20,theme.surfaceRaised);
+        label(c,"↻",319,61,24,theme.text,false);
+        label(c,"⌂",375,61,24,theme.text,false);
+
+        hudPanel(c,29,89,140,146,15,theme.surface);
+        hudPanel(c,146,89,257,146,15,theme.surface);
+        hudPanel(c,263,89,392,146,15,theme.surface);
+
+        label(c,"PUNTI",84,106,9.5f,theme.muted,true);
+        label(c,Long.toString(world.score),84,132,22,theme.text,true);
+        label(c,"RECORD",201,106,9.5f,theme.muted,true);
+        label(c,Long.toString(best),201,132,20,theme.text,true);
 
         if(spec.endless) {
-            paint.setColor(world.eraseCount==0?theme.surface:
-                    (eraseMode?theme.tertiary:theme.primary));
-            c.drawRoundRect(new RectF(273,97,398,143),17,17,paint);
-            label(c,"ERASE · "+world.eraseCount,335,125,14,
-                    world.eraseCount==0?theme.muted:(eraseMode?theme.text:theme.onPrimary),true);
-        }else if(spec.trial) {
-            label(c,"TEST VASETTO",327,108,12,theme.muted,true);
-            label(c,Math.round(world.bottom()-world.vessel.top)+" UNITÀ",327,127,12,theme.muted,true);
-            label(c,"DROP "+world.dropCount,327,147,12,theme.muted,false);
+            // The same touch rectangle as the old Erase button.
+            int eraseFill=world.eraseCount==0?theme.surface:
+                    eraseMode?theme.tertiary:theme.primary;
+            hudPanel(c,272,97,396,142,14,eraseFill);
+            label(c,"ERASE · "+world.eraseCount,334,125,12.5f,
+                    world.eraseCount==0?theme.muted:
+                    eraseMode?theme.text:theme.onPrimary,true);
+        }else if(spec.trial){
+            label(c,"TEST VASETTO",327,106,10,theme.muted,true);
+            label(c,Math.round(world.bottom()-world.vessel.top)+" UNITÀ",
+                    327,124,11,theme.text,true);
+            label(c,world.dropCount+" DROP",327,140,9.5f,theme.secondary,false);
         }else{
-            label(c,"OBIETTIVO "+spec.minScore,328,110,11,theme.muted,true);
+            label(c,"OBIETTIVO",327,105,9.5f,theme.muted,true);
+            label(c,Integer.toString(spec.minScore),327,124,16,theme.text,true);
             label(c,"EXTRA "+spec.extras(world.score,world.maxTierReached,
                     world.mergeCount)+"/"+spec.totalExtras(),
-                    327,132,11,theme.secondary,false);
-            label(c,""+spec.extraScore+" PT · BOLLA "+spec.goalTier,
-                    327,153,10,theme.muted,false);
-            if(spec.mergeGoal>0)
-                label(c,""+spec.mergeGoal+" FUSIONI",
-                    327,170,10,theme.muted,false);
+                    327,140,10,theme.secondary,true);
         }
 
         if(world.blockedTime>.5f&&!world.gameOver) {
             label(c,"INGRESSO BLOCCATO · "+(int)Math.ceil(world.remainingSeconds())+"s",
-                    210,188,12,theme.caution,true);
+                    210,174,11.5f,theme.caution,true);
             if(spec.endless&&world.eraseCount>0)
-                label(c,"Usa un Erase per liberare spazio",210,206,11,theme.muted,false);
+                label(c,"Usa Erase per liberare spazio",210,192,10.5f,theme.muted,false);
         }
-        if(eraseMode) {
-            label(c,"TOCCA IL BLOB DA ELIMINARE",210,190,12,theme.caution,true);
-        }
+        if(eraseMode)
+            label(c,"TOCCA IL BLOB DA ELIMINARE",210,192,11,theme.caution,true);
 
         float deckTop=world.bottom()+22f;
         float deckBottom=deckTop+100f;
         float nextY=deckTop+43f;
         if(aiming) {
-            line.setColor(Palette.alpha(theme.muted,102));line.setStrokeWidth(1.6f);
+            line.setColor(Palette.alpha(theme.secondary,150));
+            line.setStrokeWidth(1.4f);
             line.setPathEffect(new android.graphics.DashPathEffect(new float[]{7,11},0f));
             c.drawLine(aimX,world.bottom()-8,aimX,world.vessel.top+10,line);
             line.setPathEffect(null);
         }
-        paint.setStyle(Paint.Style.FILL);paint.setShader(null);
-        paint.setColor(theme.surfaceRaised);
-        c.drawRoundRect(new RectF(43,deckTop,377,deckBottom),21,21,paint);
+        hudPanel(c,43,deckTop,377,deckBottom,20,theme.surfaceRaised);
         drawNextBubble(c,aimX,nextY);
-        label(c,"TRASCINA · RILASCIA · SCUOTI",210,deckBottom-12f,11,theme.muted,true);
+        label(c,"TRASCINA  ·  RILASCIA  ·  SCUOTI",
+                210,deckBottom-12f,10.5f,theme.muted,true);
         if(blockedFlash>0f)
-            label(c,"QUESTO INGRESSO È OCCUPATO",210,world.bottom()+22,11,
-                theme.caution,true);
+            label(c,"QUESTO INGRESSO È OCCUPATO",210,world.bottom()+20,11,
+                    theme.caution,true);
+    }
+
+    private void hudPanel(Canvas c,float l,float t,float r,float b,float radius,int fill){
+        paint.setStyle(Paint.Style.FILL);
+        paint.setShader(null);
+        paint.setColor(fill);
+        c.drawRoundRect(l,t,r,b,radius,radius,paint);
+        line.setColor(Palette.mix(fill,theme.border,.58f));
+        line.setStrokeWidth(1f);
+        c.drawRoundRect(l,t,r,b,radius,radius,line);
     }
 
     private void drawNextBubble(Canvas c,float x,float y) {
@@ -471,20 +484,22 @@ public final class LavaView extends View {
     }
 
     private void drawGameOver(Canvas c,float h) {
-        paint.setStyle(Paint.Style.FILL);paint.setShader(null);
-        paint.setColor(Palette.alpha(theme.surfaceRaised,240));
-        c.drawRoundRect(new RectF(34,h*.36f,386,h*.71f),29,29,paint);
+        float top=h*.35f,bottom=h*.72f;
+        hudPanel(c,34,top,386,bottom,26,Palette.alpha(theme.surfaceRaised,246));
         boolean won=spec.passed(world.score);
-        label(c,spec.trial?"PROVA CONCLUSA":spec.endless?"PARTITA FINITA":(won?"LIVELLO SUPERATO":"RIPROVA"),
-                210,h*.44f,22,theme.text,true);
-        label(c,world.score+" punti · "+world.dropCount+" drop",210,h*.495f,19,theme.muted,false);
-        if(!spec.endless&&!spec.trial)label(c,"Extra "+spec.extras(world.score,
-                world.maxTierReached,world.mergeCount)+"/"+spec.totalExtras(),
-                210,h*.537f,14,theme.secondary,false);
-        paint.setColor(theme.primary);
-        c.drawRoundRect(new RectF(55,h*.585f,198,h*.664f),15,15,paint);
-        paint.setColor(theme.surface);
-        c.drawRoundRect(new RectF(221,h*.585f,365,h*.664f),15,15,paint);
+        String title=spec.trial?"PROVA CONCLUSA":spec.endless?"PARTITA FINITA":
+                won?"LIVELLO SUPERATO":"RIPROVA";
+        label(c,title,210,top+57,21,theme.text,true);
+        label(c,world.score+" punti  ·  "+world.dropCount+" drop",
+                210,top+99,17,theme.muted,false);
+        if(!spec.endless&&!spec.trial)
+            label(c,"Extra "+spec.extras(world.score,world.maxTierReached,
+                    world.mergeCount)+"/"+spec.totalExtras(),
+                    210,top+125,13,theme.secondary,false);
+
+        float buttonsTop=h*.585f,buttonsBottom=h*.664f;
+        hudPanel(c,55,buttonsTop,198,buttonsBottom,15,theme.primary);
+        hudPanel(c,221,buttonsTop,365,buttonsBottom,15,theme.surface);
         label(c,"RIPROVA",127,h*.633f,13,theme.onPrimary,true);
         label(c,"HOME",293,h*.633f,13,theme.text,true);
     }
