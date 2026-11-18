@@ -39,15 +39,15 @@ final class Palette {
     }
 
     private static final Theme[] THEMES={
-        new Theme("Prisma",new int[]{
+        new Theme("Tema 1",new int[]{
             0xFFDAF301,0xFFE9AE08,0xFFEB8403,0xFFF0420D,0xFFD23876,
             0xFFB435A8,0xFF9937C8,0xFF5A29DA,0xFF2D2383
         },0xFFEB8403,0xFFDAF301,0xFF9937C8),
-        new Theme("Aurora",new int[]{
+        new Theme("Tema 2",new int[]{
             0xFFA72F38,0xFFE2575A,0xFFEF8F55,0xFFF8DEBB,0xFF49A1A5,
             0xFF1D3058,0xFF9985C2,0xFF773661,0xFF5B5398
         },0xFF49A1A5,0xFFE2575A,0xFF9985C2),
-        new Theme("Braci",new int[]{
+        new Theme("Tema 3",new int[]{
             0xFFFDA24B,0xFFFB6204,0xFFCB3C06,0xFF980203,0xFF510207,
             0xFF5F1564,0xFF5B5398,0xFFA20096,0xFF0C0305
         },0xFFFB6204,0xFFA20096,0xFF9985C2)
