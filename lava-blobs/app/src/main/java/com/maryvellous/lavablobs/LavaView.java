@@ -456,7 +456,7 @@ public final class LavaView extends View {
         }
         hudPanel(c,100,deckTop,320,deckBottom,29,theme.surfaceRaised);
         float previewY=deckTop+Math.min(35f,deckHeight*.45f);
-        drawNextBubble(c,aimX,previewY,Math.max(14f,Math.min(1f,deckHeight/105f)));
+        drawNextBubble(c,aimX,previewY,Math.max(.45f,Math.min(1f,deckHeight/105f)));
         label(c,"TRASCINA E RILASCIA",210,deckBottom-11f,10f,theme.muted,true);
 
         // The purple buttons from the mockup: shaking remains available
