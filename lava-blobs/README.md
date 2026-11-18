@@ -2,6 +2,18 @@
 
 Un cozy merge puzzle personale. Le bolle salgono e si ammassano nel recipiente, deformandosi come slime. La **fisica approvata nella 0.5.0** (membrana di 24 particelle, pressione interna, molle, adesione temporanea) resta il nucleo del gioco.
 
+## Nuova UI e temi — novembre 2026 (PR #3, in collaudo)
+
+- Titolo Home originale mantenuto: stessa animazione delle lettere gelatinose; eliminato il sottotitolo. Home ridisegnata con card minimali, miniature dei recipienti reali, ripresa partita, tab Livelli/Infinita, sei livelli per pagina, selettore Temi e Copia dati.
+- Tre temi selezionabili dalla Home: il tocco cambia subito l'anteprima e la preferenza resta salvata localmente tramite ThemeStore, senza modificare salvataggi e progressi. Colori di blob, effetti, card, controlli, HUD e finestra di fine partita derivano dal tema.
+- Colori costanti: sfondo #322E32 → #3D3D3D e contorno dei recipienti #E6DFE3.
+- Tema 1: #DAF301 #E9AE08 #EB8403 #F0420D #D23876 #B435A8 #9937C8 #5A29DA #2D2383.
+- Tema 2: #A72F38 #E2575A #EF8F55 #F8DEBB #49A1A5 #1D3058 #9985C2 #773661 #5B5398.
+- Tema 3: #FDA24B #FB6204 #CB3C06 #980203 #510207 #5F1564 #5B5398 #A20096 #0C0305 (conservato il nero, scartato #380842).
+- Ogni palette ha nove colori e ricomincia dal primo al tier 10. Le anteprime degli altri temi sono quelle reali, non alternative inventate.
+- La UI può scorrere su schermi compatti; non sono state alterate fisica, formule dei punti, raggi, condizioni di sconfitta o controllo touch. Nuovo punteggio (base 10), minimo 1.500 e blob ingranditi appartengono a una successiva iterazione, non a questa PR.
+- Build CI e test visivo su dispositivo reale da verificare prima dell'adozione come versione definitiva.
+
 ## Gioco
 - Home minimale: titolo **Lava Blob** con ogni lettera deformata in tempo reale; sei livelli per pagina, swipe orizzontale.
 - **12 livelli iniziali** con forme di contenitore differenti. Sblocchi il seguente completando il precedente; puoi rigiocarli senza limiti. Ogni livello richiede un punteggio minimo e presenta 2 o 3 obiettivi extra. **Le soglie sono provvisorie** e saranno tarate con le partite della giocatrice.
