@@ -9,6 +9,9 @@ final class Palette {
     static final int BACKGROUND_TOP=0xFF322E32;
     static final int BACKGROUND_BOTTOM=0xFF3D3D3D;
     static final int VESSEL_OUTLINE=0xFFE6DFE3;
+    static final int NEUTRAL_SURFACE=0xFFE6DFE3;
+    // Keep the existing subtle glass strength (~17%), replacing only its hue.
+    static final int VESSEL_FILL=0x2BE6DFE3;
 
     static final class Theme {
         final String name;
@@ -16,6 +19,7 @@ final class Palette {
         final int primary, secondary, tertiary;
         final int surface, surfaceRaised, border, text, muted;
         final int positive, caution, vesselFill, speck, onPrimary;
+        final int onSurface, onSurfaceMuted;
 
         Theme(String name,int[] blobs,int primary,int secondary,int tertiary) {
             if(blobs.length!=9)throw new IllegalArgumentException("Each theme must have 9 blob colours");
@@ -24,15 +28,19 @@ final class Palette {
             this.primary=primary;
             this.secondary=secondary;
             this.tertiary=tertiary;
-            surface=mix(BACKGROUND_TOP,primary,.10f);
-            surfaceRaised=mix(BACKGROUND_BOTTOM,secondary,.13f);
-            border=mix(VESSEL_OUTLINE,primary,.52f);
+            // Neutral ivory surfaces are invariant across all three themes.
+            surface=NEUTRAL_SURFACE;
+            surfaceRaised=NEUTRAL_SURFACE;
+            border=NEUTRAL_SURFACE;
             text=mix(VESSEL_OUTLINE,primary,.05f);
             muted=mix(VESSEL_OUTLINE,secondary,.30f);
             positive=mix(primary,VESSEL_OUTLINE,.12f);
             caution=mix(blobs[3],VESSEL_OUTLINE,.22f);
-            vesselFill=mix(BACKGROUND_TOP,secondary,.17f);
-            speck=mix(primary,VESSEL_OUTLINE,.22f);
+            vesselFill=VESSEL_FILL;
+            // Preserve particles' opacity, motion and count; only neutralize hue.
+            speck=VESSEL_OUTLINE;
+            onSurface=0xFF211A26;
+            onSurfaceMuted=0xFF554E55;
             onPrimary=relativeLuminance(primary)>.43f?0xFF211A26:0xFFF7F1F3;
         }
         int forTier(int tier){return blobs[Math.floorMod(tier,blobs.length)];}
