@@ -219,6 +219,10 @@ public final class HomeView extends View {
         c.save();
         c.clipRect(l,t,r,b);
         paint.setStyle(Paint.Style.FILL);
+        // Fixed dark neutral viewport ensures the ivory vessel rim stays
+        // visible inside an ivory card without reintroducing a theme tint.
+        paint.setColor(Palette.BACKGROUND_TOP);
+        c.drawRoundRect(l,t,r,b,10f,10f,paint);
         paint.setColor(theme.vesselFill);
         c.drawPath(path,paint);
         c.save();c.clipPath(path);
