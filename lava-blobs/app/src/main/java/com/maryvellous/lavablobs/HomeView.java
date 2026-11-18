@@ -109,46 +109,7 @@ public final class HomeView extends View {
 
     // Original deforming title implementation retained intentionally.
     private void drawTitle(Canvas c,float t) {
-        String title="Lava Blob";
-        letter.setTypeface(Typeface.create("sans-serif-black",Typeface.BOLD));
-        letter.setTextAlign(Paint.Align.LEFT);
-        letter.setTextSize(58f);
-        float total=letter.measureText(title);
-        float x=(420-total)*.5f;
-        for(int i=0;i<title.length();i++){
-            String ch=title.substring(i,i+1);
-            float adv=letter.measureText(ch);
-            if(ch.equals(" ")){x+=adv;continue;}
-            glyph.reset();
-            letter.getTextPath(ch,0,1,x,119,glyph);
-            warped.reset();
-            warped.setFillType(Path.FillType.EVEN_ODD);
-            PathMeasure measure=new PathMeasure(glyph,false);
-            do {
-                float length=measure.getLength();
-                if(length<=0)continue;
-                float[] pos=new float[2],tan=new float[2];
-                int steps=Math.max(12,(int)(length/2.4f));
-                for(int j=0;j<=steps;j++) {
-                    float s=length*j/steps;
-                    measure.getPosTan(s,pos,tan);
-                    float wobble=(float)(1.4f*Math.sin(t*2.3+i*.84+s*.056)
-                            +.8f*Math.sin(t*3.1-i*.5+s*.12));
-                    float tx=pos[0]-tan[1]*wobble;
-                    float ty=pos[1]+tan[0]*wobble;
-                    if(j==0)warped.moveTo(tx,ty);else warped.lineTo(tx,ty);
-                }
-                warped.close();
-            }while(measure.nextContour());
-            paint.setStyle(Paint.Style.FILL);
-            int titleColor=theme.forTier(i%theme.blobs.length);
-            // Theme 3 includes near-black as a blob. Keep the animated logo readable
-            // against the constant dark background without recolouring the blobs.
-            paint.setColor(Palette.relativeLuminance(titleColor)<.12f?
-                    theme.primary:titleColor);
-            c.drawPath(warped,paint);
-            x+=adv;
-        }
+        BlobTitle.draw(c,letter,paint,glyph,warped,theme,t,58f,119f);
     }
 
     private void drawResume(Canvas c){
