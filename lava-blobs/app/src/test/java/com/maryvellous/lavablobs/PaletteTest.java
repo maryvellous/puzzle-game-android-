@@ -34,6 +34,15 @@ public final class PaletteTest {
             assertNotEquals(t.forTier(0),t.forTier(1));
         }
         assertNotEquals(Palette.at(0).primary,Palette.at(1).primary);
-        assertNotEquals(Palette.at(1).surface,Palette.at(2).surface);
+        // The neutral surface and the vessel never inherit a theme colour.
+        for(int i=0;i<Palette.COUNT;i++) {
+            Palette.Theme t=Palette.at(i);
+            assertEquals(0xFFE6DFE3,t.surface);
+            assertEquals(0xFFE6DFE3,t.surfaceRaised);
+            assertEquals(0xFFE6DFE3,t.speck);
+            assertEquals(0x2BE6DFE3,t.vesselFill);
+            assertEquals(43,(t.vesselFill>>>24)&255);
+            assertEquals(0xFF211A26,t.onSurface);
+        }
     }
 }
