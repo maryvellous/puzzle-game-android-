@@ -51,6 +51,7 @@ public class GameSaveTest {
         old.blobs.add(new Blob(210,400,2,new Random(2)));
         JSONObject saved=GameSave.encode(GameSpec.ENDLESS[0],old,210f,false);
         saved.remove("scoringVersion");
+        assertEquals(10+2*16,new GameSave.Snapshot(GameSpec.ENDLESS[0],saved).points());
         BlobWorld restored=new BlobWorld(new Random(2),GameSpec.ENDLESS[0]);
         GameSave.restore(restored,saved);
         assertEquals(10+2*16,restored.score);

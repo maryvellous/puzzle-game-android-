@@ -471,9 +471,9 @@ public final class LavaView extends View {
         label(c,eraseText,307.5f,controlsTop+33,15,
                 world.eraseCount>0&&spec.endless?contrastInk(eraseFill):theme.muted,true);
 
-        if(blockedFlash>0f)
-            label(c,"QUESTO INGRESSO È OCCUPATO",210,world.bottom()+8f,11,
-                    theme.caution,true);
+        if(blockedFlash>0f&&world.blockedTime<=.5f)
+            label(c,"QUESTO INGRESSO È OCCUPATO",210,
+                    Math.min(245f,world.vessel.top-8f),11,theme.caution,true);
     }
 
     private int contrastInk(int color) {
