@@ -1,8 +1,8 @@
-# Lava Blob 1.0.2 — Android
+# Lava Blob 1.0.3 — Android
 
 Un cozy merge puzzle personale. Le bolle salgono e si ammassano nel recipiente, deformandosi come slime. La **fisica approvata nella 0.5.0** (membrana di 24 particelle, pressione interna, molle, adesione temporanea) resta il nucleo del gioco.
 
-## Nuova UI e temi — novembre 2026 (PR #3, in collaudo)
+## Nuova UI e temi — novembre 2026 (PR #3)
 
 - Titolo Home originale mantenuto: stessa animazione delle lettere gelatinose; eliminato il sottotitolo. Home ridisegnata con card minimali, miniature dei recipienti reali, ripresa partita, tab Livelli/Infinita, sei livelli per pagina, selettore Temi e Copia dati.
 - Tre temi selezionabili dalla Home: la preferenza resta salvata localmente tramite ThemeStore, senza modificare salvataggi e progressi. I temi colorano blob, animazioni e soli accenti UI; le superfici neutre non ereditano il colore del tema.
@@ -13,7 +13,7 @@ Un cozy merge puzzle personale. Le bolle salgono e si ammassano nel recipiente, 
 - Ogni palette ha nove colori e ricomincia dal primo al tier 10. Le anteprime degli altri temi sono quelle reali, non alternative inventate.
 - La UI può scorrere su schermi compatti; il solver fisico, i contenitori e le condizioni di sconfitta restano invariati. In questa PR sono stati applicati anche la nuova formula (base 10), il primo obiettivo minimo di 1.500, i raggi maggiorati (+12% circa) e il nuovo HUD ispirato alla pagina 4 di Canva.
 - La schermata partita riprende **lo stesso titolo animato della Home** tramite `BlobTitle`, mostra PUNTI/OBIETTIVO in due riquadri accentati, il prossimo blob nel vassoio avorio e i controlli SCUOTI/ERASE. Le azioni non disponibili restano disabilitate. Interno recipiente #E6DFE3 a circa 17% di opacità; particelle sospese dello stesso bianco con **movimento, numero, distribuzione, dimensione e alpha originali invariati**.
-- Build CI e test visivo su dispositivo reale da verificare prima dell'adozione come versione definitiva.
+- La CI Android esegue i test automatici e compila l'APK. **Il collaudo manuale sul telefono resta separato dalla verifica CI**: soprattutto contrasto, salvataggi e resa dei recipienti.
 
 ## Gioco
 - Home minimale: titolo **Lava Blob** con ogni lettera deformata in tempo reale; sei livelli per pagina, swipe orizzontale.
@@ -63,3 +63,10 @@ Le soglie-obiettivo restano quelle provvisorie della 1.0.0 finché non saranno d
 - **Home riprogettata**: pulsante Continua, cards con miniatura separata dai testi, coordinate di clipping della miniatura e nuovo contrasto cromatico. Conservato l'effetto visivo all'interno del vetro.
 - **Firma APK**: le build debug prodotte da runner GitHub differenti possono essere firmate con chiavi differenti; finché non si collega una chiave di firma persistente, Android non permetterà sempre l'installazione sopra la 1.0.1 conservando i dati. Non chiedere mai di disinstallare senza avvertire del rischio di perdita dei progressi.
 - **Test**: roundtrip completo delle membrane, RNG, progressi di gioco, geometrie e regressioni fisiche; richiede ancora collaudo visivo reale sul telefono.
+
+## Distribuzione versione 1.0.3
+
+- Il workflow `.github/workflows/lava-blobs-production.yml` pubblica **solo il pacchetto principale** `com.maryvellous.lavablobs` nella GitHub Release `lava-blob-v1.0.3`, dopo il superamento dei test, quando le modifiche entrano in `main`.
+- L'app `com.maryvellous.lavablobs.preview` è separata e rimane unicamente uno strumento di test; **non fa parte della release principale**.
+- L'APK generato in GitHub Actions usa la **firma debug del runner**: potrebbe non essere compatibile con la firma dell'APK già installato sul telefono. Un aggiornamento senza perdere progressi richiede lo stesso certificato; **non disinstallare né cancellare i dati della vecchia app senza averli preservati e senza consenso esplicito**. La build non è destinata a Google Play.
+- Il workflow Rovina Puzzle (`android-release.yml`) è limitato a modifiche del suo progetto: non sovrascrivere le sue release quando si aggiorna Lava Blob.
