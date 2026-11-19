@@ -28,6 +28,7 @@ public final class HomeView extends View {
     private static final Typeface NORMAL=Typeface.create("sans-serif",Typeface.NORMAL);
     private static final Typeface MEDIUM=Typeface.create("sans-serif-medium",Typeface.NORMAL);
     private static final Typeface HEAVY=Typeface.create("sans-serif-black",Typeface.BOLD);
+    private static final Typeface DISPLAY=Typeface.create("casual",Typeface.BOLD);
 
     private final Listener listener;
     private final Runnable resume;
@@ -107,8 +108,11 @@ public final class HomeView extends View {
         paint.setShader(null);
     }
 
-    // Original deforming title implementation retained intentionally.
+    // The deforming wordmark remains original, now held by a fixed ivory
+    // cushion so dark or low-saturation glyphs never disappear into the backdrop.
     private void drawTitle(Canvas c,float t) {
+        panel(c,19f,53f,401f,135f,35f,Palette.NEUTRAL_SURFACE,
+                Palette.NEUTRAL_SURFACE,0f);
         BlobTitle.draw(c,letter,paint,glyph,warped,theme,t,58f,119f);
     }
 
@@ -168,7 +172,7 @@ public final class HomeView extends View {
     private void drawCard(Canvas c,GameSpec spec,float x,float y,float width,float height,
                           boolean locked,boolean next){
         int face=locked?Palette.mix(theme.surface,Palette.BACKGROUND_TOP,.16f):theme.surface;
-        panel(c,x,y,x+width,y+height,17f,face,face,0f);
+        panel(c,x,y,x+width,y+height,25f,face,face,0f);
         drawPreview(c,spec.shape,x+8,y+10,x+69,y+height-10,locked);
 
         float tx=x+77f,available=width-85f;
@@ -219,11 +223,9 @@ public final class HomeView extends View {
         c.save();
         c.clipRect(l,t,r,b);
         paint.setStyle(Paint.Style.FILL);
-        // Fixed dark neutral viewport ensures the ivory vessel rim stays
-        // visible inside an ivory card without reintroducing a theme tint.
-        paint.setColor(Palette.BACKGROUND_TOP);
-        c.drawRoundRect(l,t,r,b,10f,10f,paint);
-        paint.setColor(theme.vesselFill);
+        // A transparent miniature directly on the card, without a black box.
+        // Dark neutral tint maintains the silhouette against the ivory.
+        paint.setColor(Palette.alpha(theme.onSurfaceMuted,locked?10:24));
         c.drawPath(path,paint);
         c.save();c.clipPath(path);
         // Distinct simple flat blob discs hint at the game's soft-body movement.
@@ -238,7 +240,7 @@ public final class HomeView extends View {
         c.restore();
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeWidth(1.7f);
-        paint.setColor(Palette.alpha(Palette.VESSEL_OUTLINE,locked?135:240));
+        paint.setColor(Palette.alpha(theme.onSurfaceMuted,locked?125:205));
         c.drawPath(path,paint);
         paint.setStyle(Paint.Style.FILL);
         c.restore();
@@ -300,7 +302,7 @@ public final class HomeView extends View {
 
     private void text(Canvas c,String value,float x,float y,float size,
                       int color,boolean bold,float maxWidth){
-        letter.setTypeface(bold?MEDIUM:NORMAL);
+        letter.setTypeface(bold&&size>=14f?DISPLAY:(bold?MEDIUM:NORMAL));
         letter.setTextAlign(Paint.Align.LEFT);
         letter.setTextSize(size);
         float w=letter.measureText(value);
@@ -310,7 +312,7 @@ public final class HomeView extends View {
     }
     private void textCentered(Canvas c,String value,float x,float y,float size,
                               int color,boolean bold){
-        letter.setTypeface(bold?MEDIUM:NORMAL);
+        letter.setTypeface(bold&&size>=14f?DISPLAY:(bold?MEDIUM:NORMAL));
         letter.setTextAlign(Paint.Align.CENTER);
         letter.setTextSize(size);
         letter.setColor(color);
