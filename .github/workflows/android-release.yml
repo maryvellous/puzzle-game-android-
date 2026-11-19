@@ -4,6 +4,11 @@ on:
   push:
     branches:
       - main
+    paths:
+      # Avoid rebuilding/replacing Rovina's existing release when Lava Blob ships.
+      - 'app/**'
+      - 'build.gradle'
+      - 'settings.gradle'
   workflow_dispatch:
 
 permissions:
