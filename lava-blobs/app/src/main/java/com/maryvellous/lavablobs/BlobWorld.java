@@ -79,12 +79,17 @@ final class BlobWorld {
         float r=Blob.RADII[nextTier],launchRadius=r*.76f;
         float cx=clamp(x,LEFT+r,RIGHT-r),cy=bottom()-r-7f;
         if(!vessel.fits(cx,cy,launchRadius))return false;
+        float nodeClearance=launchRadius+2f;
+        float nodeClearanceSq=nodeClearance*nodeClearance;
         for(Blob b:blobs) {
             if(pointInside(b,cx,cy))return false;
             for(int i=0;i<Blob.NODES;i++) {
-                if(Math.hypot(b.px[i]-cx,b.py[i]-cy)<launchRadius+2f)return false;
+                float dx=b.px[i]-cx,dy=b.py[i]-cy;
+                if(dx*dx+dy*dy<nodeClearanceSq)return false;
             }
-            if(Math.hypot(b.x-cx,b.y-cy)<launchRadius+b.radius()*.56f)return false;
+            float dx=b.x-cx,dy=b.y-cy;
+            float limit=launchRadius+b.radius()*.56f;
+            if(dx*dx+dy*dy<limit*limit)return false;
         }
         return true;
     }
@@ -204,8 +209,9 @@ final class BlobWorld {
     private boolean nearEnough(Blob a,Blob b,float scale) {
         // Broad-phase filter only. The shape and collision are evaluated
         // entirely from membrane vertices and line segments below.
-        return Math.hypot(a.x-b.x,a.y-b.y)
-                < (a.radiusTarget+b.radiusTarget)*scale+5f;
+        float dx=a.x-b.x,dy=a.y-b.y;
+        float limit=(a.radiusTarget+b.radiusTarget)*scale+5f;
+        return dx*dx+dy*dy < limit*limit;
     }
 
     private void fuse(int i,int j,Blob a,Blob b) {
@@ -246,13 +252,42 @@ final class BlobWorld {
         int start; float t,distance,qx,qy;
     }
 
+    static final class Bounds {
+        float minX,maxX,minY,maxY;
+        void set(Blob blob) {
+            minX=maxX=blob.px[0];minY=maxY=blob.py[0];
+            for(int i=1;i<Blob.NODES;i++)include(blob.px[i],blob.py[i]);
+        }
+        void include(float x,float y) {
+            if(x<minX)minX=x;else if(x>maxX)maxX=x;
+            if(y<minY)minY=y;else if(y>maxY)maxY=y;
+        }
+        boolean cannotTouch(float x,float y) {
+            float margin=SKIN+.01f;
+            return x<minX-margin||x>maxX+margin||y<minY-margin||y>maxY+margin;
+        }
+    }
+
+    // Collision checks run sequentially on the UI thread. Reusing the
+    // temporary result avoids thousands of short-lived objects per frame.
+    private final Edge edgeScratch=new Edge();
+    private final Bounds contactBoundsA=new Bounds(),contactBoundsB=new Bounds();
+
     private Edge closestEdge(Blob polygon,float x,float y) {
-        Edge found=new Edge();
+        Edge found=edgeScratch;
         float minSq=Float.MAX_VALUE;
         for(int j=0;j<Blob.NODES;j++) {
             int k=(j+1)%Blob.NODES;
             float ax=polygon.px[j],ay=polygon.py[j];
-            float dx=polygon.px[k]-ax,dy=polygon.py[k]-ay;
+            float bx=polygon.px[k],by=polygon.py[k];
+            // Distance to the segment's box is a lower bound on distance to
+            // the segment itself. Skip projection only when it cannot win.
+            float minX=ax<bx?ax:bx,maxX=ax>bx?ax:bx;
+            float boxDx=x<minX?minX-x:(x>maxX?x-maxX:0f);
+            float minY=ay<by?ay:by,maxY=ay>by?ay:by;
+            float boxDy=y<minY?minY-y:(y>maxY?y-maxY:0f);
+            if(boxDx*boxDx+boxDy*boxDy>minSq+1e-3f)continue;
+            float dx=bx-ax,dy=by-ay;
             float len2=dx*dx+dy*dy;
             float t=len2<1e-6f?0f:clamp(((x-ax)*dx+(y-ay)*dy)/len2,0f,1f);
             float qx=ax+dx*t,qy=ay+dy*t;
@@ -279,14 +314,21 @@ final class BlobWorld {
     }
 
     private void projectContacts(Blob a,Blob b,boolean createAdhesion) {
+        // Include every current vertex, then only expand as projections move
+        // vertices. These bounds remain conservative throughout this pair.
+        contactBoundsA.set(a);contactBoundsB.set(b);
         for(int i=0;i<Blob.NODES;i++) {
-            pushPointFromPolygon(a,i,b,createAdhesion);
-            pushPointFromPolygon(b,i,a,createAdhesion);
+            pushPointFromPolygon(a,i,b,contactBoundsA,contactBoundsB,createAdhesion);
+            pushPointFromPolygon(b,i,a,contactBoundsB,contactBoundsA,createAdhesion);
         }
     }
 
-    private void pushPointFromPolygon(Blob source,int i,Blob target,boolean addLink) {
+    private void pushPointFromPolygon(Blob source,int i,Blob target,
+            Bounds sourceBounds,Bounds targetBounds,boolean addLink) {
         float x=source.px[i],y=source.py[i];
+        // A point outside the expanded target box can neither be inside the
+        // polygon nor within contact distance of any of its edges.
+        if(targetBounds.cannotTouch(x,y))return;
         Edge edge=closestEdge(target,x,y);
         boolean inside=pointInside(target,x,y);
         if(!inside&&edge.distance>=SKIN)return;
@@ -315,6 +357,9 @@ final class BlobWorld {
         target.py[j]-=ny*shift*.38f*weightA;
         target.px[k]-=nx*shift*.38f*weightB;
         target.py[k]-=ny*shift*.38f*weightB;
+        sourceBounds.include(source.px[i],source.py[i]);
+        targetBounds.include(target.px[j],target.py[j]);
+        targetBounds.include(target.px[k],target.py[k]);
 
         if(addLink&&!inside&&edge.distance<2.6f&&source.tier!=target.tier) {
             addAdhesion(source,target,i,edge.t<.5f?j:k);

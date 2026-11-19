@@ -15,6 +15,9 @@ final class Blob {
     static final float[] RADII = {18f, 23f, 29f, 36f, 45f, 56f, 69f, 84f, 99f};
     static final int NODES = 24;
     private static final float TWO_PI = (float) (Math.PI * 2);
+    private static final float PERIMETER_FACTOR = (float) (2 * Math.sin(Math.PI / NODES));
+    private static final float BEND_FACTOR = (float) (2 * Math.sin(2 * Math.PI / NODES));
+    private static final float AREA_FACTOR = (float) (NODES * .5 * Math.sin(TWO_PI / NODES));
 
     final int tier;
     final float[] px = new float[NODES], py = new float[NODES];
@@ -70,8 +73,7 @@ final class Blob {
     }
 
     float expectedArea() {
-        return (float) (NODES * .5 * Math.sin(TWO_PI / NODES)
-                * radiusTarget * radiusTarget);
+        return AREA_FACTOR * radiusTarget * radiusTarget;
     }
 
     void kick(float kickX, float kickY, Random random, float strength) {
@@ -86,12 +88,16 @@ final class Blob {
         // The merged/spawned membrane inflates gradually, not as a visual-only
         // scale transform. Target area and spring rest lengths change together.
         radiusTarget += (radius() - radiusTarget) * Math.min(1f, 3.7f * dt);
+        // The drift, lift and damping are shared by every particle of this blob.
+        // Calculate them once per integration step rather than 24 times.
+        float drift = (float) Math.sin(time * 1.65f + y * .014f + tier) * 13f * dt;
+        float lift = (-135f + tier * 1.5f) * dt;
+        float friction = (float) Math.exp(-1.65f * dt);
         for (int i = 0; i < NODES; i++) {
             lastX[i] = px[i];
             lastY[i] = py[i];
-            vx[i] += (float) Math.sin(time * 1.65f + y * .014f + tier) * 13f * dt;
-            vy[i] += (-135f + tier * 1.5f) * dt;
-            float friction = (float) Math.exp(-1.65f * dt);
+            vx[i] += drift;
+            vy[i] += lift;
             vx[i] *= friction;
             vy[i] *= friction;
             vx[i] = clamp(vx[i], -380f, 380f);
@@ -104,13 +110,13 @@ final class Blob {
 
     void solveMembrane() {
         // Strong perimeter, weaker bending, firm but compliant area pressure.
+        float restEdge = radiusTarget * PERIMETER_FACTOR;
+        float restBend = radiusTarget * BEND_FACTOR;
         for (int i = 0; i < NODES; i++) {
-            solveDistance(i, (i + 1) % NODES,
-                    (float) (2f * radiusTarget * Math.sin(Math.PI / NODES)), .77f);
+            solveDistance(i, (i + 1) % NODES, restEdge, .77f);
         }
         for (int i = 0; i < NODES; i++) {
-            solveDistance(i, (i + 2) % NODES,
-                    (float) (2f * radiusTarget * Math.sin(2 * Math.PI / NODES)), .21f);
+            solveDistance(i, (i + 2) % NODES, restBend, .21f);
         }
         solvePressure();
     }

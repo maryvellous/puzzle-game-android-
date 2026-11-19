@@ -10,6 +10,10 @@ final class Vessel {
     final float top,bottom;
     final int shape;
     private static final int SEGMENTS=24;
+    // Each vase is x-monotone with straight, sampled left/right sides.
+    // A conservative interior corridor avoids expensive exact wall queries.
+    private final float safeClearance;
+    private final Closest closestScratch=new Closest();
 
     Vessel(int shape,float screenHeight) {
         this.shape=shape;
@@ -45,6 +49,14 @@ final class Vessel {
             x[SEGMENTS+1+i]=mid+offset-half; y[SEGMENTS+1+i]=yy;
         }
         xs=x;ys=y;
+        float maxSlope=0f;
+        for(int i=0;i<xs.length-1;i++){
+            float dy=Math.abs(ys[i+1]-ys[i]);
+            if(dy>.001f)maxSlope=Math.max(maxSlope,Math.abs(xs[i+1]-xs[i])/dy);
+        }
+        // Minimum horizontal margin guaranteeing >0.8 world units of
+        // Euclidean distance from even the steepest side segment.
+        safeClearance=.8f*(float)Math.sqrt(1f+maxSlope*maxSlope)+2f;
     }
 
     // Shape heights are in game-world units and remain consistent on phones
@@ -123,7 +135,7 @@ final class Vessel {
         float x,y,distance;
     }
     private Closest closest(float x,float y) {
-        Closest result=new Closest();
+        Closest result=closestScratch;
         float d2Min=Float.MAX_VALUE;
         for(int i=0;i<xs.length;i++) {
             int k=(i+1)%xs.length;
@@ -144,9 +156,24 @@ final class Vessel {
         return closest(cx,cy).distance>=r+.6f;
     }
 
+    private boolean safelyInside(float x,float y) {
+        if(y<=top+safeClearance||y>=bottom-safeClearance)return false;
+        float position=(y-top)*SEGMENTS/(bottom-top);
+        int band=Math.min(SEGMENTS-1,(int)position);
+        float t=position-band;
+        float right=xs[band]+(xs[band+1]-xs[band])*t;
+        int leftIndex=xs.length-1-band;
+        float left=xs[leftIndex]+(xs[leftIndex-1]-xs[leftIndex])*t;
+        return x>left+safeClearance&&x<right-safeClearance;
+    }
+
     void confine(Blob blob) {
         for(int i=0;i<Blob.NODES;i++) {
             float x=blob.px[i],y=blob.py[i];
+            // Exact no-op for particles provably farther than contact distance
+            // from every wall, including concave shapes. The original collision
+            // solver remains responsible for everything near an edge.
+            if(safelyInside(x,y))continue;
             boolean inside=contains(x,y);
             Closest wall=closest(x,y);
             if(inside && wall.distance>=.8f)continue;
