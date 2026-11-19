@@ -1,0 +1,368 @@
+package com.maryvellous.lavablobs;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+
+/**
+ * Real particle/segment soft-body interactions. This solver never collides
+ * centres or circular radii. Blobs rise; they are free to pile up against the
+ * top surface. Different colours have short-lived sticky contact patches.
+ */
+final class BlobWorld {
+    static final float WIDTH = 420f, LEFT = 29f, RIGHT = 391f, TOP = 155f;
+    static final int ERASE_EVERY_POINTS=20_000; // provisional: revise after playtests
+
+    static final class Merge {
+        final float x, y, radius;
+        final int tier, points;
+        Merge(float x, float y, float radius, int tier, int points) {
+            this.x=x; this.y=y; this.radius=radius;
+            this.tier=tier; this.points=points;
+        }
+    }
+
+    static final class Adhesion {
+        final Blob a, b;
+        final int ai, bi;
+        float age;
+        Adhesion(Blob a, Blob b, int ai, int bi) {
+            this.a=a; this.b=b; this.ai=ai; this.bi=bi;
+        }
+        float length() {
+            return (float)Math.hypot(a.px[ai]-b.px[bi], a.py[ai]-b.py[bi]);
+        }
+    }
+
+    private static final int PASSES = 5;
+    private static final float SKIN = 3f;
+    final ArrayList<Blob> blobs = new ArrayList<>();
+    final ArrayList<Merge> merges = new ArrayList<>();
+    final ArrayList<Adhesion> adhesions = new ArrayList<>();
+    Random random;
+    final GameSpec spec;
+    Vessel vessel;
+    float height=850f, time, blockedTime,checkClock;
+    long score;
+    int nextTier,dropCount,mergeCount,maxTierReached;
+    int earnedErases,usedErases,eraseCount;
+    final int[] mergesByTier=new int[40];
+    boolean gameOver;
+
+    BlobWorld(Random random){this(random,null);}
+    BlobWorld(Random random,GameSpec spec) {
+        this.random=random;this.spec=spec;
+        reset();
+    }
+
+    float bottom(){return vessel.bottom;}
+    void setHeight(float height){
+        float h=Math.max(620f,height);
+        if(Math.abs(this.height-h)>.2f) {
+            this.height=h;
+            vessel=new Vessel(spec==null?-1:spec.shape,h);
+        }
+    }
+    void reset(){
+        blobs.clear();merges.clear();adhesions.clear();
+        score=0;time=0f;blockedTime=0f;checkClock=0f;gameOver=false;
+        dropCount=0;mergeCount=0;maxTierReached=0;
+        earnedErases=0;usedErases=0;eraseCount=0;
+        java.util.Arrays.fill(mergesByTier,0);
+        vessel=new Vessel(spec==null?-1:spec.shape,height);
+        nextTier=rollTier();
+    }
+    private int rollTier(){return GameSpec.rollDrop(random);}
+
+    boolean canLaunch(float x) {
+        if(gameOver)return false;
+        float r=Blob.RADII[nextTier],launchRadius=r*.76f;
+        float cx=clamp(x,LEFT+r,RIGHT-r),cy=bottom()-r-7f;
+        if(!vessel.fits(cx,cy,launchRadius))return false;
+        for(Blob b:blobs) {
+            if(pointInside(b,cx,cy))return false;
+            for(int i=0;i<Blob.NODES;i++) {
+                if(Math.hypot(b.px[i]-cx,b.py[i]-cy)<launchRadius+2f)return false;
+            }
+            if(Math.hypot(b.x-cx,b.y-cy)<launchRadius+b.radius()*.56f)return false;
+        }
+        return true;
+    }
+
+    boolean launch(float x) {
+        if (!canLaunch(x)) return false;
+        float r=Blob.RADII[nextTier];
+        Blob b=new Blob(clamp(x,LEFT+r,RIGHT-r),bottom()-r-7f,nextTier,.76f);
+        for (int i=0;i<Blob.NODES;i++) {
+            b.vy[i]=-180f;
+            b.vx[i]=(random.nextFloat()-.5f)*24f;
+        }
+        blobs.add(b);
+        dropCount++;
+        maxTierReached=Math.max(maxTierReached,nextTier);
+        nextTier=rollTier();
+        checkClock=.2f;
+        return true;
+    }
+
+    void shake(float sensorX,float sensorY,float sensorZ) {
+        if (gameOver || blobs.isEmpty()) return;
+        float magnitude=(float)Math.sqrt(sensorX*sensorX+sensorY*sensorY+sensorZ*sensorZ);
+        float strength=clamp(magnitude/8f,.55f,1.75f);
+        for (Blob b:blobs) {
+            float factor=1.18f-b.tier*.07f;
+            float x=clamp(-sensorX*25f,-310f,310f)*factor;
+            float y=clamp(sensorY*25f,-310f,310f)*factor;
+            // Z-axis jolts also stir the ring, through independent node motion.
+            float depth=Math.min(125f,Math.abs(sensorZ)*20f);
+            float direction=(b.x>WIDTH*.5f?1f:-1f);
+            b.kick(x+direction*depth*.25f*strength,y,random,
+                    48f*strength + depth);
+        }
+    }
+
+    /** True when at least one location can introduce the next actual mesh. */
+    boolean canLaunchAnywhere() {
+        for(float x=LEFT+18f;x<=RIGHT-18f;x+=8f)if(canLaunch(x))return true;
+        return canLaunch(210f);
+    }
+
+    float graceSeconds() {return spec!=null&&spec.endless?10f:7f;}
+    float remainingSeconds(){return Math.max(0f,graceSeconds()-blockedTime);}
+
+    boolean eraseAt(float x,float y) {
+        if(spec==null||!spec.endless||eraseCount<1||gameOver)return false;
+        for(int i=blobs.size()-1;i>=0;i--) {
+            Blob b=blobs.get(i);
+            if(!pointInside(b,x,y))continue;
+            blobs.remove(i);
+            adhesions.removeIf(link->link.a==b||link.b==b);
+            eraseCount--;usedErases++;
+            blockedTime=0;checkClock=.2f;
+            return true;
+        }
+        return false;
+    }
+
+    void tick(float dt) {
+        if(gameOver)return;
+        dt=clamp(dt,0f,.042f);
+        for(int s=0;s<2;s++)step(dt*.5f);
+        // No Y-threshold. Check real incoming-object clearance, repeatedly,
+        // after giving the soft bodies time to rebound from any phone shake.
+        checkClock+=dt;
+        if(checkClock>=.18f) {
+            checkClock=0f;
+            if(canLaunchAnywhere())blockedTime=0f;
+            else blockedTime+=.18f;
+        }
+        if(blockedTime>=graceSeconds())gameOver=true;
+    }
+
+    private void step(float dt) {
+        if(dt<=0f)return;
+        time+=dt;
+        for(Blob b:blobs)b.integrate(dt,time);
+
+        // Merge detection uses actual mesh boundaries. No spherical "sum of
+        // radii" may trigger fusion across a visible gap.
+        boolean fused=false;
+        outer:
+        for(int i=0;i<blobs.size();i++) {
+            Blob a=blobs.get(i);
+            for(int j=i+1;j<blobs.size();j++) {
+                Blob b=blobs.get(j);
+                if(a.tier==b.tier&&nearEnough(a,b,1.25f)&&surfaceTouch(a,b,2.6f)) {
+                    fuse(i,j,a,b);
+                    fused=true;
+                    break outer;
+                }
+            }
+        }
+        if(fused)adhesions.removeIf(link->!blobs.contains(link.a)||!blobs.contains(link.b));
+
+        // Constraint iterations alternate membrane pressure with true
+        // particle-to-edge contact projection. Local contacts flatten the
+        // outline. Area pressure redistributes the displaced substance.
+        for(int pass=0;pass<PASSES;pass++) {
+            for(Blob b:blobs)b.solveMembrane();
+            for(int i=0;i<blobs.size();i++) {
+                Blob a=blobs.get(i);
+                for(int j=i+1;j<blobs.size();j++) {
+                    Blob b=blobs.get(j);
+                    if(a.tier==b.tier||!nearEnough(a,b,1.55f))continue;
+                    projectContacts(a,b,pass==0);
+                }
+            }
+            solveAdhesions();
+            for(Blob b:blobs)vessel.confine(b);
+        }
+        for(Blob b:blobs)b.finish(dt);
+        updateAdhesions(dt);
+    }
+
+    private boolean nearEnough(Blob a,Blob b,float scale) {
+        // Broad-phase filter only. The shape and collision are evaluated
+        // entirely from membrane vertices and line segments below.
+        return Math.hypot(a.x-b.x,a.y-b.y)
+                < (a.radiusTarget+b.radiusTarget)*scale+5f;
+    }
+
+    private void fuse(int i,int j,Blob a,Blob b) {
+        float cx=(a.x+b.x)*.5f,cy=(a.y+b.y)*.5f;
+        int points=GameSpec.pointsForMerge(a.tier);
+        int nextTier=a.tier+1;
+        blobs.remove(j);blobs.remove(i);
+        score+=points;
+        mergeCount++;
+        if(a.tier<mergesByTier.length)mergesByTier[a.tier]++;
+        maxTierReached=Math.max(maxTierReached,nextTier);
+        merges.add(new Merge(cx,cy,new Blob(cx,cy,nextTier,.72f).radius(),nextTier,points));
+        if(spec!=null&&spec.endless) {
+            int earned=(int)Math.min(2_000_000_000L,score/ERASE_EVERY_POINTS);
+            if(earned>earnedErases) {eraseCount+=earned-earnedErases;earnedErases=earned;}
+        }
+        Blob born=new Blob(cx,cy,nextTier,.72f);
+        // Preserve some fluid motion through merging.
+        for(int k=0;k<Blob.NODES;k++) {
+            born.vx[k]=(a.vx[k]+b.vx[k])*.36f;
+            born.vy[k]=(a.vy[k]+b.vy[k])*.36f-64f;
+        }
+        vessel.confine(born);
+        blobs.add(born);
+    }
+
+    private boolean surfaceTouch(Blob a,Blob b,float tolerance) {
+        for(int i=0;i<Blob.NODES;i++) {
+            if(pointInside(b,a.px[i],a.py[i])||
+                    closestEdge(b,a.px[i],a.py[i]).distance<tolerance) return true;
+            if(pointInside(a,b.px[i],b.py[i])||
+                    closestEdge(a,b.px[i],b.py[i]).distance<tolerance) return true;
+        }
+        return false;
+    }
+
+    private static final class Edge {
+        int start; float t,distance,qx,qy;
+    }
+
+    private Edge closestEdge(Blob polygon,float x,float y) {
+        Edge found=new Edge();
+        float minSq=Float.MAX_VALUE;
+        for(int j=0;j<Blob.NODES;j++) {
+            int k=(j+1)%Blob.NODES;
+            float ax=polygon.px[j],ay=polygon.py[j];
+            float dx=polygon.px[k]-ax,dy=polygon.py[k]-ay;
+            float len2=dx*dx+dy*dy;
+            float t=len2<1e-6f?0f:clamp(((x-ax)*dx+(y-ay)*dy)/len2,0f,1f);
+            float qx=ax+dx*t,qy=ay+dy*t;
+            float d2=(x-qx)*(x-qx)+(y-qy)*(y-qy);
+            if(d2<minSq) {
+                minSq=d2;
+                found.start=j;
+                found.t=t;
+                found.qx=qx;found.qy=qy;
+            }
+        }
+        found.distance=(float)Math.sqrt(minSq);
+        return found;
+    }
+
+    private static boolean pointInside(Blob p,float x,float y) {
+        boolean inside=false;
+        for(int i=0,j=Blob.NODES-1;i<Blob.NODES;j=i++) {
+            float ax=p.px[i],ay=p.py[i],bx=p.px[j],by=p.py[j];
+            if(((ay>y)!=(by>y))&&(x<(bx-ax)*(y-ay)/(by-ay)+ax))
+                inside=!inside;
+        }
+        return inside;
+    }
+
+    private void projectContacts(Blob a,Blob b,boolean createAdhesion) {
+        for(int i=0;i<Blob.NODES;i++) {
+            pushPointFromPolygon(a,i,b,createAdhesion);
+            pushPointFromPolygon(b,i,a,createAdhesion);
+        }
+    }
+
+    private void pushPointFromPolygon(Blob source,int i,Blob target,boolean addLink) {
+        float x=source.px[i],y=source.py[i];
+        Edge edge=closestEdge(target,x,y);
+        boolean inside=pointInside(target,x,y);
+        if(!inside&&edge.distance>=SKIN)return;
+
+        int j=edge.start,k=(j+1)%Blob.NODES;
+        float nx=x-edge.qx,ny=y-edge.qy;
+        float dist=Math.max(.001f,edge.distance);
+        nx/=dist;ny/=dist;
+        if(inside){nx=-nx;ny=-ny;}
+        if(edge.distance<.001f) {
+            // For coincident boundaries use target's local segment normal.
+            nx=target.py[j]-target.py[k];
+            ny=target.px[k]-target.px[j];
+            float len=(float)Math.hypot(nx,ny);
+            if(len>.001f) { nx/=len; ny/=len; }
+            else { nx=1f;ny=0f; }
+        }
+        float overlap=inside?edge.distance+SKIN:SKIN-edge.distance;
+        float shift=Math.min(7f,overlap)*.70f;
+        source.px[i]+=nx*shift*.62f;
+        source.py[i]+=ny*shift*.62f;
+        // Split reaction across the two adjacent target particles. This
+        // creates a broad indent, unlike a circular separation impulse.
+        float weightA=1f-edge.t,weightB=edge.t;
+        target.px[j]-=nx*shift*.38f*weightA;
+        target.py[j]-=ny*shift*.38f*weightA;
+        target.px[k]-=nx*shift*.38f*weightB;
+        target.py[k]-=ny*shift*.38f*weightB;
+
+        if(addLink&&!inside&&edge.distance<2.6f&&source.tier!=target.tier) {
+            addAdhesion(source,target,i,edge.t<.5f?j:k);
+        }
+    }
+
+    private void addAdhesion(Blob a,Blob b,int ai,int bi) {
+        int pairCount=0;
+        for(Adhesion link:adhesions) {
+            if((link.a==a&&link.b==b)||(link.a==b&&link.b==a)) {
+                pairCount++;
+                if(pairCount>=2)return; // avoid making a rigid glue seam
+            }
+        }
+        adhesions.add(new Adhesion(a,b,ai,bi));
+    }
+
+    private void solveAdhesions() {
+        for(Adhesion link:adhesions) {
+            float dx=link.b.px[link.bi]-link.a.px[link.ai];
+            float dy=link.b.py[link.bi]-link.a.py[link.ai];
+            float length=(float)Math.hypot(dx,dy);
+            if(length<=4f||length>26f)continue;
+            // A brief slimy string stretches before releasing.
+            float strength=Math.min(1.6f,(length-4f)*.15f);
+            float fraction=strength/length;
+            link.a.px[link.ai]+=dx*fraction*.5f;
+            link.a.py[link.ai]+=dy*fraction*.5f;
+            link.b.px[link.bi]-=dx*fraction*.5f;
+            link.b.py[link.bi]-=dy*fraction*.5f;
+        }
+    }
+
+    private void updateAdhesions(float dt) {
+        adhesions.removeIf(link->{
+            link.age+=dt;
+            return !blobs.contains(link.a)||!blobs.contains(link.b)
+                    ||link.age>.36f||link.length()>26f;
+        });
+    }
+
+    List<Merge> consumeMerges() {
+        ArrayList<Merge> drained=new ArrayList<>(merges);
+        merges.clear();
+        return drained;
+    }
+
+    static float clamp(float value,float lo,float hi) {
+        return Math.max(lo,Math.min(hi,value));
+    }
+}
