@@ -6,11 +6,12 @@ import static org.junit.Assert.*;
 
 public class ReleaseOneTest {
     @Test public void nineColoursCycleInCorrectUserOrder() {
-        assertEquals(0xFF065143,Palette.forTier(0));
-        assertEquals(0xFF4B748E,Palette.forTier(1));
-        assertEquals(0xFFDB5461,Palette.forTier(8));
-        assertEquals(0xFF065143,Palette.forTier(9));
-        assertEquals(0xFF4B748E,Palette.forTier(10));
+        Palette.Theme initial=Palette.at(0);
+        assertEquals(0xFFDAF301,initial.forTier(0));
+        assertEquals(0xFFE9AE08,initial.forTier(1));
+        assertEquals(0xFF2D2383,initial.forTier(8));
+        assertEquals(0xFFDAF301,initial.forTier(9));
+        assertEquals(0xFFE9AE08,initial.forTier(10));
     }
 
     @Test public void allFiveDropSizesOccurWithPlannedWeights() {
@@ -22,9 +23,15 @@ public class ReleaseOneTest {
     }
 
     @Test public void scoringMatchesApprovedCurveAndHasNoNineTierCap() {
-        int[] values={100,160,260,410,660,1050,1680,2680,4290,6870};
+        int[] values={10,16,26,41,66,105,168,268,429,687};
         for(int i=0;i<values.length;i++)assertEquals("fusion "+i,
                 values[i],GameSpec.pointsForMerge(i));
+        assertEquals(1500,GameSpec.LEVELS[0].minScore);
+        for(GameSpec level:GameSpec.LEVELS)
+            assertTrue("No score goal below 1500",level.minScore>=1500);
+        assertEquals(2000,BlobWorld.ERASE_EVERY_POINTS);
+        assertArrayEquals(new float[]{20f,26f,32f,40f,50f,63f,77f,94f,111f},
+                Blob.RADII,0.001f);
         Blob giant=new Blob(210,410,13,new Random(3));
         assertTrue(giant.radius()>Blob.RADII[8]);
     }

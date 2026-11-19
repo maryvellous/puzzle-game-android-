@@ -1,11 +1,89 @@
 package com.maryvellous.lavablobs;
 
-/** Nine exact user-supplied colours, 1-based size wraps after size 9. */
+/**
+ * Single source of truth for all visual themes.
+ * Only the background and the vessel outline are independent of the theme.
+ * Colours in blobs are always exact, opaque Canva HEX values.
+ */
 final class Palette {
-    static final int[] COLORS={
-        0xFF065143,0xFF4B748E,0xFF6D9DC5,
-        0xFF6E73AD,0xFF53599A,0xFF6F4994,
-        0xFF8A4C88,0xFFA54F7B,0xFFDB5461
+    static final int BACKGROUND_TOP=0xFF322E32;
+    static final int BACKGROUND_BOTTOM=0xFF3D3D3D;
+    static final int VESSEL_OUTLINE=0xFFE6DFE3;
+    static final int NEUTRAL_SURFACE=0xFFE6DFE3;
+    // Keep the existing subtle glass strength (~17%), replacing only its hue.
+    static final int VESSEL_FILL=0x2BE6DFE3;
+
+    static final class Theme {
+        final String name;
+        final int[] blobs;
+        final int primary, secondary, tertiary;
+        final int surface, surfaceRaised, border, text, muted;
+        final int positive, caution, vesselFill, speck, onPrimary;
+        final int onSurface, onSurfaceMuted;
+
+        Theme(String name,int[] blobs,int primary,int secondary,int tertiary) {
+            if(blobs.length!=9)throw new IllegalArgumentException("Each theme must have 9 blob colours");
+            this.name=name;
+            this.blobs=blobs.clone();
+            this.primary=primary;
+            this.secondary=secondary;
+            this.tertiary=tertiary;
+            // Neutral ivory surfaces are invariant across all three themes.
+            surface=NEUTRAL_SURFACE;
+            surfaceRaised=NEUTRAL_SURFACE;
+            border=NEUTRAL_SURFACE;
+            text=mix(VESSEL_OUTLINE,primary,.05f);
+            muted=mix(VESSEL_OUTLINE,secondary,.30f);
+            positive=mix(primary,VESSEL_OUTLINE,.12f);
+            caution=mix(blobs[3],VESSEL_OUTLINE,.22f);
+            vesselFill=VESSEL_FILL;
+            // Preserve particles' opacity, motion and count; only neutralize hue.
+            speck=VESSEL_OUTLINE;
+            onSurface=0xFF211A26;
+            onSurfaceMuted=0xFF554E55;
+            onPrimary=relativeLuminance(primary)>.43f?0xFF211A26:0xFFF7F1F3;
+        }
+        int forTier(int tier){return blobs[Math.floorMod(tier,blobs.length)];}
+    }
+
+    private static final Theme[] THEMES={
+        new Theme("Tema 1",new int[]{
+            0xFFDAF301,0xFFE9AE08,0xFFEB8403,0xFFF0420D,0xFFD23876,
+            0xFFB435A8,0xFF9937C8,0xFF5A29DA,0xFF2D2383
+        },0xFFEB8403,0xFFDAF301,0xFF9937C8),
+        new Theme("Tema 2",new int[]{
+            0xFFA72F38,0xFFE2575A,0xFFEF8F55,0xFFF8DEBB,0xFF49A1A5,
+            0xFF1D3058,0xFF9985C2,0xFF773661,0xFF5B5398
+        },0xFF49A1A5,0xFFE2575A,0xFF9985C2),
+        new Theme("Tema 3",new int[]{
+            0xFFFDA24B,0xFFFB6204,0xFFCB3C06,0xFF980203,0xFF510207,
+            0xFF5F1564,0xFF5B5398,0xFFA20096,0xFF0C0305
+        },0xFFFB6204,0xFFA20096,0xFF9985C2)
     };
-    static int forTier(int tier){return COLORS[Math.floorMod(tier,COLORS.length)];}
+
+    static final int COUNT=THEMES.length;
+    // Legacy reference for screens not yet migrated to Theme; do not use in new UI.
+    static final int[] COLORS=THEMES[0].blobs.clone();
+
+    static Theme at(int index){
+        return THEMES[Math.max(0,Math.min(COUNT-1,index))];
+    }
+    static int forTier(int tier){return THEMES[0].forTier(tier);}
+
+    static int alpha(int value,int opacity){
+        return (value&0x00FFFFFF)|(Math.max(0,Math.min(255,opacity))<<24);
+    }
+    static int mix(int a,int b,float ratio){
+        float t=Math.max(0f,Math.min(1f,ratio));
+        int red=(int)(((a>>>16)&255)*(1-t)+((b>>>16)&255)*t);
+        int green=(int)(((a>>>8)&255)*(1-t)+((b>>>8)&255)*t);
+        int blue=(int)((a&255)*(1-t)+(b&255)*t);
+        return 0xFF000000|(red<<16)|(green<<8)|blue;
+    }
+    static float relativeLuminance(int color){
+        float r=((color>>>16)&255)/255f;
+        float g=((color>>>8)&255)/255f;
+        float b=(color&255)/255f;
+        return .2126f*r+.7152f*g+.0722f*b;
+    }
 }

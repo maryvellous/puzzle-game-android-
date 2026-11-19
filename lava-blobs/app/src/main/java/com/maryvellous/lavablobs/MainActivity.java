@@ -27,7 +27,7 @@ public final class MainActivity extends Activity implements SensorEventListener 
         super.onCreate(state);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
                 WindowManager.LayoutParams.FLAG_FULLSCREEN);
-        getWindow().setNavigationBarColor(0xFF111427);
+        getWindow().setNavigationBarColor(Palette.BACKGROUND_BOTTOM);
         getWindow().getDecorView().setSystemUiVisibility(0);
         if(Build.VERSION.SDK_INT>=30)getWindow().setDecorFitsSystemWindows(false);
 
@@ -37,7 +37,7 @@ public final class MainActivity extends Activity implements SensorEventListener 
         if(sensorManager!=null)accelerometer=sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
         root=new FrameLayout(this);
         root.setClipToPadding(true);
-        root.setBackgroundColor(0xFF111427);
+        root.setBackgroundColor(Palette.BACKGROUND_TOP);
         root.setOnApplyWindowInsetsListener((v,insets)->{
             int navigationBottom=Build.VERSION.SDK_INT>=30?
                     insets.getInsets(WindowInsets.Type.navigationBars()).bottom:

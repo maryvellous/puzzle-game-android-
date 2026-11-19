@@ -41,6 +41,25 @@ public class GameSaveTest {
         assertTrue(json.getBoolean("eraseMode"));
     }
 
+    @Test public void legacySaveGetsNewScoreWithoutLosingProgress() throws Exception {
+        BlobWorld old=new BlobWorld(new Random(77),GameSpec.ENDLESS[0]);
+        old.score=390; // legacy: 100 + 2*~? values don't need to be exact
+        old.mergesByTier[0]=1;
+        old.mergesByTier[1]=2;
+        old.mergeCount=3;
+        old.usedErases=0;
+        old.blobs.add(new Blob(210,400,2,new Random(2)));
+        JSONObject saved=GameSave.encode(GameSpec.ENDLESS[0],old,210f,false);
+        saved.remove("scoringVersion");
+        assertEquals(10+2*16,new GameSave.Snapshot(GameSpec.ENDLESS[0],saved).points());
+        BlobWorld restored=new BlobWorld(new Random(2),GameSpec.ENDLESS[0]);
+        GameSave.restore(restored,saved);
+        assertEquals(10+2*16,restored.score);
+        assertEquals(3,restored.mergeCount);
+        assertEquals(1,restored.blobs.size());
+        assertEquals(0,restored.eraseCount);
+    }
+
     @Test public void stickyContactsRoundTrip() throws Exception {
         BlobWorld w=new BlobWorld(new Random(44),GameSpec.LEVELS[1]);
         Blob a=new Blob(162,450,2,new Random(1));

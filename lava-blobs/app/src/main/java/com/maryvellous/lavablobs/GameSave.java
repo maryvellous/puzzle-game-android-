@@ -27,8 +27,19 @@ final class GameSave {
         final GameSpec spec;
         final JSONObject data;
         Snapshot(GameSpec spec,JSONObject data){this.spec=spec;this.data=data;}
-        long points(){return data.optLong("score");}
+        long points(){
+            if(data.optInt("scoringVersion",1)>=2)return data.optLong("score");
+            JSONArray tiers=data.optJSONArray("byTier");
+            return tiers==null?data.optLong("score"):scoreFromMerges(tiers);
+        }
         int drops(){return data.optInt("drops");}
+    }
+
+    private static long scoreFromMerges(JSONArray tiers){
+        long score=0L;
+        for(int i=0;i<Math.min(40,tiers.length());i++)
+            score+=(long)tiers.optInt(i)*GameSpec.pointsForMerge(i);
+        return score;
     }
 
     GameSave(Context context){
@@ -74,6 +85,7 @@ final class GameSave {
     static JSONObject encode(GameSpec spec,BlobWorld w,float aimX,boolean eraseMode) throws Exception {
         JSONObject state=new JSONObject();
         state.put("version",VERSION);
+        state.put("scoringVersion",2);
         state.put("id",spec.id);
         state.put("height",w.height);
         state.put("time",w.time);
@@ -150,6 +162,17 @@ final class GameSave {
         JSONArray tiers=state.getJSONArray("byTier");
         for(int i=0;i<Math.min(tiers.length(),w.mergesByTier.length);i++)
             w.mergesByTier[i]=tiers.getInt(i);
+        // Existing 1.0.2 saves remain usable. Only the score is migrated:
+        // the old formula rounded to tens, so reconstruct the exact new
+        // score from the persisted number of merges at each tier.
+        if(state.optInt("scoringVersion",1)<2) {
+            w.score=scoreFromMerges(tiers);
+            if(w.spec.endless) {
+                w.earnedErases=(int)Math.min(2_000_000_000L,
+                        w.score/BlobWorld.ERASE_EVERY_POINTS);
+                w.eraseCount=Math.max(0,w.earnedErases-w.usedErases);
+            }
+        }
         byte[] raw=Base64.getDecoder().decode(state.getString("rng"));
         if(raw.length>2048)throw new IllegalArgumentException("Invalid RNG");
         ObjectInputStream stream=new ObjectInputStream(new ByteArrayInputStream(raw));

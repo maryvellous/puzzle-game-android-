@@ -84,7 +84,7 @@ public class BlobWorldTest {
     @Test public void viscousAdhesionIsTemporaryAndReleases() {
         BlobWorld w=new BlobWorld(new Random(20));
         Blob a=new Blob(168,400,3,new Random(3));
-        Blob b=new Blob(245,400,4,new Random(4));
+        Blob b=new Blob(254,400,4,new Random(4)); // scale separation with +12% radii
         w.blobs.add(a);w.blobs.add(b);
         for(int t=0;t<5;t++)w.tick(.016f);
         assertTrue("Contact must generate a short-lived sticky patch",

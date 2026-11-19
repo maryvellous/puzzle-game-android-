@@ -1,20 +1,35 @@
-# Lava Blob 1.0.2 — Android
+# Lava Blob 1.0.3 — Android
 
 Un cozy merge puzzle personale. Le bolle salgono e si ammassano nel recipiente, deformandosi come slime. La **fisica approvata nella 0.5.0** (membrana di 24 particelle, pressione interna, molle, adesione temporanea) resta il nucleo del gioco.
+
+## Nuova UI e temi — novembre 2026 (PR #3)
+
+- Titolo Home originale mantenuto: stessa animazione delle lettere gelatinose; eliminato il sottotitolo. Home ridisegnata con card minimali, miniature dei recipienti reali, ripresa partita, tab Livelli/Infinita, sei livelli per pagina, selettore Temi e Copia dati.
+- Tre temi selezionabili dalla Home: la preferenza resta salvata localmente tramite ThemeStore, senza modificare salvataggi e progressi. I temi colorano blob, animazioni e soli accenti UI; le superfici neutre non ereditano il colore del tema.
+- Colori costanti dal mockup: sfondo #322E32 → #3D3D3D; contorno dei recipienti e superfici neutre #E6DFE3. I pannelli Home/HUD e il vassoio del prossimo blob hanno sfondo avorio senza bordino decorativo; i pulsanti intenzionalmente colorati mantengono i colori del tema.
+- Tema 1: #DAF301 #E9AE08 #EB8403 #F0420D #D23876 #B435A8 #9937C8 #5A29DA #2D2383.
+- Tema 2: #A72F38 #E2575A #EF8F55 #F8DEBB #49A1A5 #1D3058 #9985C2 #773661 #5B5398.
+- Tema 3: #FDA24B #FB6204 #CB3C06 #980203 #510207 #5F1564 #5B5398 #A20096 #0C0305 (conservato il nero, scartato #380842).
+- Ogni palette ha nove colori e ricomincia dal primo al tier 10. Le anteprime degli altri temi sono quelle reali, non alternative inventate.
+- La UI può scorrere su schermi compatti; il solver fisico, i contenitori e le condizioni di sconfitta restano invariati. In questa PR sono stati applicati anche la nuova formula (base 10), il primo obiettivo minimo di 1.500, i raggi maggiorati (+12% circa) e il nuovo HUD ispirato alla pagina 4 di Canva.
+- La schermata partita riprende **lo stesso titolo animato della Home** tramite `BlobTitle`, mostra PUNTI/OBIETTIVO in due riquadri accentati, il prossimo blob nel vassoio avorio e i controlli SCUOTI/ERASE. Le azioni non disponibili restano disabilitate. Interno recipiente #E6DFE3 a circa 17% di opacità; particelle sospese dello stesso bianco con **movimento, numero, distribuzione, dimensione e alpha originali invariati**.
+- La CI Android esegue i test automatici e compila l'APK. **Il collaudo manuale sul telefono resta separato dalla verifica CI**: soprattutto contrasto, salvataggi e resa dei recipienti.
 
 ## Gioco
 - Home minimale: titolo **Lava Blob** con ogni lettera deformata in tempo reale; sei livelli per pagina, swipe orizzontale.
 - **12 livelli iniziali** con forme di contenitore differenti. Sblocchi il seguente completando il precedente; puoi rigiocarli senza limiti. Ogni livello richiede un punteggio minimo e presenta 2 o 3 obiettivi extra. **Le soglie sono provvisorie** e saranno tarate con le partite della giocatrice.
-- **Modalità infinita immediata**: scegli uno fra tre recipienti. Ogni 20.000 punti (soglia provvisoria) si ottiene un Erase, accumulabile senza limiti; premendo Erase e poi un blob si cancella soltanto quel blob.
+- **Modalità infinita immediata**: scegli uno fra tre recipienti. Ogni 2.000 punti (soglia temporanea equivalente alla precedente scala, da calibrare in playtest) si ottiene un Erase, accumulabile senza limiti; premendo Erase e poi un blob si cancella soltanto quel blob.
 - **Game Over corretto**: non controlla più se una bolla scende in basso. Verifica invece se esiste un ingresso valido per il prossimo blob; serve un blocco persistente (7 secondi nei livelli, 10 nell'infinita), durante il quale si può scuotere e, nell'infinita, usare Erase.
-- Colori definitivi (dimensioni 1–9): `#065143`, `#4B748E`, `#6D9DC5`, `#6E73AD`, `#53599A`, `#6F4994`, `#8A4C88`, `#A54F7B`, `#DB5461`. Ripetuti ciclicamente oltre la nona.
+- Colori: tre temi Canva, ciascuno con nove colori nell'ordine dei tier; ripetizione ciclica dal tier 10. Lo sfondo e il bordo del recipiente restano cromaticamente fissi.
 - Drop soltanto di dimensioni 1–5: **45%, 28%, 16%, 8%, 3%**.
-- Punteggio proposto: prima fusione **100**, poi ogni livello moltiplicato per **1,6** e arrotondato alle decine. Non ci sono bonus combo.
+- Punteggio attuale: prima fusione **10**, poi ogni livello moltiplicato per **1,6** e arrotondato all'intero. I primi valori sono 10, 16, 26, 41, 66, 105, 168, 268, 429. Non ci sono bonus combo.
 - I blob giganti non si dissolvono e i tier proseguono oltre il nono.
 - Scuotimento via accelerometro, registrato solo mentre il gioco è in primo piano.
 
 ## Bilanciamento e privacy
-Le misure delle partite vengono salvate **solo sul telefono** (punteggio, drop, fusioni, dimensione massima, Erase, durata, fusioni per livello). Dalla Home, `COPIA DATI PARTITE` copia il JSON delle ultime 50 partite per l'analisi manuale; non esiste backend, raccolta a distanza o account. Le soglie dei livelli e dell'Erase sono ipotesi iniziali, non risultati di playtest.
+Il record della vecchia scala resta archiviato, mentre il nuovo record viene conteggiato separatamente (`record_v2_`) per evitare confronti falsati. Le partite attive precedenti vengono migrate ricostruendo il nuovo punteggio dai conteggi delle fusioni, mantenendo le membrane salvate e il progresso dei livelli. L'aumento dimensionale dei blob resta da collaudare su telefono, soprattutto per le partite riprese.
+
+Le misure delle partite vengono salvate **solo sul telefono** (punteggio, drop, fusioni, dimensione massima, Erase, durata, fusioni per livello). Dalla Home, `COPIA DATI PARTITE` copia il JSON delle ultime 50 partite per l'analisi manuale; non esiste backend, raccolta a distanza o account. Il primo obiettivo minimo è 1.500 punti nella nuova scala, come deciso. Gli altri obiettivi dei livelli e gli extra restano ai valori preesistenti in attesa di playtest con i blob maggiorati; la soglia Erase di 2.000 resta temporanea.
 
 ## Sviluppo
 Progetto indipendente dentro `lava-blobs/`. L'app di puzzle Rovina nella radice del repository è separata. Richiede JDK 17, Android SDK 35 e Gradle 8.9.
@@ -48,3 +63,10 @@ Le soglie-obiettivo restano quelle provvisorie della 1.0.0 finché non saranno d
 - **Home riprogettata**: pulsante Continua, cards con miniatura separata dai testi, coordinate di clipping della miniatura e nuovo contrasto cromatico. Conservato l'effetto visivo all'interno del vetro.
 - **Firma APK**: le build debug prodotte da runner GitHub differenti possono essere firmate con chiavi differenti; finché non si collega una chiave di firma persistente, Android non permetterà sempre l'installazione sopra la 1.0.1 conservando i dati. Non chiedere mai di disinstallare senza avvertire del rischio di perdita dei progressi.
 - **Test**: roundtrip completo delle membrane, RNG, progressi di gioco, geometrie e regressioni fisiche; richiede ancora collaudo visivo reale sul telefono.
+
+## Distribuzione versione 1.0.3
+
+- Il workflow `.github/workflows/lava-blobs-production.yml` pubblica **solo il pacchetto principale** `com.maryvellous.lavablobs` nella GitHub Release `lava-blob-v1.0.3`, dopo il superamento dei test, quando le modifiche entrano in `main`.
+- L'app `com.maryvellous.lavablobs.preview` è separata e rimane unicamente uno strumento di test; **non fa parte della release principale**.
+- L'APK generato in GitHub Actions usa la **firma debug del runner**: potrebbe non essere compatibile con la firma dell'APK già installato sul telefono. Un aggiornamento senza perdere progressi richiede lo stesso certificato; **non disinstallare né cancellare i dati della vecchia app senza averli preservati e senza consenso esplicito**. La build non è destinata a Google Play.
+- Il workflow Rovina Puzzle (`android-release.yml`) è limitato a modifiche del suo progetto: non sovrascrivere le sue release quando si aggiorna Lava Blob.
