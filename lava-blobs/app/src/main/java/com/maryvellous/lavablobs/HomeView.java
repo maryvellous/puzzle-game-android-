@@ -28,6 +28,7 @@ public final class HomeView extends View {
     private static final Typeface NORMAL=Typeface.create("sans-serif",Typeface.NORMAL);
     private static final Typeface MEDIUM=Typeface.create("sans-serif-medium",Typeface.NORMAL);
     private static final Typeface HEAVY=Typeface.create("sans-serif-black",Typeface.BOLD);
+    private static final Typeface DISPLAY=Typeface.create("casual",Typeface.BOLD);
 
     private final Listener listener;
     private final Runnable resume;
@@ -48,6 +49,8 @@ public final class HomeView extends View {
     private int page=0,section=0;
     private float scrollY,gestureStartX,gestureStartY,scrollOnDown;
     private boolean dragged;
+    private int pressedCard=-1;
+    private float cardPress;
 
     HomeView(Context context,ProgressStore progress,Listener listener,
              Runnable resume,GameSave gameSave) {
@@ -84,6 +87,8 @@ public final class HomeView extends View {
         raw.save();
         raw.scale(sc,sc);
         drawBackdrop(raw,h);
+        cardPress+=((pressedCard>=0?1f:0f)-cardPress)*.28f;
+        if(cardPress<.001f&&pressedCard<0)cardPress=0f;
         raw.translate(0,-scrollY);
         drawTitle(raw,(System.nanoTime()-start)/1_000_000_000f);
         if(saved!=null)drawResume(raw);
@@ -107,8 +112,11 @@ public final class HomeView extends View {
         paint.setShader(null);
     }
 
-    // Original deforming title implementation retained intentionally.
+    // The deforming wordmark remains original, now held by a fixed ivory
+    // cushion so dark or low-saturation glyphs never disappear into the backdrop.
     private void drawTitle(Canvas c,float t) {
+        panel(c,19f,53f,401f,135f,35f,Palette.NEUTRAL_SURFACE,
+                Palette.NEUTRAL_SURFACE,0f);
         BlobTitle.draw(c,letter,paint,glyph,warped,theme,t,58f,119f);
     }
 
@@ -148,7 +156,13 @@ public final class HomeView extends View {
             float width=section==1?W-2*MARGIN:CARD_WIDTH;
             boolean locked=!spec.endless&&id>progress.highestUnlocked();
             boolean next=!locked&&!spec.endless&&!progress.cleared(id)&&id==progress.highestUnlocked();
+            c.save();
+            if(i==pressedCard){
+                float shrink=1f-.035f*cardPress;
+                c.scale(shrink,shrink,x+width*.5f,y+CARD_HEIGHT*.5f);
+            }
             drawCard(c,spec,x,y,width,CARD_HEIGHT,locked,next);
+            c.restore();
         }
         float hintY=cardBottom()+19f;
         if(section==0){
@@ -168,7 +182,7 @@ public final class HomeView extends View {
     private void drawCard(Canvas c,GameSpec spec,float x,float y,float width,float height,
                           boolean locked,boolean next){
         int face=locked?Palette.mix(theme.surface,Palette.BACKGROUND_TOP,.16f):theme.surface;
-        panel(c,x,y,x+width,y+height,17f,face,face,0f);
+        panel(c,x,y,x+width,y+height,25f,face,face,0f);
         drawPreview(c,spec.shape,x+8,y+10,x+69,y+height-10,locked);
 
         float tx=x+77f,available=width-85f;
@@ -219,11 +233,9 @@ public final class HomeView extends View {
         c.save();
         c.clipRect(l,t,r,b);
         paint.setStyle(Paint.Style.FILL);
-        // Fixed dark neutral viewport ensures the ivory vessel rim stays
-        // visible inside an ivory card without reintroducing a theme tint.
-        paint.setColor(Palette.BACKGROUND_TOP);
-        c.drawRoundRect(l,t,r,b,10f,10f,paint);
-        paint.setColor(theme.vesselFill);
+        // A transparent miniature directly on the card, without a black box.
+        // Dark neutral tint maintains the silhouette against the ivory.
+        paint.setColor(Palette.alpha(theme.onSurfaceMuted,locked?10:24));
         c.drawPath(path,paint);
         c.save();c.clipPath(path);
         // Distinct simple flat blob discs hint at the game's soft-body movement.
@@ -238,7 +250,7 @@ public final class HomeView extends View {
         c.restore();
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeWidth(1.7f);
-        paint.setColor(Palette.alpha(Palette.VESSEL_OUTLINE,locked?135:240));
+        paint.setColor(Palette.alpha(theme.onSurfaceMuted,locked?125:205));
         c.drawPath(path,paint);
         paint.setStyle(Paint.Style.FILL);
         c.restore();
@@ -300,7 +312,7 @@ public final class HomeView extends View {
 
     private void text(Canvas c,String value,float x,float y,float size,
                       int color,boolean bold,float maxWidth){
-        letter.setTypeface(bold?MEDIUM:NORMAL);
+        letter.setTypeface(bold&&size>=14f?DISPLAY:(bold?MEDIUM:NORMAL));
         letter.setTextAlign(Paint.Align.LEFT);
         letter.setTextSize(size);
         float w=letter.measureText(value);
@@ -310,7 +322,7 @@ public final class HomeView extends View {
     }
     private void textCentered(Canvas c,String value,float x,float y,float size,
                               int color,boolean bold){
-        letter.setTypeface(bold?MEDIUM:NORMAL);
+        letter.setTypeface(bold&&size>=14f?DISPLAY:(bold?MEDIUM:NORMAL));
         letter.setTextAlign(Paint.Align.CENTER);
         letter.setTextSize(size);
         letter.setColor(color);
@@ -333,16 +345,33 @@ public final class HomeView extends View {
         switch(e.getActionMasked()){
             case MotionEvent.ACTION_DOWN:
                 gestureStartX=x;gestureStartY=y;scrollOnDown=scrollY;
-                dragged=false;return true;
+                dragged=false;pressedCard=-1;
+                float adjustedDownY=y+scrollY;
+                int hitCount=section==0?6:3;
+                for(int i=0;i<hitCount;i++){
+                    int id=page*6+i;
+                    float left=section==1?MARGIN:MARGIN+(i%2)*(CARD_WIDTH+10f);
+                    float top=cardTop()+(section==1?i:i/2)*(CARD_HEIGHT+CARD_GAP);
+                    float width=section==1?W-2*MARGIN:CARD_WIDTH;
+                    if(x>=left&&x<=left+width&&adjustedDownY>=top
+                            &&adjustedDownY<=top+CARD_HEIGHT
+                            &&(section==1||id<=progress.highestUnlocked())){
+                        pressedCard=i;
+                        break;
+                    }
+                }
+                invalidate();
+                return true;
             case MotionEvent.ACTION_MOVE:
                 float dy=y-gestureStartY,dx=x-gestureStartX;
                 if(Math.abs(dy)>7f&&Math.abs(dy)>Math.abs(dx)*1.2f){
-                    dragged=true;
+                    dragged=true;pressedCard=-1;
                     scrollY=Blob.clamp(scrollOnDown-dy,0f,maxScroll());
                     invalidate();
                 }
                 return true;
             case MotionEvent.ACTION_UP:
+                pressedCard=-1;
                 float movedX=x-gestureStartX;
                 float movedY=y-gestureStartY;
                 if(dragged||Math.abs(movedY)>17f)return true;
@@ -395,7 +424,7 @@ public final class HomeView extends View {
                     }
                 }
                 return true;
-            case MotionEvent.ACTION_CANCEL:dragged=false;return true;
+            case MotionEvent.ACTION_CANCEL:dragged=false;pressedCard=-1;return true;
             default:return true;
         }
     }

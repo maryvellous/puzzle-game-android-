@@ -32,6 +32,9 @@ public final class LavaView extends View {
     private static final int PERF_REPORT_FRAMES = 180;
     private static final Typeface FONT_REGULAR = Typeface.create("sans-serif",Typeface.NORMAL);
     private static final Typeface FONT_MEDIUM = Typeface.create("sans-serif-medium",Typeface.NORMAL);
+    // Android built-in playful face: inspired by chunky handwritten display fonts,
+    // without bundling the separately licensed More Sugar font.
+    private static final Typeface FONT_DISPLAY = Typeface.create("casual",Typeface.BOLD);
     // Solid, saturated, intentionally distinguishable hues from blue-indigo
     // through lavender and violet, never red/yellow/green.
     private final Palette.Theme theme;
@@ -58,6 +61,11 @@ public final class LavaView extends View {
     private final float[] yy = new float[Blob.NODES];
     private final ArrayList<Wave> waves = new ArrayList<>();
     private final ArrayList<Droplet> droplets = new ArrayList<>();
+    private final ArrayList<PopFx> pops = new ArrayList<>();
+    private float shakeAge=1f,shakePress,popPress;
+    private int shakeStep;
+    private float scorePulse;
+    private long lastAnimatedScore;
 
     private float aimX = W / 2;
     private long previousFrame;
@@ -88,6 +96,15 @@ public final class LavaView extends View {
         }
     }
 
+    private static final class PopFx {
+        final float x,y,r;
+        final int tier;
+        float age;
+        PopFx(float x,float y,float r,int tier) {
+            this.x=x;this.y=y;this.r=r;this.tier=tier;
+        }
+    }
+
     LavaView(Context context, GameSpec spec, ProgressStore progress,
             Runnable onHome,GameSave session,GameSave.Snapshot resume) {
         super(context);
@@ -112,6 +129,7 @@ public final class LavaView extends View {
         setHapticFeedbackEnabled(true);
         prefs=context.getSharedPreferences("lava_blobs",Context.MODE_PRIVATE);
         best=progress.record(spec.id);
+        lastAnimatedScore=world.score;
         letters.setTextAlign(Paint.Align.CENTER);
         line.setStyle(Paint.Style.STROKE);
     }
@@ -172,6 +190,10 @@ public final class LavaView extends View {
         }
         long physicsNs=System.nanoTime()-physicsStart;
         advanceEffects(elapsed);
+        if(world.score!=lastAnimatedScore){
+            lastAnimatedScore=world.score;
+            scorePulse=.33f;
+        }
         for (BlobWorld.Merge merge : world.consumeMerges()) {
             waves.add(new Wave(merge.x, merge.y, merge.radius, merge.tier));
             for (int i = 0; i < 16; i++) {
@@ -199,6 +221,14 @@ public final class LavaView extends View {
         canvas.scale(scale, scale);
 
         drawBackground(canvas, h);
+        // Cosmetic whole-vessel wobble. The physical vessel and all collider
+        // positions remain untouched; internal floating particles are unchanged.
+        canvas.save();
+        if(shakeAge<.40f) {
+            float fade=1f-shakeAge/.40f;
+            canvas.translate((float)Math.sin(shakeAge*64f)*5.5f*fade,
+                    (float)Math.sin(shakeAge*41f)*2.4f*fade);
+        }
         drawVessel(canvas);
         canvas.save();
         Path glass=glassPath();
@@ -208,8 +238,10 @@ public final class LavaView extends View {
         drawAdhesions(canvas);
         for(Blob b:world.blobs)drawBlob(canvas,b);
         drawDroplets(canvas);
+        drawPops(canvas);
         canvas.restore();
         drawVesselRim(canvas);
+        canvas.restore();
         drawHUD(canvas,h);
         if(world.gameOver)drawGameOver(canvas,h);
 
@@ -373,6 +405,25 @@ public final class LavaView extends View {
 
     private void advanceEffects(float dt) {
         blockedFlash = Math.max(0f, blockedFlash - dt);
+        scorePulse=Math.max(0f,scorePulse-dt);
+        shakePress=Math.max(0f,shakePress-dt*3.5f);
+        popPress=Math.max(0f,popPress-dt*3.5f);
+        if(shakeAge<.41f) {
+            shakeAge+=dt;
+            // Three alternating pulses recreate a phone shake rather than a
+            // single directional kick. Reuse the already approved physics API.
+            while(shakeStep<3&&shakeAge>=(shakeStep+1)*.085f) {
+                if(shakeStep==0)world.shake(-8f, 5f, 8f);
+                else if(shakeStep==1)world.shake(7f,-4.5f,8f);
+                else world.shake(-5.5f,3.5f,7f);
+                shakeStep++;
+            }
+        }
+        for(int i=pops.size()-1;i>=0;i--){
+            PopFx fx=pops.get(i);
+            fx.age+=dt;
+            if(fx.age>.58f)pops.remove(i);
+        }
         for (int i = waves.size()-1; i>=0; i--) {
             Wave w = waves.get(i);
             w.age += dt;
@@ -388,6 +439,35 @@ public final class LavaView extends View {
         }
     }
 
+    private void drawPops(Canvas c) {
+        paint.setStyle(Paint.Style.FILL);
+        paint.setShader(null);
+        for(PopFx fx:pops){
+            final float t=fx.age;
+            int base=theme.forTier(fx.tier);
+            if(t<.095f) {
+                float swell=t/.095f;
+                paint.setColor(withAlpha(base,Math.round(255f*(1f-swell*.36f))));
+                c.drawCircle(fx.x,fx.y,fx.r*(1f+.18f*swell),paint);
+            } else {
+                float progress=Math.min(1f,(t-.095f)/.485f);
+                float eased=1f-(1f-progress)*(1f-progress);
+                line.setColor(withAlpha(Palette.VESSEL_OUTLINE,Math.round(210f*(1f-progress))));
+                line.setStrokeWidth(3.8f*(1f-progress)+.4f);
+                c.drawCircle(fx.x,fx.y,fx.r*(.65f+eased*.75f),line);
+                for(int i=0;i<14;i++){
+                    float angle=(float)(i*Math.PI*2/14+.25f);
+                    float distance=fx.r*(.32f+1.42f*eased);
+                    float px=fx.x+(float)Math.cos(angle)*distance;
+                    float py=fx.y+(float)Math.sin(angle)*distance;
+                    paint.setColor(withAlpha(i%4==0?Palette.VESSEL_OUTLINE:base,
+                            Math.round(235f*(1f-progress))));
+                    c.drawCircle(px,py,Math.max(.8f,(2.8f+(i%3)*1.2f)*(1f-progress)),paint);
+                }
+            }
+        }
+    }
+
     private void drawVesselRim(Canvas c) {
         line.setColor(Palette.VESSEL_OUTLINE);
         line.setStrokeWidth(4.2f);
@@ -397,56 +477,54 @@ public final class LavaView extends View {
         c.drawPath(glassPath(),line);
     }
 
-    /** In-game layout from the fourth Canva board, with colours from Theme. */
+    /** Bubbly HUD: quiet ivory header, colourful floating counters, spacious play. */
     private void drawHUD(Canvas c,float h) {
+        // Ivory is shared by every theme and keeps the changing title readable.
+        hudPanel(c,18,19,402,103,35,Palette.NEUTRAL_SURFACE);
         BlobTitle.draw(c,letters,paint,titleGlyph,titleWarped,theme,
-                (System.nanoTime()-titleStart)/1_000_000_000f,35f,61f);
+                (System.nanoTime()-titleStart)/1_000_000_000f,34f,66f);
         String location=spec.endless?"Modalità infinita":
                 spec.trial?spec.name:"Livello "+(spec.id+1)+" · "+spec.name;
-        label(c,location,210,87,11,theme.muted,false);
+        label(c,location,210,90,11,theme.onSurfaceMuted,false);
 
-        // Controls are now on opposite sides of the shared animated title.
-        hudPanel(c,29,32,75,76,18,theme.surfaceRaised);
-        hudPanel(c,345,32,391,76,18,theme.surfaceRaised);
-        label(c,"↻",52,63,26,theme.onSurface,false);
-        label(c,"⌂",368,62,25,theme.onSurface,false);
+        // Two round floating header actions, not more outlined rectangles.
+        bubbleButton(c,53,60,23,theme.secondary,0);
+        bubbleButton(c,367,60,23,theme.tertiary,0);
+        label(c,"↻",53,69,26,contrastInk(theme.secondary),true);
+        label(c,"⌂",367,69,25,contrastInk(theme.tertiary),true);
 
-        // Canva page 4: two large, clearly separated counters.
-        int scoreFill=theme.forTier(0);
-        int goalFill=theme.primary;
-        hudPanel(c,29,109,195,169,22,scoreFill);
-        hudPanel(c,225,109,391,169,22,goalFill);
-        int scoreInk=contrastInk(scoreFill);
-        int goalInk=contrastInk(goalFill);
-        label(c,"PUNTI",112,130,11,scoreInk,true);
-        label(c,Long.toString(world.score),112,155,23,scoreInk,true);
+        // Score bubbles bounce lightly when the number changes.
+        float bounce=scorePulse>0?
+                (float)Math.sin((.33f-scorePulse)/.33f*Math.PI)*.045f:0f;
+        c.save();c.scale(1f+bounce,1f+bounce,112,143);
+        bubbleCounter(c,28,109,197,174,theme.forTier(0));
+        label(c,"PUNTI",112,132,11,contrastInk(theme.forTier(0)),true);
+        bigNumber(c,Long.toString(world.score),112,159,26,contrastInk(theme.forTier(0)),145f);
+        c.restore();
+
+        int goalFill=theme.tertiary;
+        bubbleCounter(c,224,109,392,174,goalFill);
         String heading=spec.endless?"RECORD":spec.trial?"DROP":"OBIETTIVO";
         String figure=spec.endless?Long.toString(Math.max(best,world.score)):
                 spec.trial?Integer.toString(world.dropCount):
                 Integer.toString(spec.minScore);
-        label(c,heading,308,130,11,goalInk,true);
-        label(c,figure,308,155,23,goalInk,true);
+        label(c,heading,308,132,11,contrastInk(goalFill),true);
+        bigNumber(c,figure,308,159,26,contrastInk(goalFill),143f);
 
         if(!spec.endless&&!spec.trial)
             label(c,"EXTRA "+spec.extras(world.score,world.maxTierReached,
                     world.mergeCount)+"/"+spec.totalExtras(),
-                    308,186,10.5f,theme.secondary,true);
+                    308,194,10.5f,theme.text,true);
 
         if(world.blockedTime>.5f&&!world.gameOver) {
             label(c,"INGRESSO BLOCCATO · "+(int)Math.ceil(world.remainingSeconds())+"s",
-                    210,211,11.5f,theme.caution,true);
+                    210,212,11,theme.caution,true);
             if(spec.endless&&world.eraseCount>0)
-                label(c,"Usa Erase per liberare spazio",210,228,10.5f,theme.muted,false);
+                label(c,"Usa POP per liberare spazio",210,229,10.5f,theme.text,false);
         }
         if(eraseMode)
-            label(c,"TOCCA IL BLOB DA ELIMINARE",210,229,11f,theme.caution,true);
+            label(c,"TOCCA IL BLOB DA FAR SCOPPIARE",210,228,11f,theme.caution,true);
 
-        // Narrow floating next-blob tray; both footer actions remain visible
-        // on short displays even when a taller vessel is being played.
-        float controlsTop=h-62f;
-        float deckTop=world.bottom()+13f;
-        float deckBottom=Math.max(deckTop+63f,controlsTop-9f);
-        float deckHeight=deckBottom-deckTop;
         if(aiming) {
             line.setColor(Palette.alpha(theme.secondary,150));
             line.setStrokeWidth(1.4f);
@@ -454,26 +532,71 @@ public final class LavaView extends View {
             c.drawLine(aimX,world.bottom()-8,aimX,world.vessel.top+10,line);
             line.setPathEffect(null);
         }
-        hudPanel(c,100,deckTop,320,deckBottom,29,theme.surfaceRaised);
-        float previewY=deckTop+Math.min(35f,deckHeight*.45f);
-        drawNextBubble(c,210f,previewY,Math.max(.45f,Math.min(1f,deckHeight/105f)));
-        label(c,"TRASCINA E RILASCIA",210,deckBottom-11f,10f,theme.onSurfaceMuted,true);
 
-        // The purple buttons from the mockup: shaking remains available
-        // through the accelerometer; tapping the left button is an alternative.
-        int shakeFill=theme.tertiary;
-        int eraseFill=world.eraseCount>0&&spec.endless?
-                (eraseMode?theme.tertiary:theme.secondary):theme.surface;
-        hudPanel(c,32,controlsTop,193,h-10f,22,shakeFill);
-        hudPanel(c,227,controlsTop,388,h-10f,22,eraseFill);
-        label(c,"SCUOTI",112.5f,controlsTop+33,15,contrastInk(shakeFill),true);
-        String eraseText=spec.endless?"ERASE · "+world.eraseCount:"ERASE";
-        label(c,eraseText,307.5f,controlsTop+33,15,
-                world.eraseCount>0&&spec.endless?contrastInk(eraseFill):theme.onSurfaceMuted,true);
+        float centerY=h-70f;
+        float nextX=spec.endless?210f:276f;
+        float shakeX=spec.endless?77f:118f;
+        // Small central next-blob bubble replaces the old broad tray.
+        bubbleButton(c,nextX,centerY,43,Palette.NEUTRAL_SURFACE,0f);
+        float previewScale=Math.min(1.04f,30f/(Blob.RADII[world.nextTier]*.76f));
+        drawNextBubble(c,nextX,centerY-4f,previewScale);
+        label(c,"PROSSIMO",nextX,centerY-53f,10.5f,theme.text,true);
+        label(c,"TRASCINA",nextX,h-13,10.5f,theme.text,true);
+
+        int shakeFill=theme.secondary;
+        bubbleButton(c,shakeX,centerY,43,shakeFill,shakePress);
+        int shakeInk=contrastInk(shakeFill);
+        label(c,"≈",shakeX,centerY-6,27,shakeInk,true);
+        label(c,"SCUOTI",shakeX,centerY+20,14,shakeInk,true);
+
+        // POP does not even render in levels or trials.
+        if(spec.endless) {
+            boolean available=world.eraseCount>0;
+            int popFill=available?(eraseMode?theme.tertiary:theme.primary):
+                    Palette.NEUTRAL_SURFACE;
+            int popInk=available?contrastInk(popFill):theme.onSurfaceMuted;
+            bubbleButton(c,343,centerY,43,popFill,popPress);
+            label(c,"POP",343,centerY+11,23,popInk,true);
+            label(c,available?"×"+world.eraseCount:"0",343,centerY-16,12,popInk,true);
+        }
 
         if(blockedFlash>0f&&world.blockedTime<=.5f)
             label(c,"QUESTO INGRESSO È OCCUPATO",210,
                     Math.min(245f,world.vessel.top-8f),11,theme.caution,true);
+    }
+
+    private void bubbleCounter(Canvas c,float l,float t,float r,float b,int fill) {
+        paint.setShader(null);
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(fill);
+        c.drawOval(l,t,r,b,paint);
+        // Gentle asymmetric lobes; no outline, gradient or fake shine.
+        c.drawCircle(l+22f,t+20f,16f,paint);
+        c.drawCircle(r-19f,b-19f,12f,paint);
+    }
+
+    private void bubbleButton(Canvas c,float x,float y,float r,int fill,float pressed) {
+        float factor=1f-.095f*Math.min(1f,pressed);
+        c.save();
+        c.scale(factor,factor,x,y);
+        paint.setShader(null);
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(fill);
+        c.drawCircle(x,y,r,paint);
+        c.drawCircle(x-r*.72f,y-r*.16f,r*.26f,paint);
+        c.drawCircle(x+r*.66f,y+r*.31f,r*.20f,paint);
+        c.restore();
+    }
+
+    private void bigNumber(Canvas c,String value,float x,float y,
+            float size,int ink,float maxWidth) {
+        letters.setShader(null);
+        letters.setColor(ink);
+        letters.setTypeface(FONT_DISPLAY);
+        letters.setTextSize(size);
+        float measured=letters.measureText(value);
+        if(measured>maxWidth)letters.setTextSize(Math.max(13f,size*maxWidth/measured));
+        c.drawText(value,x,y,letters);
     }
 
     private int contrastInk(int color) {
@@ -527,7 +650,7 @@ public final class LavaView extends View {
         letters.setShader(null);
         letters.setColor(color);
         letters.setTextSize(size);
-        letters.setTypeface(bold?FONT_MEDIUM:FONT_REGULAR);
+        letters.setTypeface(bold&&size>=13f?FONT_DISPLAY:(bold?FONT_MEDIUM:FONT_REGULAR));
         c.drawText(value, x, y, letters);
     }
 
@@ -555,29 +678,36 @@ public final class LavaView extends View {
                     }
                     return true;
                 }
-                if(y>32f&&y<79f&&x>342f){onHome.run();return true;}
-                if(y>32f&&y<79f&&x<80f){restart();return true;}
-                float controlsTop=h-62f;
-                if(y>=controlsTop&&y<=h&&x>=227f) {
-                    if(spec.endless&&world.eraseCount>0)
-                        eraseMode=!eraseMode;
+                if(y>26f&&y<98f&&x>337f){onHome.run();return true;}
+                if(y>26f&&y<98f&&x<82f){restart();return true;}
+                float centerY=h-70f;
+                float shakeX=spec.endless?77f:118f;
+                if(hitBubble(x,y,shakeX,centerY,51f)) {
+                    world.shake(8f,-5f,8f);
+                    shakeAge=0f;shakeStep=0;shakePress=1f;
+                    performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+                    saveCheckpoint();
                     invalidate();return true;
                 }
-                if(y>=controlsTop&&y<=h&&x<=193f) {
-                    if(!world.gameOver) {
-                        world.shake(5f,-6f,9f);
-                        performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
-                        saveCheckpoint();
+                if(spec.endless&&hitBubble(x,y,343f,centerY,51f)) {
+                    if(world.eraseCount>0) {
+                        eraseMode=!eraseMode;
+                        popPress=1f;
                     }
                     invalidate();return true;
                 }
+                // The bottom launch-preview area is not a drop target.
+                if(y>=centerY-50f) return true;
                 if(eraseMode){
                     if(world.eraseAt(x,y)){
+                        pops.add(new PopFx(world.lastPoppedX,world.lastPoppedY,
+                                world.lastPoppedRadius,world.lastPoppedTier));
                         performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+                        popPress=1f;
                         eraseMode=false;
                         saveCheckpoint();
                     }
-                    return true;
+                    invalidate();return true;
                 }
                 aiming=true;aimX=BlobWorld.clamp(x,49f,371f);return true;
             case MotionEvent.ACTION_MOVE:
@@ -598,12 +728,18 @@ public final class LavaView extends View {
         }
     }
 
+    private static boolean hitBubble(float x,float y,float cx,float cy,float r) {
+        float dx=x-cx,dy=y-cy;
+        return dx*dx+dy*dy<=r*r;
+    }
+
     private void restart() {
         if(world.dropCount>0&&!world.gameOver)progress.save(spec,world,false);
         session.clear();
         world.reset();
-        waves.clear();droplets.clear();
+        waves.clear();droplets.clear();pops.clear();
         blockedFlash=0f;eraseMode=false;aiming=false;
+        shakeAge=1f;shakePress=popPress=0f;shakeStep=0;scorePulse=0f;lastAnimatedScore=0L;
         aimX=W*.5f;previousFrame=0;finalized=false;lastCheckpoint=0f;
         saveCheckpoint();
         invalidate();

@@ -51,10 +51,21 @@ final class BlobTitle {
                 }
                 warped.close();
             }while(measure.nextContour());
-            paint.setStyle(Paint.Style.FILL);
             int titleColor=theme.forTier(i%theme.blobs.length);
-            paint.setColor(Palette.relativeLuminance(titleColor)<.12f
-                    ?theme.primary:titleColor);
+            titleColor=Palette.relativeLuminance(titleColor)<.12f
+                    ?theme.primary:titleColor;
+            paint.setShader(null);
+            // Light citrus/yellow letters need an ink edge against the new
+            // ivory title cushion. Keep the original deforming contours.
+            if(Palette.relativeLuminance(titleColor)>.58f){
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setStrokeJoin(Paint.Join.ROUND);
+                paint.setStrokeWidth(Math.max(1.2f,size*.045f));
+                paint.setColor(Palette.alpha(theme.onSurface,190));
+                c.drawPath(warped,paint);
+            }
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(titleColor);
             c.drawPath(warped,paint);
             x+=advance;
         }

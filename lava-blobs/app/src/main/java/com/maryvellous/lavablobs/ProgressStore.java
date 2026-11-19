@@ -46,7 +46,7 @@ final class ProgressStore {
         editor.apply();
         try{
             JSONObject session=new JSONObject();
-            session.put("version","1.0.3");
+            session.put("version","1.0.4");
             session.put("scoringVersion",2);
             session.put("time",System.currentTimeMillis());
             session.put("mode",spec.trial?"vessel_trial":(spec.endless?"endless":"level"));
