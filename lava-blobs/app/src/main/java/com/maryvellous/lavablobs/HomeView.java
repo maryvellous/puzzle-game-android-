@@ -49,6 +49,8 @@ public final class HomeView extends View {
     private int page=0,section=0;
     private float scrollY,gestureStartX,gestureStartY,scrollOnDown;
     private boolean dragged;
+    private int pressedCard=-1;
+    private float cardPress;
 
     HomeView(Context context,ProgressStore progress,Listener listener,
              Runnable resume,GameSave gameSave) {
@@ -85,6 +87,8 @@ public final class HomeView extends View {
         raw.save();
         raw.scale(sc,sc);
         drawBackdrop(raw,h);
+        cardPress+=((pressedCard>=0?1f:0f)-cardPress)*.28f;
+        if(cardPress<.001f&&pressedCard<0)cardPress=0f;
         raw.translate(0,-scrollY);
         drawTitle(raw,(System.nanoTime()-start)/1_000_000_000f);
         if(saved!=null)drawResume(raw);
@@ -152,7 +156,13 @@ public final class HomeView extends View {
             float width=section==1?W-2*MARGIN:CARD_WIDTH;
             boolean locked=!spec.endless&&id>progress.highestUnlocked();
             boolean next=!locked&&!spec.endless&&!progress.cleared(id)&&id==progress.highestUnlocked();
+            c.save();
+            if(i==pressedCard){
+                float shrink=1f-.035f*cardPress;
+                c.scale(shrink,shrink,x+width*.5f,y+CARD_HEIGHT*.5f);
+            }
             drawCard(c,spec,x,y,width,CARD_HEIGHT,locked,next);
+            c.restore();
         }
         float hintY=cardBottom()+19f;
         if(section==0){
@@ -335,16 +345,33 @@ public final class HomeView extends View {
         switch(e.getActionMasked()){
             case MotionEvent.ACTION_DOWN:
                 gestureStartX=x;gestureStartY=y;scrollOnDown=scrollY;
-                dragged=false;return true;
+                dragged=false;pressedCard=-1;
+                float adjustedDownY=y+scrollY;
+                int hitCount=section==0?6:3;
+                for(int i=0;i<hitCount;i++){
+                    int id=page*6+i;
+                    float left=section==1?MARGIN:MARGIN+(i%2)*(CARD_WIDTH+10f);
+                    float top=cardTop()+(section==1?i:i/2)*(CARD_HEIGHT+CARD_GAP);
+                    float width=section==1?W-2*MARGIN:CARD_WIDTH;
+                    if(x>=left&&x<=left+width&&adjustedDownY>=top
+                            &&adjustedDownY<=top+CARD_HEIGHT
+                            &&(section==1||id<=progress.highestUnlocked())){
+                        pressedCard=i;
+                        break;
+                    }
+                }
+                invalidate();
+                return true;
             case MotionEvent.ACTION_MOVE:
                 float dy=y-gestureStartY,dx=x-gestureStartX;
                 if(Math.abs(dy)>7f&&Math.abs(dy)>Math.abs(dx)*1.2f){
-                    dragged=true;
+                    dragged=true;pressedCard=-1;
                     scrollY=Blob.clamp(scrollOnDown-dy,0f,maxScroll());
                     invalidate();
                 }
                 return true;
             case MotionEvent.ACTION_UP:
+                pressedCard=-1;
                 float movedX=x-gestureStartX;
                 float movedY=y-gestureStartY;
                 if(dragged||Math.abs(movedY)>17f)return true;
@@ -397,7 +424,7 @@ public final class HomeView extends View {
                     }
                 }
                 return true;
-            case MotionEvent.ACTION_CANCEL:dragged=false;return true;
+            case MotionEvent.ACTION_CANCEL:dragged=false;pressedCard=-1;return true;
             default:return true;
         }
     }
