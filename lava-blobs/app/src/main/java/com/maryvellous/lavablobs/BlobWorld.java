@@ -46,6 +46,9 @@ final class BlobWorld {
     long score;
     int nextTier,dropCount,mergeCount,maxTierReached;
     int earnedErases,usedErases,eraseCount;
+    // Non-persistent event payload for the short cosmetic POP animation.
+    float lastPoppedX,lastPoppedY,lastPoppedRadius;
+    int lastPoppedTier;
     final int[] mergesByTier=new int[40];
     boolean gameOver;
 
@@ -140,6 +143,10 @@ final class BlobWorld {
         for(int i=blobs.size()-1;i>=0;i--) {
             Blob b=blobs.get(i);
             if(!pointInside(b,x,y))continue;
+            lastPoppedX=b.x;
+            lastPoppedY=b.y;
+            lastPoppedRadius=b.radius();
+            lastPoppedTier=b.tier;
             blobs.remove(i);
             adhesions.removeIf(link->link.a==b||link.b==b);
             eraseCount--;usedErases++;
