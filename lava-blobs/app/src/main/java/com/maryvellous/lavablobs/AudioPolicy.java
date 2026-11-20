@@ -10,6 +10,6 @@ final class AudioPolicy {
         return Math.max(.79f, Math.min(1.42f, 1.38f - .07f * Math.max(0, tier)));
     }
     static float impactVolume(float speed) {
-        return Math.min(.15f, .065f + Math.max(0f, speed - 70f) * .00045f);
+        return Math.min(.32f, .15f + Math.max(0f, speed - 42f) * .00075f);
     }
 }
