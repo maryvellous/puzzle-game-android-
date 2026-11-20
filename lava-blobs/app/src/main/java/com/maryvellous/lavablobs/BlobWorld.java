@@ -353,12 +353,12 @@ final class BlobWorld {
             bvx+=b.vx[i];bvy+=b.vy[i];
         }
         float approach=((avx-bvx)*dx+(avy-bvy)*dy)/(Blob.NODES*distance);
-        if(approach<70f)return;
+        if(approach<42f)return;
         int ida=System.identityHashCode(a),idb=System.identityHashCode(b);
         long low=Math.min(ida,idb)&0xffffffffL,high=Math.max(ida,idb)&0xffffffffL;
         long key=(low<<32)|high;
         Float previous=impactTimes.get(key);
-        if(previous!=null&&time-previous<.48f)return;
+        if(previous!=null&&time-previous<.34f)return;
         if(impacts.size()<6)impacts.add(new Impact((a.tier+b.tier)/2,approach));
         impactTimes.put(key,time);
         if(impactTimes.size()>400)
