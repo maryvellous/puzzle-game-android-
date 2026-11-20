@@ -28,7 +28,7 @@ final class GameAudio {
     private final Random rng=new Random();
     private int bagCursor=4,previousBloop=-1;
     private volatile boolean released;
-    private volatile int impactId,launchId;
+    private volatile int impactId,launchId,popId;
     private long lastImpactMs,lastMergeMs;
 
     GameAudio(Context context) {
@@ -51,13 +51,16 @@ final class GameAudio {
     private void prepareClips(Context context) {
         try {
             File launch=EffectCompiler.render(context,R.raw.swoosh_source,
-                    "lava_launch_v1.wav",.05f,.94f,true,12,24);
+                    "lava_launch_v2.wav",.47f,.94f,true,5,13);
             File impact=EffectCompiler.render(context,R.raw.bloop_2,
-                    "lava_impact_v1.wav",.31f,.68f,false,14,52);
+                    "lava_impact_v2.wav",.31f,.68f,false,14,52);
+            File pop=EffectCompiler.render(context,R.raw.bloop_2,
+                    "lava_pop_v1.wav",.04f,.23f,false,3,22);
             synchronized(this){
                 if(released)return;
                 launchId=sounds.load(launch.getAbsolutePath(),1);
                 impactId=sounds.load(impact.getAbsolutePath(),1);
+                popId=sounds.load(pop.getAbsolutePath(),1);
             }
         }catch(Exception e){
             Log.w(TAG,"Optional launch/impact preparation failed",e);
@@ -90,17 +93,22 @@ final class GameAudio {
 
     void launch(int tier) {
         if(released||!ready.contains(launchId))return;
-        float rate=Math.max(1.05f,1.42f-.04f*Math.max(0,tier));
+        float rate=Math.max(1.08f,1.23f-.035f*Math.max(0,tier));
         sounds.play(launchId,.16f,.16f,0,0,rate);
     }
 
     void impact(int tier,float speed) {
         if(released||!ready.contains(impactId))return;
         long now=SystemClock.elapsedRealtime();
-        if(now-lastImpactMs<105L||now-lastMergeMs<115L)return;
+        if(now-lastImpactMs<88L||now-lastMergeMs<100L)return;
         lastImpactMs=now;
         float volume=AudioPolicy.impactVolume(speed);
         sounds.play(impactId,volume,volume,0,0,AudioPolicy.impactRate(tier));
+    }
+
+    void pop() {
+        if(released||!ready.contains(popId))return;
+        sounds.play(popId,.29f,.29f,1,0,1.30f);
     }
 
     void pause(){if(!released)sounds.autoPause();}
