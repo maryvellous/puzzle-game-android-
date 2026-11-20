@@ -1,4 +1,17 @@
-# Lava Blob 1.0.4 — Android
+# Lava Blob 1.0.5 — Android
+
+## Sistema audio — v1.0.5
+
+- **Fusioni:** suoni originali `Bloop 1–4` di floraphonic (Pixabay), in shuffle-bag di quattro varianti senza ripetizioni consecutive; volume dominante, velocità progressivamente appena ridotta da `1.00×` a minimo `0.92×` in base alla dimensione.
+- **Immissione dal basso:** `swoosh_v2` di migoreng1 (Freesound, CC0), invertito, accorciato e sfumato con fade tramite decoder audio Android; volume molto discreto.
+- **Collisioni:** porzione centrale del `Bloop 2`, senza l'attacco iniziale, sfumata con fade; pitch più alto/veloce per piccoli blob (`wip`), più basso e lungo per grandi (`wouupp`). Molto più quieto di una fusione.
+- **Motore:** `GameAudio` usa `SoundPool` con attributi audio di gioco e caricamento asincrono. `EffectCompiler` decodifica e prepara in background i due derivati WAV una sola volta per cache; non tocca il thread della fisica o del rendering.
+- **Collisioni effettive:** rilevate dal passaggio iniziale di risoluzione delle membrane differenti, con soglia di velocità relativa di avvicinamento, cooldown per coppia, limite di eventi in coda e priorità dei suoni di fusione. Gli urti deboli e i blob già premuti gli uni contro gli altri restano silenziosi.
+- **Lifecycle:** risorse liberate al ritorno alla Home; pausa/ripresa in background Android. Fallimento eventuale nella preparazione di due clip non interrompe il gameplay.
+- **Musica ambient:** non aggiunta, non ancora scelta.
+- **Stato:** implementato nel codice; collaudo timbrico sul dispositivo ancora necessario.
+
+**Licenze e fonti:** floraphonic Bloop 1 https://pixabay.com/sound-effects/film-special-effects-bloop-1-184019/ ; Bloop 2 https://pixabay.com/sound-effects/film-special-effects-bloop-2-186531/ ; Bloop 3 https://pixabay.com/sound-effects/film-special-effects-bloop-3-186532/ ; Bloop 4 https://pixabay.com/sound-effects/film-special-effects-bloop-4-186533/ (Pixabay Content License). Immissione: migoreng1 https://freesound.org/people/migoreng1/sounds/786514/ (CC0). Risorse incorporate nel gioco, non fornite come libreria audio indipendente.
 
 ## Audio — decisioni progettuali approvate il 20 novembre 2026
 
@@ -15,7 +28,7 @@ I cinque file sintetizzati dall'assistente durante la ricerca sono **scartati co
 
 **Non ancora scelti:** effetto per gli urti fra blob (deve risultare davvero elastico, morbido e *wobbly*, senza impressione umida o disgustosa) e musica ambient zen. I precedenti suggerimenti non costituiscono asset approvati.
 
-**Stato:** specifica progettuale, **non implementata né collaudata**. Prima dell'integrazione verificare condizioni d'uso/licenza Pixabay per i file scelti, conservarne provenienza e testare sul dispositivo Android, senza cambiare la fisica del gioco.
+**Stato storico al 20 novembre:** specifica inizialmente non implementata; vedi «Sistema audio — v1.0.5» per lo stato attuale. Prima dell'integrazione verificare condizioni d'uso/licenza Pixabay per i file scelti, conservarne provenienza e testare sul dispositivo Android, senza cambiare la fisica del gioco.
 
 Un cozy merge puzzle personale. Le bolle salgono e si ammassano nel recipiente, deformandosi come slime. La **fisica approvata nella 0.5.0** (membrana di 24 particelle, pressione interna, molle, adesione temporanea) resta il nucleo del gioco.
 
