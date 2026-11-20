@@ -1,5 +1,22 @@
 # Lava Blob 1.0.4 — Android
 
+## Audio — decisioni progettuali approvate il 20 novembre 2026
+
+**Effetti delle fusioni: quattro campioni scelti, da integrare.** Utilizzare i suoni originali di floraphonic pubblicati su Pixabay:
+
+- [Bloop 1](https://pixabay.com/sound-effects/film-special-effects-bloop-1-184019/)
+- [Bloop 2](https://pixabay.com/sound-effects/film-special-effects-bloop-2-186531/)
+- [Bloop 3](https://pixabay.com/sound-effects/film-special-effects-bloop-3-186532/)
+- [Bloop 4](https://pixabay.com/sound-effects/film-special-effects-bloop-4-186533/)
+
+Alternare i quattro suoni durante le fusioni (evitando ripetizioni ravvicinate) e **rallentare lievissimamente la riproduzione al crescere della dimensione della fusione**: variazione progressiva e contenuta, mantenendo il timbro *bubbly* e rotondo dei campioni. Nessuna nuova sintesi, riverbero o sostituzione del suono originale. **La curva numerica precisa non è ancora stata approvata:** regolarla e ascoltarla in gioco prima di fissare valori definitivi.
+
+I cinque file sintetizzati dall'assistente durante la ricerca sono **scartati completamente**. Evitare suoni di gelatina bagnata, squish vischiosi, colpi secchi o campioni di collisione già rifiutati.
+
+**Non ancora scelti:** effetto per gli urti fra blob (deve risultare davvero elastico, morbido e *wobbly*, senza impressione umida o disgustosa) e musica ambient zen. I precedenti suggerimenti non costituiscono asset approvati.
+
+**Stato:** specifica progettuale, **non implementata né collaudata**. Prima dell'integrazione verificare condizioni d'uso/licenza Pixabay per i file scelti, conservarne provenienza e testare sul dispositivo Android, senza cambiare la fisica del gioco.
+
 Un cozy merge puzzle personale. Le bolle salgono e si ammassano nel recipiente, deformandosi come slime. La **fisica approvata nella 0.5.0** (membrana di 24 particelle, pressione interna, molle, adesione temporanea) resta il nucleo del gioco.
 
 ## UI bubbly e interazioni — 19 novembre 2026 (v1.0.4)
