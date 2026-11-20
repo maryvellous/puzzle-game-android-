@@ -16,6 +16,30 @@ Un cozy merge puzzle personale. Le bolle salgono e si ammassano nel recipiente, 
 ## Bilanciamento e privacy
 Le misure delle partite vengono salvate **solo sul telefono** (punteggio, drop, fusioni, dimensione massima, Erase, durata, fusioni per livello). Dalla Home, `COPIA DATI PARTITE` copia il JSON delle ultime 50 partite per l'analisi manuale; non esiste backend, raccolta a distanza o account. Le soglie dei livelli e dell'Erase sono ipotesi iniziali, non risultati di playtest.
 
+## Progettazione audio — decisioni del 20 novembre 2026 (da implementare)
+
+### Effetti di fusione: campioni approvati
+
+Usare esclusivamente i quattro effetti originali **Bloop 1, Bloop 2, Bloop 3 e Bloop 4** di **floraphonic**, disponibili su Pixabay:
+
+- [Bloop 1](https://pixabay.com/sound-effects/film-special-effects-bloop-1-184019/)
+- [Bloop 2](https://pixabay.com/sound-effects/film-special-effects-bloop-2-186531/)
+- [Bloop 3](https://pixabay.com/sound-effects/film-special-effects-bloop-3-186532/)
+- [Bloop 4](https://pixabay.com/sound-effects/film-special-effects-bloop-4-186533/)
+
+Alternare i quattro campioni durante le fusioni per variare il feedback sonoro ed evitare monotonia. Al crescere della **dimensione della fusione**, riprodurre il campione **lievissimamente più lentamente**, in modo graduale e continuo (e quindi leggermente più grave se la velocità altera anche il pitch). Preservare il carattere originale *bubbly*, rotondo ed elastico dei Bloop: niente suoni bagnati, viscidi, squish realistici o distorsioni aggiuntive. I valori precisi della curva di riproduzione sono **da calibrare all'ascolto**, non ancora approvati come specifica numerica.
+
+I cinque effetti sintetizzati di prova proposti in chat sono stati **scartati integralmente** e non devono essere usati o inseriti tra le risorse del gioco.
+
+### Audio ancora da definire
+
+- **Collisioni fra blob:** campione non approvato; cercare un suono davvero gommoso, leggero e wobbly, evitando schiocchi secchi, suoni vischiosi o registrazioni umide sgradevoli. Non sostituirlo automaticamente con uno dei suoni di fusione.
+- **Musica di sottofondo:** ancora da ascoltare e selezionare. Direzione zen, discreta e non ripetitiva.
+
+### Stato implementativo
+
+Questa sezione documenta **scelte di design approvate**, non l'integrazione effettiva nell'APK. Prima dell'implementazione, recuperare i quattro file originali, verificare la licenza Pixabay vigente e conservarne attribuzione e provenienza nel progetto. Testare l'alternanza e la variazione di velocità sul telefono senza introdurre cambiamenti alla fisica approvata.
+
 ## Sviluppo
 Progetto indipendente dentro `lava-blobs/`. L'app di puzzle Rovina nella radice del repository è separata. Richiede JDK 17, Android SDK 35 e Gradle 8.9.
 
