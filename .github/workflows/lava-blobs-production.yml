@@ -37,31 +37,60 @@ jobs:
       - name: Verify gameplay and palette tests
         run: gradle --no-daemon -p lava-blobs :app:testDebugUnitTest
 
+      - name: Configure optional persistent signing key
+        env:
+          LAVA_KEYSTORE_BASE64: ${{ secrets.LAVA_KEYSTORE_BASE64 }}
+          LAVA_SIGNING_STORE_PASSWORD: ${{ secrets.LAVA_SIGNING_STORE_PASSWORD }}
+          LAVA_SIGNING_KEY_PASSWORD: ${{ secrets.LAVA_SIGNING_KEY_PASSWORD }}
+          LAVA_SIGNING_KEY_ALIAS: ${{ secrets.LAVA_SIGNING_KEY_ALIAS }}
+        run: |
+          if [[ -n "$LAVA_KEYSTORE_BASE64" && -n "$LAVA_SIGNING_STORE_PASSWORD" && -n "$LAVA_SIGNING_KEY_ALIAS" && -n "$LAVA_SIGNING_KEY_PASSWORD" ]]; then
+            printf '%s' "$LAVA_KEYSTORE_BASE64" | base64 --decode > "$GITHUB_WORKSPACE/lava-blobs/signing.keystore"
+            echo "LAVA_SIGNING_STORE_FILE=$GITHUB_WORKSPACE/lava-blobs/signing.keystore" >> "$GITHUB_ENV"
+            echo "LAVA_STABLE_SIGNING=1" >> "$GITHUB_ENV"
+          else
+            echo "LAVA_STABLE_SIGNING=0" >> "$GITHUB_ENV"
+            echo "::warning::Persistent APK signing is not configured: this APK will have an ephemeral debug signature."
+          fi
+
       - name: Build main-package installable APK
-        run: gradle --no-daemon -p lava-blobs :app:assembleDebug
+        env:
+          LAVA_SIGNING_STORE_PASSWORD: ${{ secrets.LAVA_SIGNING_STORE_PASSWORD }}
+          LAVA_SIGNING_KEY_PASSWORD: ${{ secrets.LAVA_SIGNING_KEY_PASSWORD }}
+          LAVA_SIGNING_KEY_ALIAS: ${{ secrets.LAVA_SIGNING_KEY_ALIAS }}
+        run: |
+          if [[ "$LAVA_STABLE_SIGNING" == "1" ]]; then
+            gradle --no-daemon -p lava-blobs :app:assembleRelease
+          else
+            gradle --no-daemon -p lava-blobs :app:assembleDebug
+          fi
 
       - name: Stage distribution APK
         run: |
           mkdir -p release
-          cp lava-blobs/app/build/outputs/apk/debug/app-debug.apk release/lava-blob-v1.0.5.apk
+          if [[ "$LAVA_STABLE_SIGNING" == "1" ]]; then
+            cp lava-blobs/app/build/outputs/apk/release/app-release.apk release/lava-blob-v1.0.6.apk
+          else
+            cp lava-blobs/app/build/outputs/apk/debug/app-debug.apk release/lava-blob-v1.0.6.apk
+          fi
 
       - name: Upload versioned APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: lava-blob-v1.0.5-android
-          path: release/lava-blob-v1.0.5.apk
+          name: lava-blob-v1.0.6-android
+          path: release/lava-blob-v1.0.6.apk
           if-no-files-found: error
 
       - name: Publish dedicated Lava Blob GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: lava-blob-v1.0.5
-          APK: release/lava-blob-v1.0.5.apk
+          TAG: lava-blob-v1.0.6
+          APK: release/lava-blob-v1.0.6.apk
         run: |
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Tag $TAG already released; not replacing a published APK or its signing certificate."
             exit 0
           fi
           gh release create "$TAG" "$APK" --target "$GITHUB_SHA" \
-            --title "Lava Blob v1.0.5" \
-            --notes "Versione principale Android (com.maryvellous.lavablobs): tre temi Canva, HUD aggiornato, superfici avorio #E6DFE3, recipiente neutro semitrasparente e particelle originali, scoring e blob maggiorati. APK di build debug firmato dal runner CI: una versione installata con un certificato differente non può essere aggiornata direttamente; preservare i dati prima di un'eventuale disinstallazione. Non è una release firmata per Google Play."
+            --title "Lava Blob v1.0.6" \
+            --notes "Lava Blob 1.0.6: soglie punti ribilanciate per geometria, lancio con trascinamento, effetto immissione più corto, collisioni più presenti, POP e telemetria corretta. Firma stabile configurata via GitHub Secrets: $LAVA_STABLE_SIGNING (0=debug temporanea, 1=stabile). Non è una release per Google Play."
