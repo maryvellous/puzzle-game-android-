@@ -105,15 +105,20 @@ public final class MainActivity extends Activity implements SensorEventListener 
         if(game!=null) {
             game.saveCheckpoint();
             game.pauseClock();
+            game.pauseAudio();
         }
         stopSensor();
         super.onPause();
     }
     @Override protected void onResume(){
         super.onResume();
-        if(game!=null)game.pauseClock();
+        if(game!=null){game.pauseClock();game.resumeAudio();}
         shakeDetector.reset();
         startSensor();
+    }
+    @Override protected void onDestroy(){
+        if(game!=null){game.releaseAudio();game=null;}
+        super.onDestroy();
     }
     @Override public void onSensorChanged(SensorEvent event){
         if(event.sensor.getType()!=Sensor.TYPE_ACCELEROMETER||game==null)return;

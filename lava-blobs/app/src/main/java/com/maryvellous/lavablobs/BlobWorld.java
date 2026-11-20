@@ -1,7 +1,9 @@
 package com.maryvellous.lavablobs;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 /**
@@ -22,6 +24,12 @@ final class BlobWorld {
         }
     }
 
+    static final class Impact {
+        final int tier;
+        final float speed;
+        Impact(int tier,float speed){this.tier=tier;this.speed=speed;}
+    }
+
     static final class Adhesion {
         final Blob a, b;
         final int ai, bi;
@@ -38,6 +46,8 @@ final class BlobWorld {
     private static final float SKIN = 3f;
     final ArrayList<Blob> blobs = new ArrayList<>();
     final ArrayList<Merge> merges = new ArrayList<>();
+    private final ArrayList<Impact> impacts = new ArrayList<>();
+    private final Map<Long,Float> impactTimes = new HashMap<>();
     final ArrayList<Adhesion> adhesions = new ArrayList<>();
     Random random;
     final GameSpec spec;
@@ -67,7 +77,7 @@ final class BlobWorld {
         }
     }
     void reset(){
-        blobs.clear();merges.clear();adhesions.clear();
+        blobs.clear();merges.clear();impacts.clear();impactTimes.clear();adhesions.clear();
         score=0;time=0f;blockedTime=0f;checkClock=0f;gameOver=false;
         dropCount=0;mergeCount=0;maxTierReached=0;
         earnedErases=0;usedErases=0;eraseCount=0;
@@ -324,21 +334,46 @@ final class BlobWorld {
         // Include every current vertex, then only expand as projections move
         // vertices. These bounds remain conservative throughout this pair.
         contactBoundsA.set(a);contactBoundsB.set(b);
+        boolean touched=false;
         for(int i=0;i<Blob.NODES;i++) {
-            pushPointFromPolygon(a,i,b,contactBoundsA,contactBoundsB,createAdhesion);
-            pushPointFromPolygon(b,i,a,contactBoundsB,contactBoundsA,createAdhesion);
+            if(pushPointFromPolygon(a,i,b,contactBoundsA,contactBoundsB,createAdhesion))touched=true;
+            if(pushPointFromPolygon(b,i,a,contactBoundsB,contactBoundsA,createAdhesion))touched=true;
         }
+        // Pass zero reports existing physical contacts without changing solver forces.
+        if(createAdhesion&&touched)recordImpact(a,b);
     }
 
-    private void pushPointFromPolygon(Blob source,int i,Blob target,
+    private void recordImpact(Blob a,Blob b) {
+        float dx=b.x-a.x,dy=b.y-a.y;
+        float distance=(float)Math.hypot(dx,dy);
+        if(distance<.001f)return;
+        float avx=0f,avy=0f,bvx=0f,bvy=0f;
+        for(int i=0;i<Blob.NODES;i++){
+            avx+=a.vx[i];avy+=a.vy[i];
+            bvx+=b.vx[i];bvy+=b.vy[i];
+        }
+        float approach=((avx-bvx)*dx+(avy-bvy)*dy)/(Blob.NODES*distance);
+        if(approach<70f)return;
+        int ida=System.identityHashCode(a),idb=System.identityHashCode(b);
+        long low=Math.min(ida,idb)&0xffffffffL,high=Math.max(ida,idb)&0xffffffffL;
+        long key=(low<<32)|high;
+        Float previous=impactTimes.get(key);
+        if(previous!=null&&time-previous<.48f)return;
+        if(impacts.size()<6)impacts.add(new Impact((a.tier+b.tier)/2,approach));
+        impactTimes.put(key,time);
+        if(impactTimes.size()>400)
+            impactTimes.entrySet().removeIf(e->time-e.getValue()>1.2f);
+    }
+
+    private boolean pushPointFromPolygon(Blob source,int i,Blob target,
             Bounds sourceBounds,Bounds targetBounds,boolean addLink) {
         float x=source.px[i],y=source.py[i];
         // A point outside the expanded target box can neither be inside the
         // polygon nor within contact distance of any of its edges.
-        if(targetBounds.cannotTouch(x,y))return;
+        if(targetBounds.cannotTouch(x,y))return false;
         Edge edge=closestEdge(target,x,y);
         boolean inside=pointInside(target,x,y);
-        if(!inside&&edge.distance>=SKIN)return;
+        if(!inside&&edge.distance>=SKIN)return false;
 
         int j=edge.start,k=(j+1)%Blob.NODES;
         float nx=x-edge.qx,ny=y-edge.qy;
@@ -371,6 +406,7 @@ final class BlobWorld {
         if(addLink&&!inside&&edge.distance<2.6f&&source.tier!=target.tier) {
             addAdhesion(source,target,i,edge.t<.5f?j:k);
         }
+        return true;
     }
 
     private void addAdhesion(Blob a,Blob b,int ai,int bi) {
@@ -406,6 +442,12 @@ final class BlobWorld {
             return !blobs.contains(link.a)||!blobs.contains(link.b)
                     ||link.age>.36f||link.length()>26f;
         });
+    }
+
+    List<Impact> consumeImpacts() {
+        ArrayList<Impact> drained=new ArrayList<>(impacts);
+        impacts.clear();
+        return drained;
     }
 
     List<Merge> consumeMerges() {

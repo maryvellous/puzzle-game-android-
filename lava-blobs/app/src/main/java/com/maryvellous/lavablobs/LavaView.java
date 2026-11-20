@@ -44,6 +44,7 @@ public final class LavaView extends View {
     private final GameSave session;
     private float lastCheckpoint;
     private final BlobWorld world;
+    private final GameAudio audio;
     private final Random random = new Random();
     private final SharedPreferences prefs;
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -110,6 +111,7 @@ public final class LavaView extends View {
         super(context);
         this.spec=spec;this.progress=progress;this.onHome=onHome;
         this.session=session;
+        audio=new GameAudio(context);
         theme=new ThemeStore(context).current();
         perfLogging=(context.getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE)!=0;
         world=new BlobWorld(new Random(),spec);
@@ -135,7 +137,10 @@ public final class LavaView extends View {
     }
 
     /** Preserve game without counting a pause as a completed playtest. */
-    void leave() { saveCheckpoint(); }
+    void leave() { saveCheckpoint(); audio.release(); }
+    void releaseAudio(){audio.release();}
+    void pauseAudio(){audio.pause();}
+    void resumeAudio(){audio.resume();}
 
     void saveCheckpoint() {
         if(world.gameOver) {session.clear();return;}
@@ -195,6 +200,7 @@ public final class LavaView extends View {
             scorePulse=.33f;
         }
         for (BlobWorld.Merge merge : world.consumeMerges()) {
+            audio.merge(merge.tier);
             waves.add(new Wave(merge.x, merge.y, merge.radius, merge.tier));
             for (int i = 0; i < 16; i++) {
                 float angle = (float) (random.nextFloat() * Math.PI * 2);
@@ -205,6 +211,9 @@ public final class LavaView extends View {
                         1.8f + random.nextFloat() * 3.6f, merge.tier));
             }
             performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+        }
+        for(BlobWorld.Impact impact : world.consumeImpacts()) {
+            audio.impact(impact.tier,impact.speed);
         }
         if (world.score > best) best=world.score;
         if(world.gameOver&&!finalized) {
@@ -716,7 +725,9 @@ public final class LavaView extends View {
             case MotionEvent.ACTION_UP:
                 if(aiming){
                     aimX=BlobWorld.clamp(x,49f,371f);
+                    int launchedTier=world.nextTier;
                     if(world.launch(aimX)) {
+                        audio.launch(launchedTier);
                         performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
                         saveCheckpoint();
                     } else blockedFlash=.9f;
