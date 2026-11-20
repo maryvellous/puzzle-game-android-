@@ -1,0 +1,21 @@
+package com.maryvellous.lavablobs;
+
+import org.junit.Test;
+import static org.junit.Assert.*;
+
+public class AudioPolicyTest {
+    @Test public void mergesSlowOnlySlightly() {
+        assertEquals(1f, AudioPolicy.mergeRate(1),.00001f);
+        assertTrue(AudioPolicy.mergeRate(5)<AudioPolicy.mergeRate(2));
+        assertEquals(.92f, AudioPolicy.mergeRate(100),.00001f);
+    }
+    @Test public void largeCollisionIsLower() {
+        assertTrue(AudioPolicy.impactRate(1)>AudioPolicy.impactRate(8));
+        assertTrue(AudioPolicy.impactRate(30)>=.79f);
+    }
+    @Test public void collisionsStaySubtle() {
+        assertTrue(AudioPolicy.impactVolume(90f)<.2f);
+        assertTrue(AudioPolicy.impactVolume(500f)<=.15f);
+        assertTrue(AudioPolicy.impactVolume(200f)>AudioPolicy.impactVolume(80f));
+    }
+}
