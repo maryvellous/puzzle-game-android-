@@ -12,6 +12,7 @@ import android.graphics.RectF;
 import android.graphics.Shader;
 import android.graphics.Typeface;
 import android.util.Log;
+import android.os.SystemClock;
 import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
 import android.view.View;
@@ -75,6 +76,11 @@ public final class LavaView extends View {
     private long perfGapNs,perfWorstGapNs,perfPhysicsNs,perfCanvasNs,perfCpuNs;
     private long perfSaveNs,perfWorstSaveNs;
     private boolean aiming;
+    private boolean draggingFromTray;
+    private int activePointerId=MotionEvent.INVALID_POINTER_ID;
+    private float dragX,dragY;
+    private float activeSeconds;
+    private long lastActionMs=SystemClock.uptimeMillis();
     private float blockedFlash;
     private long best;
     private boolean eraseMode;
@@ -121,6 +127,7 @@ public final class LavaView extends View {
                 aimX=(float)resume.data.optDouble("aimX",W/2);
                 eraseMode=world.eraseCount>0&&resume.data.optBoolean("eraseMode",false);
                 lastCheckpoint=world.time;
+                activeSeconds=(float)resume.data.optDouble("activeSeconds",world.time);
             }catch(Exception ignored){
                 // A corrupted save must not crash startup. Keep the old slot
                 // until the next successful checkpoint replaces it.
@@ -145,7 +152,7 @@ public final class LavaView extends View {
     void saveCheckpoint() {
         if(world.gameOver) {session.clear();return;}
         long started=perfLogging?System.nanoTime():0L;
-        boolean saved=session.save(spec,world,aimX,eraseMode);
+        boolean saved=session.save(spec,world,aimX,eraseMode,activeSeconds);
         if(perfLogging) {
             long spent=System.nanoTime()-started;
             perfSaveNs+=spent;
@@ -157,6 +164,7 @@ public final class LavaView extends View {
 
     /** Called by the activity's sensor listener on the UI thread. */
     void shake(float sensorX, float sensorY, float sensorZ) {
+        lastActionMs=SystemClock.uptimeMillis();
         world.shake(sensorX, sensorY, sensorZ);
         invalidate();
     }
@@ -182,6 +190,10 @@ public final class LavaView extends View {
         long gapNs = previousFrame == 0L ? 0L : Math.max(0L,now-previousFrame);
         float elapsed = Math.min(.10f,gapNs / 1_000_000_000f);
         previousFrame = now;
+        // Active playtime excludes long in-foreground idle periods without
+        // changing the simulation timer, particles or game-over countdown.
+        if(!world.gameOver&&SystemClock.uptimeMillis()-lastActionMs<=12_000L)
+            activeSeconds+=elapsed;
         // Fixed-size physics steps keep membrane stiffness independent of FPS.
         // Bound catch-up work: never try to simulate unlimited missed frames.
         physicsAccumulator=Math.min(PHYSICS_STEP*MAX_STEPS_PER_FRAME,
@@ -217,7 +229,7 @@ public final class LavaView extends View {
         }
         if (world.score > best) best=world.score;
         if(world.gameOver&&!finalized) {
-            progress.save(spec,world,true);
+            progress.save(spec,world,true,activeSeconds);
             session.clear();
             finalized=true;
         }else if(!world.gameOver&&world.time-lastCheckpoint>1.5f){
@@ -533,6 +545,8 @@ public final class LavaView extends View {
         }
         if(eraseMode)
             label(c,"TOCCA IL BLOB DA FAR SCOPPIARE",210,228,11f,theme.caution,true);
+        else if(world.dropCount==0&&!aiming&&!spec.trial)
+            label(c,"TOCCA IL VASO O TRASCINA LA BOLLA",210,218,10f,theme.text,false);
 
         if(aiming) {
             line.setColor(Palette.alpha(theme.secondary,150));
@@ -549,6 +563,12 @@ public final class LavaView extends View {
         bubbleButton(c,nextX,centerY,43,Palette.NEUTRAL_SURFACE,0f);
         float previewScale=Math.min(1.04f,30f/(Blob.RADII[world.nextTier]*.76f));
         drawNextBubble(c,nextX,centerY-4f,previewScale);
+        // The tray stays visible as a cancel target while a ghost follows
+        // the fingertip into the vessel.
+        if(draggingFromTray&&dragY<centerY-50f) {
+            float ghostScale=Math.min(1f,32f/(Blob.RADII[world.nextTier]*.76f));
+            drawNextBubble(c,dragX,Math.max(world.vessel.top+12f,dragY),ghostScale);
+        }
         label(c,"PROSSIMO",nextX,centerY-53f,10.5f,theme.text,true);
         label(c,"TRASCINA",nextX,h-13,10.5f,theme.text,true);
 
@@ -677,10 +697,18 @@ public final class LavaView extends View {
 
     @Override public boolean onTouchEvent(MotionEvent event) {
         if(getWidth()==0||getHeight()==0)return false;
-        float x=(event.getX()-offsetX())/scale(),y=event.getY()/scale();
-        float h=getHeight()/scale();
-        switch(event.getActionMasked()){
+        final float sc=scale();
+        final float h=getHeight()/sc;
+        final int action=event.getActionMasked();
+        float x=(event.getX()-offsetX())/sc;
+        float y=event.getY()/sc;
+        final float centerY=h-70f;
+        final float nextX=spec.endless?210f:276f;
+
+        switch(action){
             case MotionEvent.ACTION_DOWN:
+                lastActionMs=SystemClock.uptimeMillis();
+                activePointerId=event.getPointerId(0);
                 if(world.gameOver){
                     if(y>h*.57f&&y<h*.70f){
                         if(x>=209)onHome.run();else restart();
@@ -689,28 +717,26 @@ public final class LavaView extends View {
                 }
                 if(y>26f&&y<98f&&x>337f){onHome.run();return true;}
                 if(y>26f&&y<98f&&x<82f){restart();return true;}
-                float centerY=h-70f;
                 float shakeX=spec.endless?77f:118f;
-                if(hitBubble(x,y,shakeX,centerY,51f)) {
+                if(hitBubble(x,y,shakeX,centerY,51f)){
                     world.shake(8f,-5f,8f);
                     shakeAge=0f;shakeStep=0;shakePress=1f;
                     performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
                     saveCheckpoint();
                     invalidate();return true;
                 }
-                if(spec.endless&&hitBubble(x,y,343f,centerY,51f)) {
-                    if(world.eraseCount>0) {
+                if(spec.endless&&hitBubble(x,y,343f,centerY,51f)){
+                    if(world.eraseCount>0){
                         eraseMode=!eraseMode;
                         popPress=1f;
                     }
                     invalidate();return true;
                 }
-                // The bottom launch-preview area is not a drop target.
-                if(y>=centerY-50f) return true;
                 if(eraseMode){
-                    if(world.eraseAt(x,y)){
+                    if(y<centerY-50f&&world.eraseAt(x,y)){
                         pops.add(new PopFx(world.lastPoppedX,world.lastPoppedY,
                                 world.lastPoppedRadius,world.lastPoppedTier));
+                        audio.pop();
                         performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
                         popPress=1f;
                         eraseMode=false;
@@ -718,23 +744,62 @@ public final class LavaView extends View {
                     }
                     invalidate();return true;
                 }
-                aiming=true;aimX=BlobWorld.clamp(x,49f,371f);return true;
+                if(hitBubble(x,y,nextX,centerY,49f)){
+                    // Begin a real tray drag, not a tap-to-launch.
+                    aiming=true;
+                    draggingFromTray=true;
+                    dragX=x;dragY=y;
+                    aimX=BlobWorld.clamp(x,49f,371f);
+                    invalidate();return true;
+                }
+                if(y>=centerY-50f)return true;
+                // Preserve the existing fast touch/slide/release launch.
+                aiming=true;draggingFromTray=false;
+                aimX=BlobWorld.clamp(x,49f,371f);
+                invalidate();return true;
+
             case MotionEvent.ACTION_MOVE:
-                if(aiming)aimX=BlobWorld.clamp(x,49f,371f);
+                if(aiming){
+                    int pointer=event.findPointerIndex(activePointerId);
+                    if(pointer>=0){
+                        x=(event.getX(pointer)-offsetX())/sc;
+                        y=event.getY(pointer)/sc;
+                        aimX=BlobWorld.clamp(x,49f,371f);
+                        if(draggingFromTray){dragX=x;dragY=y;}
+                        lastActionMs=SystemClock.uptimeMillis();
+                        invalidate();
+                    }
+                }
                 return true;
+
             case MotionEvent.ACTION_UP:
                 if(aiming){
+                    int pointer=event.findPointerIndex(activePointerId);
+                    if(pointer>=0){
+                        x=(event.getX(pointer)-offsetX())/sc;
+                        y=event.getY(pointer)/sc;
+                    }
                     aimX=BlobWorld.clamp(x,49f,371f);
-                    int launchedTier=world.nextTier;
-                    if(world.launch(aimX)) {
-                        audio.launch(launchedTier);
-                        performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
-                        saveCheckpoint();
-                    } else blockedFlash=.9f;
+                    // Releasing over the tray cancels the drag.
+                    boolean shouldLaunch=!draggingFromTray||
+                            (y<centerY-50f&&y>=world.vessel.top-25f);
+                    if(shouldLaunch){
+                        int tier=world.nextTier;
+                        if(world.launch(aimX)){
+                            audio.launch(tier);
+                            performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
+                            saveCheckpoint();
+                        }else blockedFlash=.9f;
+                    }
                 }
-                aiming=false;return true;
+                aiming=false;draggingFromTray=false;
+                activePointerId=MotionEvent.INVALID_POINTER_ID;
+                invalidate();return true;
+
             case MotionEvent.ACTION_CANCEL:
-                aiming=false;return true;
+                aiming=false;draggingFromTray=false;
+                activePointerId=MotionEvent.INVALID_POINTER_ID;
+                invalidate();return true;
             default:return true;
         }
     }
@@ -745,11 +810,13 @@ public final class LavaView extends View {
     }
 
     private void restart() {
-        if(world.dropCount>0&&!world.gameOver)progress.save(spec,world,false);
+        if(world.dropCount>0&&!world.gameOver)progress.save(spec,world,false,activeSeconds);
         session.clear();
         world.reset();
         waves.clear();droplets.clear();pops.clear();
-        blockedFlash=0f;eraseMode=false;aiming=false;
+        blockedFlash=0f;eraseMode=false;aiming=false;draggingFromTray=false;
+        activePointerId=MotionEvent.INVALID_POINTER_ID;
+        activeSeconds=0f;lastActionMs=SystemClock.uptimeMillis();
         shakeAge=1f;shakePress=popPress=0f;shakeStep=0;scorePulse=0f;lastAnimatedScore=0L;
         aimX=W*.5f;previousFrame=0;finalized=false;lastCheckpoint=0f;
         saveCheckpoint();
