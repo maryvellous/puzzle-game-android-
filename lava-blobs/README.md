@@ -1,4 +1,37 @@
-# Lava Blob 1.0.5 — Android
+# Lava Blob 1.0.6 — Android
+
+## Modifiche della 1.0.6 (20 novembre 2026)
+
+**Soglie in punti per forma:** valori sperimentali che non seguono una progressione numerica obbligatoria. Fiala = 2.200, Onde = 2.000. Gli extra in punti sono separati e ricalibrati per evitare i traguardi finora irrealistici.
+
+| Livello | Minimo | Extra punti |
+|---|---:|---:|
+| 1 · Primo vasetto | 1.500 | 2.200 |
+| 2 · La coppa | 950 | 1.450 |
+| 3 · Anfora | 1.600 | 2.200 |
+| 4 · Gola stretta | 1.850 | 2.500 |
+| 5 · La fiala | 2.200 | 2.700 |
+| 6 · Onde | 2.000 | 2.550 |
+| 7 · Pancia | 2.100 | 2.800 |
+| 8 · Clessidra | 1.900 | 2.550 |
+| 9 · Piccola goccia | 1.800 | 2.450 |
+| 10 · Vaso lunare | 2.150 | 2.850 |
+| 11 · Il nodo | 2.000 | 2.750 |
+| 12 · Ultima danza | 2.150 | 2.900 |
+
+**Audio:** accorciato il campione per l'immissione a circa 0,09 s percepiti; alzato moderatamente il volume delle collisioni e ridotta la soglia di velocità richiesta per produrle, con anti-ripetizione conservata; aggiunto un breve POP solo dopo una cancellazione riuscita. Le quattro fusioni Bloop e la loro curva restano inalterate.
+
+**UX:** il pulsante con la bolla «TRASCINA» ora avvia un trascinamento con una bolla fantasma e linea di mira; il rilascio nel recipiente lancia e il rilascio sul vassoio annulla. Il lancio rapido direttamente nel recipiente resta funzionante. Indicazione essenziale al primo avvio del livello.
+
+**Telemetria:** il JSON delle partite prende la versione dal pacchetto realmente installato; mantiene `durationSeconds` per confrontare lo storico e aggiunge `activeSeconds`, che non avanza quando il gioco rimane aperto senza input per più di 12 secondi. Il valore `activeSeconds` fa parte del salvataggio della partita in corso. Non modifica il timer fisico.
+
+**Distribuzione:** il workflow supporta un keystore di firma persistente tramite quattro segreti (`LAVA_KEYSTORE_BASE64`, `LAVA_SIGNING_STORE_PASSWORD`, `LAVA_SIGNING_KEY_ALIAS`, `LAVA_SIGNING_KEY_PASSWORD`). In assenza di questi segreti produce ancora un APK debug con firma non stabile; configurare i segreti è necessario per aggiornare le future versioni senza reinstallazione. Non inserire keystore o password in Git.
+
+**Criterio di accettazione:** CI Android (test + build) e collaudo reale di trascinamento, annullamento, tempi attivi, suoni e difficoltà sui recipienti. Non equiparare la riuscita della CI al collaudo UX.
+
+---
+
+# Lava Blob 1.0.5 — Android (storico)
 
 ## Sistema audio — v1.0.5
 
