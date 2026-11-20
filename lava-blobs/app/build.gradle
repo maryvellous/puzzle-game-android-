@@ -10,12 +10,32 @@ android {
         applicationId 'com.maryvellous.lavablobs'
         minSdk 26
         targetSdk 35
-        versionCode 11
-        versionName '1.0.5'
+        versionCode 12
+        versionName '1.0.6'
         manifestPlaceholders = [appLabel: 'Lava Blob']
     }
 
+    // Optional stable release key supplied through GitHub Actions secrets.
+    // Never commit private keystores or passwords to the repository.
+    signingConfigs {
+        if (System.getenv('LAVA_SIGNING_STORE_FILE') &&
+                System.getenv('LAVA_SIGNING_STORE_PASSWORD') &&
+                System.getenv('LAVA_SIGNING_KEY_ALIAS') &&
+                System.getenv('LAVA_SIGNING_KEY_PASSWORD')) {
+            stable {
+                storeFile file(System.getenv('LAVA_SIGNING_STORE_FILE'))
+                storePassword System.getenv('LAVA_SIGNING_STORE_PASSWORD')
+                keyAlias System.getenv('LAVA_SIGNING_KEY_ALIAS')
+                keyPassword System.getenv('LAVA_SIGNING_KEY_PASSWORD')
+            }
+        }
+    }
+
     buildTypes {
+        release {
+            if (signingConfigs.findByName('stable') != null)
+                signingConfig signingConfigs.stable
+        }
         preview {
             initWith debug
             applicationIdSuffix '.preview'

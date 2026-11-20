@@ -67,10 +67,14 @@ final class GameSave {
     void clear(){slot.delete();}
 
     boolean save(GameSpec spec,BlobWorld world,float aimX,boolean eraseMode){
+        return save(spec,world,aimX,eraseMode,world.time);
+    }
+
+    boolean save(GameSpec spec,BlobWorld world,float aimX,boolean eraseMode,float activeSeconds){
         if(world.gameOver){clear();return true;}
         FileOutputStream out=null;
         try {
-            JSONObject data=encode(spec,world,aimX,eraseMode);
+            JSONObject data=encode(spec,world,aimX,eraseMode,activeSeconds);
             byte[] bytes=data.toString().getBytes(StandardCharsets.UTF_8);
             out=slot.startWrite();
             out.write(bytes);
@@ -83,12 +87,18 @@ final class GameSave {
     }
 
     static JSONObject encode(GameSpec spec,BlobWorld w,float aimX,boolean eraseMode) throws Exception {
+        return encode(spec,w,aimX,eraseMode,w.time);
+    }
+
+    static JSONObject encode(GameSpec spec,BlobWorld w,float aimX,boolean eraseMode,
+            float activeSeconds) throws Exception {
         JSONObject state=new JSONObject();
         state.put("version",VERSION);
         state.put("scoringVersion",2);
         state.put("id",spec.id);
         state.put("height",w.height);
         state.put("time",w.time);
+        state.put("activeSeconds",Math.max(0f,activeSeconds));
         state.put("score",w.score);
         state.put("drops",w.dropCount);
         state.put("merges",w.mergeCount);

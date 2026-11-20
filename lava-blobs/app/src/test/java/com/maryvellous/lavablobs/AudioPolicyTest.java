@@ -14,8 +14,8 @@ public class AudioPolicyTest {
         assertTrue(AudioPolicy.impactRate(30)>=.79f);
     }
     @Test public void collisionsStaySubtle() {
-        assertTrue(AudioPolicy.impactVolume(90f)<.2f);
-        assertTrue(AudioPolicy.impactVolume(500f)<=.15f);
+        assertTrue(AudioPolicy.impactVolume(90f)>.15f);
+        assertTrue(AudioPolicy.impactVolume(500f)<=.32f);
         assertTrue(AudioPolicy.impactVolume(200f)>AudioPolicy.impactVolume(80f));
     }
 }

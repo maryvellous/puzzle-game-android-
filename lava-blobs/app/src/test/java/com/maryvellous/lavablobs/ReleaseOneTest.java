@@ -27,8 +27,10 @@ public class ReleaseOneTest {
         for(int i=0;i<values.length;i++)assertEquals("fusion "+i,
                 values[i],GameSpec.pointsForMerge(i));
         assertEquals(1500,GameSpec.LEVELS[0].minScore);
-        for(GameSpec level:GameSpec.LEVELS)
-            assertTrue("No score goal below 1500",level.minScore>=1500);
+        // Goals are per-vessel, not a forced increasing progression.
+        assertEquals(950,GameSpec.LEVELS[1].minScore);
+        assertEquals(2200,GameSpec.LEVELS[4].minScore);
+        assertEquals(2000,GameSpec.LEVELS[5].minScore);
         assertEquals(2000,BlobWorld.ERASE_EVERY_POINTS);
         assertArrayEquals(new float[]{20f,26f,32f,40f,50f,63f,77f,94f,111f},
                 Blob.RADII,0.001f);

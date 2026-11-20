@@ -34,6 +34,10 @@ final class ProgressStore {
     }
 
     void save(GameSpec spec,BlobWorld world,boolean finished) {
+        save(spec,world,finished,world.time);
+    }
+
+    void save(GameSpec spec,BlobWorld world,boolean finished,float activeSeconds) {
         int extraMask=spec.extrasMask(world.score,world.maxTierReached,world.mergeCount);
         SharedPreferences.Editor editor=prefs.edit();
         if(world.score>record(spec.id))editor.putLong("record_v2_"+spec.id,world.score);
@@ -46,7 +50,7 @@ final class ProgressStore {
         editor.apply();
         try{
             JSONObject session=new JSONObject();
-            session.put("version","1.0.4");
+            session.put("version",currentVersion());
             session.put("scoringVersion",2);
             session.put("time",System.currentTimeMillis());
             session.put("mode",spec.trial?"vessel_trial":(spec.endless?"endless":"level"));
@@ -60,7 +64,9 @@ final class ProgressStore {
             session.put("maxSize",world.maxTierReached+1);
             session.put("eraseEarned",world.earnedErases);
             session.put("eraseUsed",world.usedErases);
+            // Preserve the existing physics-duration field for historical comparison.
             session.put("durationSeconds",Math.round(world.time));
+            session.put("activeSeconds",Math.round(Math.max(0f,activeSeconds)));
             session.put("mergesBySize",new JSONArray(world.mergesByTier));
             JSONArray old=new JSONArray(prefs.getString("session_log","[]"));
             JSONArray updated=new JSONArray();
@@ -68,6 +74,14 @@ final class ProgressStore {
             for(int i=0;i<Math.min(old.length(),49);i++)updated.put(old.get(i));
             prefs.edit().putString("session_log",updated.toString()).apply();
         }catch(Exception ignored){ /* Do not interrupt an offline game. */ }
+    }
+
+    private String currentVersion() {
+        try {
+            String version=context.getPackageManager()
+                    .getPackageInfo(context.getPackageName(),0).versionName;
+            return version==null?"unknown":version;
+        }catch(Exception ignored){return "unknown";}
     }
 
     void copyReport() {
