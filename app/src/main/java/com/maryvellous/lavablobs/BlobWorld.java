@@ -359,7 +359,7 @@ final class BlobWorld {
         long low=Math.min(ida,idb)&0xffffffffL,high=Math.max(ida,idb)&0xffffffffL;
         long key=(low<<32)|high;
         Float previous=impactTimes.get(key);
-        if(previous!=null&&time-previous<AudioPolicy.IMPACT_PAIR_COOLDOWN_SECONDS)return;
+        if(!AudioPolicy.allowPairImpactAt(time,previous))return;
         Impact event=new Impact((a.tier+b.tier)/2,approach);
         if(impacts.size()<6) {
             impacts.add(event);
