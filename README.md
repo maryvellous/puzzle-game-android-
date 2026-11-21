@@ -1,3 +1,16 @@
+# Lava Blob 1.0.11 — Android
+
+## Pulsante effetti sonori (21 novembre 2026)
+
+- In partita, tasto con icona altoparlante a destra sotto gli indicatori: **SUONI** se attivi, **MUTO** se disattivati. Il tasto non esce né interrompe la partita.
+- Un'unica preferenza locale `sound_effects_enabled_v1` (attiva per impostazione predefinita) governa i soli **effetti sonori**: fusione, lancio, collisione, POP. Rimane salvata passando alla Home, cambiando livello e riaprendo l'app.
+- Quando vengono disattivati, gli effetti già in riproduzione vengono fermati; i nuovi eventi non producono suoni. Il feedback aptico, la fisica, i salvataggi e tutte le altre funzioni continuano normalmente.
+- **Musica**: nessun nuovo audio o secondo interruttore in questa versione. La futura musica avrà un controllo distinto che non dipenderà da questa preferenza.
+- Test della regola comune che blocca la riproduzione di ogni effetto; test precedenti e compilazione dell'APK. Nessuna modifica ai suoni della 1.0.10.
+- Versione 1.0.11, versionCode 17. Senza keystore persistente, le APK di GitHub Actions possono richiedere la disinstallazione della versione precedente, con perdita dei dati locali non esportati.
+
+---
+
 # Lava Blob 1.0.10 — Android
 
 ## Nuova taratura collisioni sonore (21 novembre 2026)
