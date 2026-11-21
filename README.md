@@ -10,6 +10,8 @@ La direzione futura è un **unico modello acustico derivato dai quattro Bloop or
 
 **Stato dell'app:** la release utilizzabile resta **1.0.11**. Gli effetti attuali e il tasto **SUONI/MUTO** non sono stati modificati; non esiste ancora una musica integrata. I changelog successivi documentano versioni storiche, **non** il sistema procedurale futuro.
 
+**Playtest audio Android (22 novembre 2026):** la prima APK sperimentale [Audio Test](docs/ANDROID_AUDIO_TEST_APK.md) è stata installata e provata: l'audio legato alle membrane risulta **complessivamente convincente**. Il feedback successivo è che blob piccoli e grandi suonano troppo simili. La nuova [Audio Size Test](docs/ANDROID_AUDIO_SIZE_TEST.md) usa gli **stessi tre WAV**, con il pitch e la durata dipendenti dal volume effettivo delle membrane che collidono, scorrono o si comprimono. È un'altra app installabile in parallelo, non una modifica alla 1.0.11 né un sintetizzatore PCM completo.
+
 ---
 
 # Lava Blob 1.0.11 — Android

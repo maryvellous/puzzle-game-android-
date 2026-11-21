@@ -22,6 +22,7 @@ final class GameAudio {
     private static final String TAG="LavaAudio";
     private static final String EFFECTS_KEY="sound_effects_enabled_v1";
     private final SoundPool sounds;
+    private final ExperimentalAudio audioTest;
     private final SharedPreferences preferences;
     private boolean effectsEnabled;
     // Remember recent streams so muting cuts off sounds that are already playing.
@@ -58,6 +59,7 @@ final class GameAudio {
         impactId=sounds.load(context,R.raw.lava_impact_soft,1);
         Context app=context.getApplicationContext();
         worker.execute(()->prepareClips(app));
+        audioTest=BuildConfig.AUDIO_TEST?new ExperimentalAudio(context,effectsEnabled):null;
     }
 
     private void prepareClips(Context context) {
@@ -92,6 +94,7 @@ final class GameAudio {
         if(released||effectsEnabled==enabled)return;
         effectsEnabled=enabled;
         preferences.edit().putBoolean(EFFECTS_KEY,enabled).apply();
+        if(audioTest!=null)audioTest.setEnabled(enabled);
         if(!enabled) {
             for(int streamId:recentStreams)if(streamId!=0)sounds.stop(streamId);
             java.util.Arrays.fill(recentStreams,0);
@@ -126,6 +129,7 @@ final class GameAudio {
     }
 
     void merge(int mergedTier) {
+        if(audioTest!=null)audioTest.onMerge();
         if(released||!effectsEnabled)return;
         int id=bloops[nextBloop()];
         if(!canPlay(id))return;
@@ -139,7 +143,11 @@ final class GameAudio {
         playEffect(launchId,.16f,0,rate);
     }
 
-    void impact() {
+    void impact(int tier,float approachSpeed,float radiusA,float radiusB) {
+        if(audioTest!=null){
+            audioTest.impact(tier,radiusA,radiusB,approachSpeed);
+            return;
+        }
         if(!canPlay(impactId))return;
         long now=SystemClock.elapsedRealtime();
         if(!AudioPolicy.allowImpactAt(now,lastImpactMs,lastMergeMs))return;
@@ -154,14 +162,28 @@ final class GameAudio {
         playEffect(popId,.29f,1,1.30f);
     }
 
-    void pause(){if(!released)sounds.autoPause();}
-    void resume(){if(!released)sounds.autoResume();}
+    /** Observe once per physics frame; never once per solver pass. */
+    void observePhysics(BlobWorld world,float elapsedSeconds) {
+        if(audioTest!=null&&!released)audioTest.observe(world,elapsedSeconds);
+    }
+
+    void pause(){
+        if(released)return;
+        sounds.autoPause();
+        if(audioTest!=null)audioTest.pause();
+    }
+    void resume(){
+        if(released)return;
+        sounds.autoResume();
+        if(audioTest!=null)audioTest.resume();
+    }
 
     synchronized void release() {
         if(released)return;
         released=true;
         worker.shutdownNow();
         ready.clear();
+        if(audioTest!=null)audioTest.release();
         sounds.release();
     }
 }
