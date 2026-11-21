@@ -9,6 +9,11 @@ final class AudioPolicy {
     static boolean shouldPlayImpact(float approachSpeed) {
         return approachSpeed >= 8f;
     }
+    /** Prefer the edited contact clip; the already bundled Bloop 2 is a reliable fallback. */
+    static int impactSample(int editedId, boolean editedReady, int fallbackId, boolean fallbackReady) {
+        if(editedId>0 && editedReady)return editedId;
+        return fallbackId>0 && fallbackReady ? fallbackId : 0;
+    }
     static float impactRate(int tier) {
         return Math.max(.79f, Math.min(1.42f, 1.38f - .07f * Math.max(0, tier)));
     }
