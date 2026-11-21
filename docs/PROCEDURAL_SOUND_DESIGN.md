@@ -2,7 +2,7 @@
 
 **Documento progettuale · Versione 1.0 · 21 novembre 2026**  
 **Stato:** direzione progettuale approvata; progettazione dettagliata completata; implementazione **non avviata**.  
-**Base di riferimento:** Lava Blob Android **1.0.11**, repository \`maryvellous/puzzle-game-android-\`.  
+**Base di riferimento:** Lava Blob Android **1.0.11**, repository `maryvellous/puzzle-game-android-`.  
 **Ambito:** tutti gli **effetti sonori** (fusioni, urti, deformazioni, attriti, rilascio, lancio e POP). **Musica separata**.
 
 > **Visione:** i blob non riproducono effetti preconfezionati quando si verifica un evento: *producono* un suono coerente con la loro materia, dimensione e comportamento. I quattro Bloop originali di floraphonic sono il riferimento timbrico del materiale, perché le fusioni attuali funzionano e sembrano appartenere realmente alle bolle.
@@ -23,7 +23,7 @@
 - **Non modificare la fisica** del gioco per "far suonare meglio" gli effetti. Il modello audio osserva la fisica esistente.
 - Non peggiorare frame rate, input, gioco infinito, salvataggi o consumo energetico in modo significativo.
 - Il progetto è **Android nativo**, Java, minSdk 26, targetSdk 35 (stato 1.0.11). Evitare servizi remoti, IA online e costi ricorrenti.
-- Il tasto già esistente \`SUONI/MUTO\` e la preferenza \`sound_effects_enabled_v1\` devono controllare **tutti** gli effetti, nuovi inclusi; silenziare anche le code già in riproduzione.
+- Il tasto già esistente `SUONI/MUTO` e la preferenza `sound_effects_enabled_v1` devono controllare **tutti** gli effetti, nuovi inclusi; silenziare anche le code già in riproduzione.
 - Salvare il sistema classico per confronti A/B e rollback. **Nessuna release o migrazione automatica** durante la sperimentazione.
 - Tutti i parametri numerici indicati come *iniziali* sono ipotesi da misurare e regolare, **non** valori validati all'ascolto.
 
@@ -36,10 +36,10 @@ Simulazione scientificamente esatta di onde in un fluido 3D; riverbero ambiental
 
 | Asset nel repository | Autore / origine | Durata MP3 codificata | Utilizzo attuale |
 |---|---|---:|---|
-| \`app/src/main/res/raw/bloop_1.mp3\` | floraphonic, Pixabay | ca. 0,627 s | Fusione |
-| \`app/src/main/res/raw/bloop_2.mp3\` | floraphonic, Pixabay | ca. 0,627 s | Fusione |
-| \`app/src/main/res/raw/bloop_3.mp3\` | floraphonic, Pixabay | ca. 1,045 s | Fusione |
-| \`app/src/main/res/raw/bloop_4.mp3\` | floraphonic, Pixabay | ca. 1,045 s | Fusione |
+| `app/src/main/res/raw/bloop_1.mp3` | floraphonic, Pixabay | ca. 0,627 s | Fusione |
+| `app/src/main/res/raw/bloop_2.mp3` | floraphonic, Pixabay | ca. 0,627 s | Fusione |
+| `app/src/main/res/raw/bloop_3.mp3` | floraphonic, Pixabay | ca. 1,045 s | Fusione |
+| `app/src/main/res/raw/bloop_4.mp3` | floraphonic, Pixabay | ca. 1,045 s | Fusione |
 
 I quattro file sono MP3 stereo, 44,1 kHz, 256 kbps. Le durate riportate derivano dai frame MP3 e **non dimostrano** l'effettiva durata della componente sonora: possono includere ritardo/riempimento dell'encoder o silenzio finale.
 
@@ -53,12 +53,12 @@ Fonte/autore e licenza:
 - [Pixabay Content License](https://pixabay.com/service/license-summary/): impiego/modifica in un'opera più ampia consentiti secondo le condizioni applicabili; **non** redistribuire i campioni o derivati come sound pack autonomo. Conservare attribuzione e provenienza nei documenti di progetto; verificare la liceità di eventuali asset grezzi esposti nel repository pubblico.
 
 ### Implementazione classica attuale (1.0.11)
-- \`GameAudio.java\` usa \`SoundPool\`; sceglie i quattro Bloop per la fusione tramite shuffle bag e varia leggermente il playback rate in base al livello.
-- Urto diverso-tier: un WAV originale separato, \`lava_impact_soft.wav\` (112 ms), volume fisso basso, soglia relativa **42**; intervallo globale **350 ms**, per coppia **700 ms**. Questi sono *workaround* dell'audio a eventi, **non** leggi della fisica da conservare nel nuovo modello.
-- Lancio e POP: clip preparati da \`EffectCompiler.java\`.
-- Il tasto \`SUONI/MUTO\` controlla fusioni, urti, lancio e POP; la musica non è implementata.
-- \`BlobWorld.java\` rileva fusioni prima della risoluzione dei contatti e aggiorna membrane/contatti attraverso **5 passaggi** di vincoli per step; \`LavaView.java\` esegue passi fissi da **1/60 s** (massimo 4 per frame).
-- \`Blob.java\`: **24 nodi** con posizioni e velocità; \`radiusTarget\`, \`radius()\`, \`area()\`, \`expectedArea()\`, \`finish(dt)\`. Le adesioni tra blob offrono dati aggiuntivi per l'effetto elastico/viscoso.
+- `GameAudio.java` usa `SoundPool`; sceglie i quattro Bloop per la fusione tramite shuffle bag e varia leggermente il playback rate in base al livello.
+- Urto diverso-tier: un WAV originale separato, `lava_impact_soft.wav` (112 ms), volume fisso basso, soglia relativa **42**; intervallo globale **350 ms**, per coppia **700 ms**. Questi sono *workaround* dell'audio a eventi, **non** leggi della fisica da conservare nel nuovo modello.
+- Lancio e POP: clip preparati da `EffectCompiler.java`.
+- Il tasto `SUONI/MUTO` controlla fusioni, urti, lancio e POP; la musica non è implementata.
+- `BlobWorld.java` rileva fusioni prima della risoluzione dei contatti e aggiorna membrane/contatti attraverso **5 passaggi** di vincoli per step; `LavaView.java` esegue passi fissi da **1/60 s** (massimo 4 per frame).
+- `Blob.java`: **24 nodi** con posizioni e velocità; `radiusTarget`, `radius()`, `area()`, `expectedArea()`, `finish(dt)`. Le adesioni tra blob offrono dati aggiuntivi per l'effetto elastico/viscoso.
 
 **Decisione:** i quattro Bloop sono il *materiale sorgente* della futura sintesi, non semplici sample da assegnare a quattro livelli. Il vecchio motore resta il riferimento sonoro da superare.
 
@@ -84,7 +84,7 @@ Ricerche di riferimento: [Phya — fisica, contatto e risonanza](https://link.sp
 4. Eseguire STFT/spettrogramma e analisi di frequenze dominanti e loro evoluzione; stimare pitch solo dove la componente tonale lo consente. Non presumere che ogni Bloop abbia una singola fondamentale.
 5. Stimare componenti risonanti (frequenza, ampiezza, damping), parte transiente e residuo rumoroso; confrontare l'errore di ricostruzione con la sorgente.
 6. Identificare brevi grani di carattere timbrico (es. attacco, corpo, coda) con crossfade appropriati; sperimentare 20–80 ms **come intervallo iniziale**, non come costante definitiva.
-7. Produrre \`sound_material_v1.json\` (o asset equivalente) con parametri **misurati**, riferimenti ai grani e versionamento dell'analisi. Non includere dati spettrali inventati.
+7. Produrre `sound_material_v1.json` (o asset equivalente) con parametri **misurati**, riferimenti ai grani e versionamento dell'analisi. Non includere dati spettrali inventati.
 8. Rendere una piccola raccolta di file A/B e annotare gli scostamenti percepiti: attacco troppo netto, suono troppo elettronico, coda metallica, ripetizioni udibili.
 
 L'analisi avviene **offline**; il gioco non deve fare STFT o aprire/decodificare MP3 nella callback audio.
@@ -97,12 +97,12 @@ L'unità principale è una **coppia di superfici in contatto**, non la semplice 
 
 Per ogni contatto aggregato lungo uno step fisico:
 - ID stabili dei due blob; posizione del contatto o posizione media pesata.
-- Normale locale \`n\` orientata da A verso B; tangente locale \`t\`.
-- Velocità locale relativa \`vA - vB\` campionata **prima** della correzione di posizione del solver.
-- Avvicinamento \`vn = max(0, dot(vA-vB, n))\` con orientamento coerente; scorrimento \`vt = abs(dot(vA-vB,t))\`.
+- Normale locale `n` orientata da A verso B; tangente locale `t`.
+- Velocità locale relativa `vA - vB` campionata **prima** della correzione di posizione del solver.
+- Avvicinamento `vn = max(0, dot(vA-vB, n))` con orientamento coerente; scorrimento `vt = abs(dot(vA-vB,t))`.
 - Profondità/prossimità e numero di nodi in contatto; evoluzione di tali grandezze nel tempo.
 - Raggi, rapporto di dimensioni, area e deformazione di entrambe le membrane.
-- Durata del contatto, transizioni \`begin/update/end\`, presenza di eventuali adesioni e loro estensione.
+- Durata del contatto, transizioni `begin/update/end`, presenza di eventuali adesioni e loro estensione.
 
 **Attenzione:** il solver è basato su proiezioni di posizione, non produce direttamente forze o impulsi fisici attendibili. L'audio utilizza *proxy* calibrati; non spacciare uno spostamento imposto dal solver per forza misurata.
 
@@ -110,36 +110,36 @@ Per ogni contatto aggregato lungo uno step fisico:
 
 Misura di partenza, da combinare e validare:
 
-\`Carea = clamp((expectedArea - area) / expectedArea, 0, 1)\`.
+`Carea = clamp((expectedArea - area) / expectedArea, 0, 1)`.
 
-Per evitare falsi positivi dovuti al rigonfiamento programmato dopo una fusione, \`expectedArea()\` usa il target attuale della membrana, non il raggio finale. Aggiungere una misura **locale** di schiacciamento/curvatura e la sua derivata smussata; distinguere la pressione/oscillazione interna dal contatto esterno.
+Per evitare falsi positivi dovuti al rigonfiamento programmato dopo una fusione, `expectedArea()` usa il target attuale della membrana, non il raggio finale. Aggiungere una misura **locale** di schiacciamento/curvatura e la sua derivata smussata; distinguere la pressione/oscillazione interna dal contatto esterno.
 
 Sorgenti sonore:
-- \`contactPressure\`: cresce con la deformazione sostenuta e la prossimità; entra/esce con inviluppo dolce, non ripete lo stesso sample.
-- \`scrapeRate\`: dipende da \`vt\` e dal carico di contatto, non soltanto dalla velocità globale del blob.
-- \`excitation\`: aumenta quando la componente di avvicinamento crea una compressione rapida; ricarica la risonanza del corpo.
+- `contactPressure`: cresce con la deformazione sostenuta e la prossimità; entra/esce con inviluppo dolce, non ripete lo stesso sample.
+- `scrapeRate`: dipende da `vt` e dal carico di contatto, non soltanto dalla velocità globale del blob.
+- `excitation`: aumenta quando la componente di avvicinamento crea una compressione rapida; ricarica la risonanza del corpo.
 
 ### 4.3 Dimensione e dinamica
 
 Esempio **iniziale da calibrare**, non proprietà fisica misurata:
 
-\`f(r) = fRef * pow(rRef / max(r,rMin), alpha)\`, con \`alpha\` da esplorare indicativamente fra **0,25 e 0,50**.
+`f(r) = fRef * pow(rRef / max(r,rMin), alpha)`, con `alpha` da esplorare indicativamente fra **0,25 e 0,50**.
 
-All'aumentare del raggio, la frequenza tende a scendere e la risonanza può durare più a lungo. Imporre limiti percettivi e scegliere \`fRef\` **dopo** l'analisi dei Bloop.
+All'aumentare del raggio, la frequenza tende a scendere e la risonanza può durare più a lungo. Imporre limiti percettivi e scegliere `fRef` **dopo** l'analisi dei Bloop.
 
-Per l'intensità usare una trasformazione compressa/saturata dell'eccitazione (per esempio \`log1p(k*E)\` normalizzato), non \`volume = raggio\`. Un proxy di energia può combinare velocità normale e massa percepita (\`massa ~ raggio^2\` come scelta artistica in 2D); nessun impulso/forza fisica "esatto" è disponibile senza cambiare il solver.
+Per l'intensità usare una trasformazione compressa/saturata dell'eccitazione (per esempio `log1p(k*E)` normalizzato), non `volume = raggio`. Un proxy di energia può combinare velocità normale e massa percepita (`massa ~ raggio^2` come scelta artistica in 2D); nessun impulso/forza fisica "esatto" è disponibile senza cambiare il solver.
 
 Prevedere smoothing distinto per inviluppo di attacco (breve), evoluzione del contatto (più lenta), cambiamento di pitch e rilascio. I coefficienti si determinano ascoltando.
 
 ### 4.4 Non confondere i cinque passaggi del solver con cinque urti
 
-\`BlobWorld.step()\` chiama \`projectContacts()\` per ogni coppia fino a cinque volte. Un \`AcousticProbe\` deve creare **un solo \`ContactUpdate\` aggregato per coppia per step fisico**, accumulando massimo/medie pesate e profondità, senza accodare un evento per ogni proiezione. In presenza di \`MAX_STEPS_PER_FRAME=4\`, inviare le osservazioni in ordine temporale o con timestamp di simulazione per evitare burst audio fittizi in un unico frame grafico.
+`BlobWorld.step()` chiama `projectContacts()` per ogni coppia fino a cinque volte. Un `AcousticProbe` deve creare **un solo `ContactUpdate` aggregato per coppia per step fisico**, accumulando massimo/medie pesate e profondità, senza accodare un evento per ogni proiezione. In presenza di `MAX_STEPS_PER_FRAME=4`, inviare le osservazioni in ordine temporale o con timestamp di simulazione per evitare burst audio fittizi in un unico frame grafico.
 
-Preferire identificatori di blob espliciti e stabili per la durata della loro vita; non usare \`identityHashCode\` come chiave duratura del nuovo sistema.
+Preferire identificatori di blob espliciti e stabili per la durata della loro vita; non usare `identityHashCode` come chiave duratura del nuovo sistema.
 
 ### 4.5 Fusione: transizione di materiale e massa
 
-**Primo obiettivo qualitativo del progetto.** Oggi le fusioni fra blob dello stesso tier vengono rilevate **prima** della risoluzione della membrana e rimpiazzano i due blob con uno nuovo. Il nuovo \`MergeAcousticEvent\` deve essere catturato prima della rimozione e contenere:
+**Primo obiettivo qualitativo del progetto.** Oggi le fusioni fra blob dello stesso tier vengono rilevate **prima** della risoluzione della membrana e rimpiazzano i due blob con uno nuovo. Il nuovo `MergeAcousticEvent` deve essere catturato prima della rimozione e contenere:
 - ID, raggio e tier dei due genitori.
 - Raggio/tier previsto del blob risultante.
 - Velocità relativa, deformazione, posizione e caratteristiche di contatto disponibili prima della fusione.
@@ -158,19 +158,19 @@ Non si deve pretendere che due note distinte siano udibili per ogni fusione: l'e
 
 | Gesto fisico | Eccitazione | Evoluzione del timbro |
 |---|---|---|
-| Urto breve | Picco \`vn\` e compressione locale | Attacco elastico, risonanza corta |
+| Urto breve | Picco `vn` e compressione locale | Attacco elastico, risonanza corta |
 | Schiacciamento | Pressione/deformazione sostenuta | Risonanza morbida con ampiezza correlata alla pressione |
-| Sfregamento | \`vt\` sotto carico di contatto | Trama granulare/rumorosa a bassa intensità, continua |
+| Sfregamento | `vt` sotto carico di contatto | Trama granulare/rumorosa a bassa intensità, continua |
 | Distacco | Termine del contatto, energia residua | Coda naturale, nessun "pop" obbligatorio |
 | Adesione che si tende | Allungamento e velocità del filo | Lieve tensione/viscosità; niente sibilo dominante |
-| Lancio | Movimento/accelerazione iniziale e dimensione | Breve transizione dalla stessa famiglia timbrica, non clip \`swoosh\` estranea |
+| Lancio | Movimento/accelerazione iniziale e dimensione | Breve transizione dalla stessa famiglia timbrica, non clip `swoosh` estranea |
 | POP/cancellazione | Rilascio rapido della pressione e volume del blob | Transiente rapido + rilascio risonante dallo stesso materiale |
 
 Le pareti del vaso sono una **fase successiva opzionale**: prima validare blob-blob e fusione, poi decidere se il contatto col vaso debba usare lo stesso materiale o una caratteristica diversa.
 
 ## 5. Architettura software proposta
 
-\`\`\`text
+```text
 BlobWorld (simulazione 60 Hz, 5 passaggi di vincoli)
    ├─ AcousticProbe
    │    ├─ ContactUpdate(pairId, vn, vt, compression, radii, duration, time)
@@ -190,19 +190,19 @@ Mixer / envelope smoothing / limiter / mute SFX
           │
           ▼
 AudioTrack PCM (prototipo) → eventuale Oboe (se necessario)
-\`\`\`
+```
 
 Responsabilità:
-- **\`AcousticProbe\`**: osservazione fisica, nessuna sintesi o I/O; restituisce dati riutilizzabili nei test JVM.
-- **\`SoundMaterialProfile\`**: modello versionato offline, con parametri dei quattro Bloop, grani e intervalli sicuri.
-- **\`AudioEventBridge\`**: passaggio thread-safe e senza blocchi rilevanti dei parametri del motore fisico; aggiornamenti di contatto coalescibili, fusioni mai perse.
-- **\`BlobSynth\`**: risuonatori, texture granulari, inviluppi, pitch, stato delle voci e loro terminazione.
-- **\`AudioMixer\` / \`ProceduralAudioEngine\`**: priorità delle voci, limiter, volume generale degli effetti, output PCM e ciclo di vita Android.
-- **\`MusicEngine\`**: futuro sistema separato; non è parte del primo prototipo.
+- **`AcousticProbe`**: osservazione fisica, nessuna sintesi o I/O; restituisce dati riutilizzabili nei test JVM.
+- **`SoundMaterialProfile`**: modello versionato offline, con parametri dei quattro Bloop, grani e intervalli sicuri.
+- **`AudioEventBridge`**: passaggio thread-safe e senza blocchi rilevanti dei parametri del motore fisico; aggiornamenti di contatto coalescibili, fusioni mai perse.
+- **`BlobSynth`**: risuonatori, texture granulari, inviluppi, pitch, stato delle voci e loro terminazione.
+- **`AudioMixer` / `ProceduralAudioEngine`**: priorità delle voci, limiter, volume generale degli effetti, output PCM e ciclo di vita Android.
+- **`MusicEngine`**: futuro sistema separato; non è parte del primo prototipo.
 
 ### Output Android, latenza e threading
 
-**Prototipo:** \`AudioTrack\` Java in modalità PCM streaming per limitare le dipendenze. Un thread audio dedicato produce blocchi regolari; campioni decodificati e profili precaricati.
+**Prototipo:** `AudioTrack` Java in modalità PCM streaming per limitare le dipendenze. Un thread audio dedicato produce blocchi regolari; campioni decodificati e profili precaricati.
 
 **Opzione successiva:** [Google Oboe](https://developer.android.com/games/sdk/oboe/low-latency-audio), tramite Android NDK C++, *solo se* il prototipo mostra latenza/instabilità che AudioTrack non risolve. Oboe usa le API native disponibili e richiede una callback audio con attenzione a memoria, blocchi e priorità del thread.
 
@@ -214,7 +214,7 @@ Prevedere corretta gestione di pause, resume, focus audio, interruzioni, rotazio
 
 - Prototipo: **4–8 voci sonore** totali; regolare secondo profilo CPU e qualità percepita. Non un oscillatore per ciascuno dei 24 nodi di ogni blob.
 - **Priorità:** fusione > urto significativo > contatto deformante > leggero sfregamento. L'energia locale influisce sulla priorità, non solo il tipo.
-- Per i contatti continuativi una voce è associata al \`pairId\`; aggiornarla, non crearne una nuova ogni frame.
+- Per i contatti continuativi una voce è associata al `pairId`; aggiornarla, non crearne una nuova ogni frame.
 - Rilascio con fade/crossfade quando una voce viene rimossa o rubata, per evitare click.
 - Limiter morbido per impedire clipping e controllo del loudness del mix; non comprimere in modo aggressivo i Bloop.
 - Target indicativo: feedback sonoro percepito come immediato (da misurare con latenza *evento fisico → output* sul telefono), nessun underrun udibile, frame time del gameplay non peggiorato. Fissare soglie di accettazione dopo il benchmark iniziale.
@@ -225,7 +225,7 @@ Prevedere corretta gestione di pause, resume, focus audio, interruzioni, rotazio
 Scena con due blob e quattro azioni ripetibili: **urto, compressione, sfregamento, fusione**. Stessi raggi, velocità e traiettorie per confronti fra sistemi.
 
 Dovrà esistere una possibilità di ascolto A/B fra:
-- A. Fusioni originali attuali (\`SoundPool\`, quattro Bloop).
+- A. Fusioni originali attuali (`SoundPool`, quattro Bloop).
 - B. Fusione interamente procedurale con i parametri estratti.
 - C. Fusione ibrida che conserva una quota superiore di frammenti originali, se B risulta troppo sintetica.
 
@@ -254,7 +254,7 @@ Le versioni possono essere esportate come *mix contestuali di prova*, non come p
 | **A — Analisi** | Profili misurati dei 4 Bloop, spettrogrammi, envelope, grani selezionati, note sulle licenze | Identità sonora documentata, nessun dato inventato |
 | **B — Fusione offline** | Tre varianti A/B/C, renderer deterministico e report d'ascolto | Almeno una fusione procedurale/ibrida è convincente quanto gli originali |
 | **C — Due blob** | Contatti, schiacciamento, sfregamento e fusione in scena controllata | Relazione chiara fra movimento e suono, senza artefatti |
-| **D — Prototipo Android** | \`AcousticProbe\`, bridge, DSP e \`AudioTrack\` in modalità sperimentale | Latenza, fluidità, mute e gestione voci accettabili sul telefono |
+| **D — Prototipo Android** | `AcousticProbe`, bridge, DSP e `AudioTrack` in modalità sperimentale | Latenza, fluidità, mute e gestione voci accettabili sul telefono |
 | **E — Estensione** | Lancio, POP, contatti sostenuti, eventuali pareti | Unico materiale timbrico, mix non fastidioso |
 | **F — Integrazione finale** | Sostituzione controllata dei vecchi SFX, rollback e test regressione | Approvazione d'ascolto e tecnica; nessuna modifica non richiesta alla fisica |
 | **G — Musica** | Traccia scelta/licenziata, mix e interruttore dedicato | Musica e effetti indipendenti, entrambi ascoltabili senza fatica |
@@ -274,7 +274,7 @@ Le fasi possono essere implementate in PR piccole; nessuna nuova versione di gio
 | Cambio del gameplay per soddisfare la sintesi | Probe passivo e invarianti di fisica verificati con regressioni |
 | Proprietà intellettuale dei Bloop | Tracciamento licenza/provenienza, uso integrato nel gioco, evitare distribuzione di sample/derivati isolati |
 | Incompatibilità con musica futura | Engine/controlli separati per SFX e musica; master limiter/mix dedicato |
-| Regressione/insoddisfazione | Flag \`classic/procedural\` nelle build di prova, confronto A/B, rollback senza migrazione dati |
+| Regressione/insoddisfazione | Flag `classic/procedural` nelle build di prova, confronto A/B, rollback senza migrazione dati |
 
 ## 9. Decisioni e punti da misurare
 
@@ -299,7 +299,7 @@ Le fasi possono essere implementate in PR piccole; nessuna nuova versione di gio
 
 **Primo task in game:** estendere in modo passivo gli eventi fisici con ID persistenti e osservazioni per contatto; verificare che attivare o disattivare il probe non cambi traiettorie, punteggi o fusioni.
 
-**Nessuna modifica richiesta ora** a \`GameAudio\`, \`BlobWorld\`, UI, Gradle, workflow di release o asset audio attuali. Questo documento è una *specifica* da cui partire per successivi interventi autorizzati.
+**Nessuna modifica richiesta ora** a `GameAudio`, `BlobWorld`, UI, Gradle, workflow di release o asset audio attuali. Questo documento è una *specifica* da cui partire per successivi interventi autorizzati.
 
 ## 11. Riferimenti tecnici
 
@@ -312,4 +312,4 @@ Le fasi possono essere implementate in PR piccole; nessuna nuova versione di gio
 
 ---
 
-**Stato di avanzamento aggiornabile:** \`SPECIFICA APPROVATA — NON IMPLEMENTATA\`. L'ultima build utilizzabile rimane la **1.0.11**; questo documento non annuncia una release e non sostituisce gli effetti esistenti.
+**Stato di avanzamento aggiornabile:** `SPECIFICA APPROVATA — NON IMPLEMENTATA`. L'ultima build utilizzabile rimane la **1.0.11**; questo documento non annuncia una release e non sostituisce gli effetti esistenti.
