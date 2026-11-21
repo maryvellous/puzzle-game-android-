@@ -1,3 +1,11 @@
+# Lava Blob 1.0.7 — Android
+
+Aggiornamento audio (21 novembre 2026): soglia di avvicinamento per il suono degli urti tra blob differenti ridotta da 42 a 8. Nessuna modifica a volume, asset sonori, frequenza, anti-ripetizione o fisica. È una prova da ascoltare su dispositivo, non una conferma che il suono sia riprodotto.
+
+Distribuzione: versioneCode 13. La release 1.0.6 era firmata con chiave debug temporanea da GitHub Actions (firma stabile=0); chi ha installato quella versione potrebbe doverla disinstallare prima di installare la 1.0.7. Finché non viene configurato un keystore persistente, aggiornamenti futuri possono richiedere lo stesso passaggio.
+
+---
+
 # Lava Blob 1.0.6 — Android
 
 ## Modifiche della 1.0.6 (20 novembre 2026)
