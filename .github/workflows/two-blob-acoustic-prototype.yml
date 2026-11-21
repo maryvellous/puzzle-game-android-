@@ -66,14 +66,24 @@ jobs:
           test -s build/audio_lab/two_blob_subtle/03_friction_old_tail_whisper_tail_ghost.wav
           test -s build/audio_lab/two_blob_subtle/04_combined_soft_impact_compression_friction_fusion.wav
           test -s build/audio_lab/two_blob_subtle/C3_MIX_REPORT.json
-          cat build/audio_lab/two_blob_subtle/C3_MIX_REPORT.json >> "$GITHUB_STEP_SUMMARY"
+          python tools/audio_lab/refine_c4.py \
+            --c3 build/audio_lab/two_blob_subtle \
+            --old build/audio_lab/two_blob \
+            --traces app/build/audio_lab/two_blob_physics.csv \
+            --output build/audio_lab/two_blob_c4
+          test -s build/audio_lab/two_blob_c4/A_impact_C3_vs_C4_pitch.wav
+          test -s build/audio_lab/two_blob_c4/B_friction_C3_vs_C4_wet.wav
+          test -s build/audio_lab/two_blob_c4/C_compression_silent_vs_whisper.wav
+          test -s build/audio_lab/two_blob_c4/C4_METRICS.json
+          cat build/audio_lab/two_blob_c4/C4_METRICS.json >> "$GITHUB_STEP_SUMMARY"
       - name: Upload offline acoustic listening tests (not an APK)
         uses: actions/upload-artifact@v4
         with:
-          name: lava-blobs-subtle-mix-friction-tail
+          name: lava-blobs-c4-organic-impacts-friction-compression
           path: |
             build/audio_lab/two_blob/
             build/audio_lab/two_blob_rework/
             build/audio_lab/two_blob_subtle/
+            build/audio_lab/two_blob_c4/
           retention-days: 14
           if-no-files-found: error
