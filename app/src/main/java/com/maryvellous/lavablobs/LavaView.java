@@ -620,6 +620,7 @@ public final class LavaView extends View {
         } else {
             c.drawLine(x+6,y-9,x+17,y+9,line);
         }
+        line.setStrokeCap(Paint.Cap.BUTT);
         label(c,enabled?"SUONI":"MUTO",x,y+36,10,theme.text,true);
     }
 
