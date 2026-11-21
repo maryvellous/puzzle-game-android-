@@ -143,9 +143,9 @@ final class GameAudio {
         playEffect(launchId,.16f,0,rate);
     }
 
-    void impact(int tier,float approachSpeed) {
+    void impact(int tier,float approachSpeed,float radiusA,float radiusB) {
         if(audioTest!=null){
-            audioTest.impact(tier,approachSpeed);
+            audioTest.impact(radiusA,radiusB,approachSpeed);
             return;
         }
         if(!canPlay(impactId))return;
