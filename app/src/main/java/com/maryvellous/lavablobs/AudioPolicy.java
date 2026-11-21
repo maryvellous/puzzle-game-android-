@@ -30,6 +30,10 @@ final class AudioPolicy {
         return approachSpeed >= 42f;
     }
 
+    static boolean allowPairImpactAt(float nowSeconds,Float previousSeconds) {
+        return previousSeconds==null||nowSeconds-previousSeconds>=IMPACT_PAIR_COOLDOWN_SECONDS;
+    }
+
     /** Do not repeat impact sounds in dense shakes or immediately after a merge. */
     static boolean allowImpactAt(long nowMs,long lastImpactMs,long lastMergeMs) {
         return (lastImpactMs==0L || nowMs-lastImpactMs>=IMPACT_MIN_GAP_MS)
