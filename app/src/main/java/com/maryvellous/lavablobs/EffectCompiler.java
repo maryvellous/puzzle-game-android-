@@ -21,15 +21,6 @@ final class EffectCompiler {
     private EffectCompiler() {}
     static File render(Context ctx,int raw,String filename,float from,float to,
                        boolean reverse,int fadeInMs,int fadeOutMs) throws Exception {
-        return renderInternal(ctx,raw,filename,from,to,reverse,fadeInMs,fadeOutMs,false);
-    }
-    static File renderSoftImpact(Context ctx,int raw,String filename,float from,float to,
-                                 boolean reverse,int fadeInMs,int fadeOutMs) throws Exception {
-        return renderInternal(ctx,raw,filename,from,to,reverse,fadeInMs,fadeOutMs,true);
-    }
-    private static File renderInternal(Context ctx,int raw,String filename,float from,float to,
-                                boolean reverse,int fadeInMs,int fadeOutMs,boolean softImpact)
-                                throws Exception {
         File output=new File(ctx.getCacheDir(),filename);
         if(cachedWavIsUsable(output))return output;
         Decoded d=decode(ctx,raw);
@@ -50,7 +41,6 @@ final class EffectCompiler {
             short sample=(short)(sum/d.channels*gain);
             mono[2*i]=(byte)(sample&255);mono[2*i+1]=(byte)((sample>>8)&255);
         }
-        if(softImpact)AudioPolicy.softenImpactPcm16(mono);
         if(!AudioPolicy.usableMonoPcm16(mono,0,mono.length))
             throw new IOException("Selected audio excerpt is effectively silent");
         File tmp=new File(ctx.getCacheDir(),filename+".tmp");
