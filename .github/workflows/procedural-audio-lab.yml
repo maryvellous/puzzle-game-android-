@@ -1,0 +1,44 @@
+name: Lava Blobs Procedural Audio Lab (offline A/B)
+
+on:
+  pull_request:
+    paths:
+      - 'tools/audio_lab/**'
+      - '.github/workflows/procedural-audio-lab.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze-and-render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install offline signal processing dependencies
+        run: |
+          python -m pip install --disable-pip-version-check numpy==1.26.4 scipy==1.15.3 matplotlib==3.10.3
+          ffmpeg -version | head -1
+      - name: Unit tests with deterministic synthetic samples
+        run: python -m unittest discover -s tools/audio_lab -p 'test_*.py' -v
+      - name: Analyze four original Bloop MP3 and render A/B/C fusion tests
+        run: |
+          python tools/audio_lab/analyze_and_render.py \
+            --inputs app/src/main/res/raw \
+            --output build/audio_lab
+          test -s build/audio_lab/features.json
+          test -s build/audio_lab/LISTENING_NOTES.md
+          test -s build/audio_lab/listen_A_original_B_modal_C_hybrid.wav
+          test -s build/audio_lab/bloop_analysis.png
+          cat build/audio_lab/LISTENING_NOTES.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload listening previews and measured spectrograms (internal evaluation)
+        uses: actions/upload-artifact@v4
+        with:
+          name: lava-blobs-bloop-ab-prototype
+          path: build/audio_lab/
+          retention-days: 14
+          if-no-files-found: error
