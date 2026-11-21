@@ -167,8 +167,8 @@ def modal_synthesis(src: np.ndarray, modes_hz: list[float]) -> np.ndarray:
     return protect(result)
 
 
-def granular_texture(src: np.ndarray, seed: int) -> np.ndarray:
-    """Resequence short material grains while following the source envelope."""
+def granular_texture_legacy(src: np.ndarray, seed: int) -> np.ndarray:
+    """Original jittered-grain baseline (retained for controlled A/B comparison)."""
     random = np.random.default_rng(seed)
     n = len(src)
     out = np.zeros(n, dtype=np.float64)
@@ -196,9 +196,42 @@ def granular_texture(src: np.ndarray, seed: int) -> np.ndarray:
     return protect(out)
 
 
+def granular_texture(src: np.ndarray, seed: int) -> np.ndarray:
+    """Phase-coherent source-aligned overlap-add. No stochastic read jumps.
+
+    The earlier grain reshuffle selected a new arbitrary source offset on every
+    ~22ms grain, discontinuously changing phase/pitch and creating audible
+    crackle in the C/D mixes. Preserve source-time continuity in this reference
+    reconstruction and defer pitch/time-grain movement to a separate future
+    phase-locked resampler/WSOLA implementation.
+    """
+    _ = seed  # Interface retained for deterministic future variants.
+    n = len(src)
+    grain_length = max(1024, int(.070 * SAMPLE_RATE))
+    hop = max(64, grain_length // 4)  # 75% overlap.
+    window = np.hanning(grain_length)
+    output = np.zeros(n, dtype=np.float64)
+    weights = np.zeros(n, dtype=np.float64)
+    for dest_start in range(-grain_length + hop, n, hop):
+        left = max(0, dest_start)
+        right = min(n, dest_start + grain_length)
+        if right <= left:
+            continue
+        slice_start = left - dest_start
+        slice_end = slice_start + (right - left)
+        w = window[slice_start:slice_end]
+        output[left:right] += src[left:right] * w
+        weights[left:right] += w
+    if np.any(weights < 1e-6):
+        raise ValueError("Overlap-add left an uncovered audio sample")
+    return output / weights
+
+
 def hybrid_synthesis(src: np.ndarray, modal: np.ndarray, seed: int,
-                     grain_share: float = .36, onset_end: float = .07) -> np.ndarray:
-    granular = granular_texture(src,seed)
+                     grain_share: float = .36, onset_end: float = .07,
+                     use_legacy_grains: bool = False) -> np.ndarray:
+    granular = (granular_texture_legacy(src,seed) if use_legacy_grains
+                else granular_texture(src,seed))
     result = (1.-grain_share)*modal + grain_share*granular
     n = len(result)
     t = np.arange(n)/SAMPLE_RATE
@@ -270,11 +303,17 @@ def run(input_dir: Path, output: Path) -> None:
         b=modal_synthesis(active,modes)
         c=hybrid_synthesis(active,b,seed=idx+1234)
         d=hybrid_synthesis(active,b,seed=idx+1234,grain_share=.78,onset_end=.105)
-        info_by_name[name]={'decoded':x, 'active':active, 'modal':b, 'hybrid':c, 'natural':d}
+        c_old=hybrid_synthesis(active,b,seed=idx+1234,use_legacy_grains=True)
+        d_old=hybrid_synthesis(active,b,seed=idx+1234,grain_share=.78,
+                               onset_end=.105,use_legacy_grains=True)
+        info_by_name[name]={'decoded':x, 'active':active, 'modal':b,
+                            'hybrid':c, 'natural':d, 'old_c':c_old, 'old_d':d_old}
         feature_report[name]={**meta,**features, 'source_sha256':__import__('hashlib').sha256(source_path.read_bytes()).hexdigest()}
         save_wav(output/'comparisons'/f'{name}_B_modal.wav',b)
         save_wav(output/'comparisons'/f'{name}_C_hybrid.wav',c)
         save_wav(output/'comparisons'/f'{name}_D_texture_preserved.wav',d)
+        save_wav(output/'legacy_comparison'/f'{name}_C_old_grain_jitter.wav',c_old)
+        save_wav(output/'legacy_comparison'/f'{name}_D_old_grain_jitter.wav',d_old)
         print(f'{name}: {meta["active_seconds"]}s active, centroid {features["median_spectral_centroid_hz"]}Hz, modes={modes}',flush=True)
     master=info_by_name['bloop_2']['hybrid']
     for size in ['small','medium','large']:
@@ -289,6 +328,13 @@ def run(input_dir: Path, output: Path) -> None:
         level_match(ref['hybrid'],source_rms),spacing,
         level_match(ref['natural'],source_rms)])
     save_wav(output/'listen_A_original_B_modal_C_hybrid_D_natural.wav',montage)
+    before_after=np.concatenate([
+        level_match(ref['active'],source_rms),spacing,
+        level_match(ref['old_c'],source_rms),spacing,
+        level_match(ref['hybrid'],source_rms),spacing,
+        level_match(ref['old_d'],source_rms),spacing,
+        level_match(ref['natural'],source_rms)])
+    save_wav(output/'listen_A_C_old_C_clean_D_old_D_clean.wav',before_after)
     for path in output.rglob('*.wav'):
         with wave.open(str(path)) as w:
             assert w.getframerate()==SAMPLE_RATE and w.getnchannels()==1 and w.getsampwidth()==2
@@ -302,9 +348,11 @@ def run(input_dir: Path, output: Path) -> None:
         'samples':feature_report,
         'synthetic_prototypes':{
             'B':'modal additive baseline',
-            'C':'hybrid: original attack + 64% modal / 36% granular body',
-            'D':'sample-faithful: longer original attack + 22% modal / 78% granular body',
-            'montage':'A/B/C/D loudness-matched with 0.4s pauses'
+            'C':'hybrid: original attack + 64% modal / 36% phase-coherent source-aligned grains',
+            'D':'sample-faithful: original attack + 22% modal / 78% phase-coherent source-aligned grains',
+            'legacy_C_D':'prior arbitrary grain jitter at every 22ms hop; suspected source of crackling',
+            'montage':'A/B/C/D loudness-matched with 0.4s pauses',
+            'before_after':'A / C legacy / C clean / D legacy / D clean'
         },
     },ensure_ascii=False,indent=2),encoding='utf8')
     lines=[
@@ -320,9 +368,10 @@ def run(input_dir: Path, output: Path) -> None:
     lines += ['', 'Values extracted from decoded mono PCM; the peak frequencies are **candidate modes**, not validated fundamentals.', '',
         '## Listening instructions', '',
         '1. Start with listen_A_original_B_modal_C_hybrid_D_natural.wav: A is original, B is fully modal, C is hybrid and D preserves more original texture. The versions are RMS-balanced before safe peak limiting; each is separated by 0.4 seconds of silence.',
-        '2. Compare comparisons/bloop_N_B_modal.wav, bloop_N_C_hybrid.wav and bloop_N_D_texture_preserved.wav for all four references.',
-        '3. Listen to variations/fusion_small_soft.wav through fusion_large_strong.wav to assess size and energy. These initially derive from C; this is a parameter test, not final acoustic physics.',
-        '4. Compare on headphones and on the actual Android phone. Note whether the attack retains the original charm, whether there is metallic ringing, and whether the grain texture loops audibly.',
+        '2. Use listen_A_C_old_C_clean_D_old_D_clean.wav to hear A original, old C, clean C, old D and clean D in that order (0.4s pauses; levels balanced).',
+        '3. Compare comparisons/bloop_N_B_modal.wav, bloop_N_C_hybrid.wav and bloop_N_D_texture_preserved.wav for all four references.',
+        '4. Listen to variations/fusion_small_soft.wav through fusion_large_strong.wav to assess size and energy. These initially derive from clean C; this is a parameter test, not final acoustic physics.',
+        '5. Compare on headphones and the actual Android phone. Specifically report if the light sizzling/frying heard in old C/D has disappeared in the clean C/D versions, and whether they still sound like the original material.',
         '', '## Decision gate', '',
         'A synthesis is **not approved** by a passing test or the measured spectra. It must sound at least as convincing as the existing fusion Bloop to the user. If not, iterate without changing GameAudio.',
         '', '## Licensing and provenance', '',
