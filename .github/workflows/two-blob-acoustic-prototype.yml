@@ -1,0 +1,59 @@
+name: Lava Blobs — real physics acoustic prototype
+
+on:
+  pull_request:
+    paths:
+      - 'app/src/test/java/com/maryvellous/lavablobs/AcousticTwoBlobTraceTest.java'
+      - 'tools/audio_lab/**'
+      - '.github/workflows/two-blob-acoustic-prototype.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  physics-to-audio:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Android SDK 35
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"
+      - name: Simulate real two-blob soft-body physics in JVM unit tests
+        run: |
+          gradle --no-daemon :app:testDebugUnitTest
+          test -s app/build/audio_lab/two_blob_physics.csv
+          wc -l app/build/audio_lab/two_blob_physics.csv
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install offline DSP and decoder
+        run: |
+          python -m pip install --disable-pip-version-check numpy==1.26.4 scipy==1.15.3 matplotlib==3.10.3 imageio-ffmpeg==0.6.0
+      - name: Render Bloop-derived sounds controlled by actual mesh physics
+        run: |
+          python tools/audio_lab/render_physics_prototype.py \
+            --traces app/build/audio_lab/two_blob_physics.csv \
+            --sources app/src/main/res/raw \
+            --output build/audio_lab/two_blob
+          test -s build/audio_lab/two_blob/listen_real_physics_four_behaviors.wav
+          test -s build/audio_lab/two_blob/real_physics_trace.png
+          test -s build/audio_lab/two_blob/physics_audio_metrics.json
+          cat build/audio_lab/two_blob/physics_audio_metrics.json >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload offline acoustic listening tests (not an APK)
+        uses: actions/upload-artifact@v4
+        with:
+          name: lava-blobs-physics-to-sound-two-blob
+          path: build/audio_lab/two_blob/
+          retention-days: 14
+          if-no-files-found: error
