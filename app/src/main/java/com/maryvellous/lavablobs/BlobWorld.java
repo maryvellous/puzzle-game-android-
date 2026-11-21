@@ -359,9 +359,18 @@ final class BlobWorld {
         long low=Math.min(ida,idb)&0xffffffffL,high=Math.max(ida,idb)&0xffffffffL;
         long key=(low<<32)|high;
         Float previous=impactTimes.get(key);
-        if(previous!=null&&time-previous<.34f)return;
-        if(impacts.size()>=6)return; // Never cooldown an event we did not queue.
-        impacts.add(new Impact((a.tier+b.tier)/2,approach));
+        if(previous!=null&&time-previous<AudioPolicy.IMPACT_PAIR_COOLDOWN_SECONDS)return;
+        Impact event=new Impact((a.tier+b.tier)/2,approach);
+        if(impacts.size()<6) {
+            impacts.add(event);
+        } else {
+            // Keep the strongest six during a burst, not just the first six.
+            int weakest=0;
+            for(int i=1;i<impacts.size();i++)
+                if(impacts.get(i).speed<impacts.get(weakest).speed)weakest=i;
+            if(approach<=impacts.get(weakest).speed)return;
+            impacts.set(weakest,event);
+        }
         impactTimes.put(key,time);
         if(impactTimes.size()>400)
             impactTimes.entrySet().removeIf(e->time-e.getValue()>1.2f);
@@ -444,6 +453,13 @@ final class BlobWorld {
             return !blobs.contains(link.a)||!blobs.contains(link.b)
                     ||link.age>.36f||link.length()>26f;
         });
+    }
+
+    static Impact strongestImpact(List<Impact> events) {
+        Impact strongest=null;
+        for(Impact event:events)
+            if(strongest==null||event.speed>strongest.speed)strongest=event;
+        return strongest;
     }
 
     List<Impact> consumeImpacts() {
