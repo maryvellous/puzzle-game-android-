@@ -3,6 +3,19 @@ package com.maryvellous.lavablobs;
 /** Pure audio tuning, independent of Android for unit tests. */
 final class AudioPolicy {
     private AudioPolicy() {}
+    /** Reject a truncated or nearly silent decoded effect, so impact can fall back. */
+    static boolean usableMonoPcm16(byte[] pcm,int offset,int size) {
+        if(pcm==null||offset<0||size<512||size%2!=0||offset>pcm.length-size)return false;
+        int peak=0;
+        long sum=0L;
+        for(int i=offset;i<offset+size;i+=2) {
+            int sample=(short)((pcm[i]&255)|((pcm[i+1]&255)<<8));
+            int abs=Math.abs(sample);
+            peak=Math.max(peak,abs);
+            sum+=abs;
+        }
+        return peak>=256 && sum/(size/2)>=64;
+    }
     static float mergeRate(int tier) {
         return Math.max(.92f, 1f - .01f * Math.max(0, tier - 1));
     }
