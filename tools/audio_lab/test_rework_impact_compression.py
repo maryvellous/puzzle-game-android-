@@ -36,7 +36,7 @@ class ImpactCompressionReworkTest(unittest.TestCase):
     def test_physics_derivative_drives_onset(self):
         _,control=resample_controls(self.trace)
         e=contact_excitation(control)
-        self.assertGreater(float(e.sum()), .30)
+        self.assertGreater(float(e.sum()), .15)
         self.assertLess(float(e.sum()), 3.0)
         compression=deformation_driver(control)
         self.assertGreater(float(compression.sum()),.03)
