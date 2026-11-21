@@ -204,6 +204,7 @@ public final class LavaView extends View {
             steps++;
         }
         long physicsNs=System.nanoTime()-physicsStart;
+        if(steps>0)audio.observePhysics(world,steps*PHYSICS_STEP);
         advanceEffects(elapsed);
         if(world.score!=lastAnimatedScore){
             lastAnimatedScore=world.score;
@@ -224,7 +225,7 @@ public final class LavaView extends View {
         }
         // Several blobs may collide in a frame: only the strongest can sound.
         BlobWorld.Impact strongest=BlobWorld.strongestImpact(world.consumeImpacts());
-        if(strongest!=null)audio.impact();
+        if(strongest!=null)audio.impact(strongest.tier,strongest.speed);
         if (world.score > best) best=world.score;
         if(world.gameOver&&!finalized) {
             progress.save(spec,world,true,activeSeconds);
@@ -262,6 +263,13 @@ public final class LavaView extends View {
         drawVesselRim(canvas);
         canvas.restore();
         drawHUD(canvas,h);
+        if(BuildConfig.AUDIO_TEST) {
+            letters.setTypeface(FONT_MEDIUM);
+            letters.setTextSize(11f);
+            letters.setColor(Color.argb(215,255,230,161));
+            letters.setTextAlign(Paint.Align.CENTER);
+            canvas.drawText("AUDIO TEST - NON DEFINITIVO",W*.5f,h-12f,letters);
+        }
         if(world.gameOver)drawGameOver(canvas,h);
 
         canvas.restore();
