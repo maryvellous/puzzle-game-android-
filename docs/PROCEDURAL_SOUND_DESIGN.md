@@ -1,7 +1,8 @@
 # Lava Blobs — Sound design procedurale guidato dalla fisica
 
 **Documento progettuale · Versione 1.0 · 21 novembre 2026**  
-**Stato:** direzione progettuale approvata; progettazione dettagliata completata; implementazione **non avviata**.  
+**Stato:** direzione progettuale approvata; **fase A (analisi dei Bloop) completata**, **fase B (ricostruzioni offline) in attesa di approvazione d'ascolto**. Motore procedurale **non integrato nel gioco**.  
+**Risultati:** [laboratorio A/B/C/D del 21 novembre 2026](PROCEDURAL_AUDIO_LAB_2026-11-21.md).  
 **Base di riferimento:** Lava Blob Android **1.0.11**, repository `maryvellous/puzzle-game-android-`.  
 **Ambito:** tutti gli **effetti sonori** (fusioni, urti, deformazioni, attriti, rilascio, lancio e POP). **Musica separata**.
 
@@ -312,4 +313,4 @@ Le fasi possono essere implementate in PR piccole; nessuna nuova versione di gio
 
 ---
 
-**Stato di avanzamento aggiornabile:** `SPECIFICA APPROVATA — NON IMPLEMENTATA`. L'ultima build utilizzabile rimane la **1.0.11**; questo documento non annuncia una release e non sostituisce gli effetti esistenti.
+**Stato di avanzamento:** `FASE A MISURATA — FASE B RENDERIZZATA / ASCOLTO PENDENTE — MOTORE ANDROID NON INTEGRATO`. I primi risultati e file di confronto sono descritti in [PROCEDURAL_AUDIO_LAB_2026-11-21.md](PROCEDURAL_AUDIO_LAB_2026-11-21.md). L'ultima build utilizzabile rimane la **1.0.11**; nessun effetto esistente è stato sostituito.
