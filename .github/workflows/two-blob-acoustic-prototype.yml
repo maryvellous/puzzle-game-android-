@@ -85,12 +85,9 @@ jobs:
       - name: Upload offline acoustic listening tests (not an APK)
         uses: actions/upload-artifact@v4
         with:
-          name: lava-blobs-c41-no-extra-fusion-audible-impact
-          path: |
-            build/audio_lab/two_blob/
-            build/audio_lab/two_blob_rework/
-            build/audio_lab/two_blob_subtle/
-            build/audio_lab/two_blob_c4/
-            build/audio_lab/two_blob_c41/
+          name: lava-blobs-C41-ONLY-corrected-audio
+          # Archive ONLY corrected C4.1 exports: older montages wrongly
+          # appended a fusion sound to unrelated comparisons.
+          path: build/audio_lab/two_blob_c41/
           retention-days: 14
           if-no-files-found: error
