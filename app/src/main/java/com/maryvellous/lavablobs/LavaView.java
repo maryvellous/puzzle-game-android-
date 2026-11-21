@@ -2,7 +2,6 @@ package com.maryvellous.lavablobs;
 
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
-import android.content.SharedPreferences;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.LinearGradient;
@@ -47,11 +46,11 @@ public final class LavaView extends View {
     private final BlobWorld world;
     private final GameAudio audio;
     private final Random random = new Random();
-    private final SharedPreferences prefs;
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint letters = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint line = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path blobPath = new Path();
+    private final Path speakerPath = new Path();
     private final Path titleGlyph = new Path(), titleWarped = new Path();
     private final long titleStart = System.nanoTime();
     private final Path cachedGlassPath = new Path();
@@ -136,7 +135,6 @@ public final class LavaView extends View {
         }
         setLayerType(View.LAYER_TYPE_HARDWARE,null);
         setHapticFeedbackEnabled(true);
-        prefs=context.getSharedPreferences("lava_blobs",Context.MODE_PRIVATE);
         best=progress.record(spec.id);
         lastAnimatedScore=world.score;
         letters.setTextAlign(Paint.Align.CENTER);
@@ -536,6 +534,7 @@ public final class LavaView extends View {
             label(c,"EXTRA "+spec.extras(world.score,world.maxTierReached,
                     world.mergeCount)+"/"+spec.totalExtras(),
                     308,194,10.5f,theme.text,true);
+        drawSoundToggle(c);
 
         if(world.blockedTime>.5f&&!world.gameOver) {
             label(c,"INGRESSO BLOCCATO · "+(int)Math.ceil(world.remainingSeconds())+"s",
@@ -592,6 +591,37 @@ public final class LavaView extends View {
         if(blockedFlash>0f&&world.blockedTime<=.5f)
             label(c,"QUESTO INGRESSO È OCCUPATO",210,
                     Math.min(245f,world.vessel.top-8f),11,theme.caution,true);
+    }
+
+    /** Independent effects toggle; a separate music switch can be added later. */
+    private void drawSoundToggle(Canvas c) {
+        final float x=365f,y=205f;
+        boolean enabled=audio.effectsEnabled();
+        int fill=enabled?theme.secondary:Palette.NEUTRAL_SURFACE;
+        int ink=enabled?contrastInk(fill):theme.onSurfaceMuted;
+        bubbleButton(c,x,y,21f,fill,0f);
+        speakerPath.reset();
+        speakerPath.moveTo(x-11,y-5);
+        speakerPath.lineTo(x-6,y-5);
+        speakerPath.lineTo(x+1,y-11);
+        speakerPath.lineTo(x+1,y+11);
+        speakerPath.lineTo(x-6,y+5);
+        speakerPath.lineTo(x-11,y+5);
+        speakerPath.close();
+        paint.setShader(null);
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(ink);
+        c.drawPath(speakerPath,paint);
+        line.setColor(ink);
+        line.setStrokeWidth(2.2f);
+        line.setStrokeCap(Paint.Cap.ROUND);
+        if(enabled) {
+            c.drawArc(x-3,y-10,x+15,y+10,-62,124,false,line);
+        } else {
+            c.drawLine(x+6,y-9,x+17,y+9,line);
+        }
+        line.setStrokeCap(Paint.Cap.BUTT);
+        label(c,enabled?"SUONI":"MUTO",x,y+36,10,theme.text,true);
     }
 
     private void bubbleCounter(Canvas c,float l,float t,float r,float b,int fill) {
@@ -709,6 +739,14 @@ public final class LavaView extends View {
             case MotionEvent.ACTION_DOWN:
                 lastActionMs=SystemClock.uptimeMillis();
                 activePointerId=event.getPointerId(0);
+                if(hitBubble(x,y,365f,205f,27f)){
+                    boolean enabled=!audio.effectsEnabled();
+                    audio.setEffectsEnabled(enabled);
+                    performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
+                    announceForAccessibility(enabled?"Effetti sonori attivati":"Effetti sonori disattivati");
+                    invalidate();
+                    return true;
+                }
                 if(world.gameOver){
                     if(y>h*.57f&&y<h*.70f){
                         if(x>=209)onHome.run();else restart();

@@ -4,6 +4,16 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class AudioPolicyTest {
+    @Test public void effectSwitchGatesAllPlaybackIncludingLoadedSamples() {
+        assertTrue(AudioPolicy.effectsAllowed(true,false,true));
+        assertFalse(AudioPolicy.effectsAllowed(false,false,true));
+        assertFalse(AudioPolicy.effectsAllowed(true,true,true));
+        assertFalse(AudioPolicy.effectsAllowed(true,false,false));
+        // The effects toggle must not affect collision thresholds.
+        assertTrue(AudioPolicy.shouldPlayImpact(42f));
+        assertFalse(AudioPolicy.shouldPlayImpact(41.9f));
+    }
+
     @Test public void mergesSlowOnlySlightly() {
         assertEquals(1f,AudioPolicy.mergeRate(1),.00001f);
         assertEquals(.92f,AudioPolicy.mergeRate(100),.00001f);
