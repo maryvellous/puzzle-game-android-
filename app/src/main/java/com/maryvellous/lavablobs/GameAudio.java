@@ -145,7 +145,7 @@ final class GameAudio {
 
     void impact(int tier,float approachSpeed,float radiusA,float radiusB) {
         if(audioTest!=null){
-            audioTest.impact(radiusA,radiusB,approachSpeed);
+            audioTest.impact(tier,radiusA,radiusB,approachSpeed);
             return;
         }
         if(!canPlay(impactId))return;
