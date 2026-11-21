@@ -1,6 +1,11 @@
 name: Publish Lava Blob Android
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'app/build.gradle'
   workflow_dispatch:
 
 permissions:
@@ -63,28 +68,28 @@ jobs:
         run: |
           mkdir -p release
           if [[ "$LAVA_STABLE_SIGNING" == "1" ]]; then
-            cp app/build/outputs/apk/release/app-release.apk release/lava-blob-v1.0.10.apk
+            cp app/build/outputs/apk/release/app-release.apk release/lava-blob-v1.0.11.apk
           else
-            cp app/build/outputs/apk/debug/app-debug.apk release/lava-blob-v1.0.10.apk
+            cp app/build/outputs/apk/debug/app-debug.apk release/lava-blob-v1.0.11.apk
           fi
 
       - name: Upload versioned APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: lava-blob-v1.0.10-android
-          path: release/lava-blob-v1.0.10.apk
+          name: lava-blob-v1.0.11-android
+          path: release/lava-blob-v1.0.11.apk
           if-no-files-found: error
 
       - name: Publish dedicated Lava Blob GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: lava-blob-v1.0.10
-          APK: release/lava-blob-v1.0.10.apk
+          TAG: lava-blob-v1.0.11
+          APK: release/lava-blob-v1.0.11.apk
         run: |
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Tag $TAG already released; not replacing a published APK or its signing certificate."
             exit 0
           fi
           gh release create "$TAG" "$APK" --target "$GITHUB_SHA" \
-            --title "Lava Blob v1.0.10" \
-            --notes "Lava Blob 1.0.10: collisioni sopra velocita relativa 42 (prima 20); 350ms minimo tra suoni di urto, 700ms per stessa coppia; un unico evento sonoro per frame, scegliendo la collisione piu forte. Nuovo suono originale da 112ms: tup gommoso e ovattato, gain fisso 0.08, caricato dall'APK indipendentemente dalle fusioni (gain 0.56). Fisica, suoni di fusione e altri effetti invariati. Test di regressione fisica, gestione eventi, cooldown e verifica WAV. Firma stabile configurata: $LAVA_STABLE_SIGNING (0=debug temporanea; puo richiedere disinstallazione della versione precedente, 1=stabile). Non e una release Google Play."
+            --title "Lava Blob v1.0.11" \
+            --notes "Lava Blob 1.0.11: aggiunto tasto SUONI/MUTO nella schermata di gioco. Disattiva o riattiva immediatamente tutti gli effetti sonori (fusioni, urti, lancio, POP), interrompe i suoni in corso e salva la scelta tra partite e riavvii. La musica rimane un canale distinto, da introdurre in seguito con un controllo separato. Fisica, timbro e frequenza degli urti della 1.0.10 invariati. Firma stabile configurata: $LAVA_STABLE_SIGNING (0=debug temporanea; puo richiedere disinstallazione della versione precedente, 1=stabile). Non e una release Google Play."
