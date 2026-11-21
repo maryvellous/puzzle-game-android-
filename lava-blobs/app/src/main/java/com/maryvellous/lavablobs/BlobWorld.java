@@ -353,7 +353,7 @@ final class BlobWorld {
             bvx+=b.vx[i];bvy+=b.vy[i];
         }
         float approach=((avx-bvx)*dx+(avy-bvy)*dy)/(Blob.NODES*distance);
-        if(approach<42f)return;
+        if(!AudioPolicy.shouldPlayImpact(approach))return;
         int ida=System.identityHashCode(a),idb=System.identityHashCode(b);
         long low=Math.min(ida,idb)&0xffffffffL,high=Math.max(ida,idb)&0xffffffffL;
         long key=(low<<32)|high;
