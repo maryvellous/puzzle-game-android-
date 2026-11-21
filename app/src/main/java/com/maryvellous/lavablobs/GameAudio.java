@@ -28,7 +28,7 @@ final class GameAudio {
     private final Random rng=new Random();
     private int bagCursor=4,previousBloop=-1;
     private volatile boolean released;
-    private volatile int impactId,launchId,popId;
+    private volatile int impactId,impactFallbackId,launchId,popId;
     private long lastImpactMs,lastMergeMs;
 
     GameAudio(Context context) {
@@ -44,23 +44,25 @@ final class GameAudio {
         bloops[1]=sounds.load(context,R.raw.bloop_2,1);
         bloops[2]=sounds.load(context,R.raw.bloop_3,1);
         bloops[3]=sounds.load(context,R.raw.bloop_4,1);
+        // Independent, non-merge sound for impact fallback; never play a full merge Bloop as a collision.
+        impactFallbackId=sounds.load(context,R.raw.swoosh_source,1);
         Context app=context.getApplicationContext();
         worker.execute(()->prepareClips(app));
     }
 
     private void prepareClips(Context context) {
-        // Each effect is independent. A failed launch or POP conversion cannot
-        // block impact playback; the bundled Bloop 2 remains the fallback.
+        // Separate preparations: a failed launch/POP conversion cannot affect collisions.
+        // Impact is a new, shorter filtered excerpt (v3 busts the old cached v2 WAV).
         try {
-            File impact=EffectCompiler.render(context,R.raw.bloop_2,
-                    "lava_impact_v2.wav",.31f,.68f,false,14,52);
+            File impact=EffectCompiler.renderSoftImpact(context,R.raw.bloop_2,
+                    "lava_impact_v3.wav",.28f,.53f,false,5,40);
             synchronized(this) {
                 if(released)return;
                 impactId=sounds.load(impact.getAbsolutePath(),1);
-                if(impactId==0)Log.w(TAG,"Edited impact WAV refused by SoundPool; using Bloop 2");
+                if(impactId==0)Log.w(TAG,"Impact WAV load rejected; using quiet swoosh fallback");
             }
         }catch(Exception e){
-            Log.w(TAG,"Edited impact WAV unavailable; using bundled Bloop 2",e);
+            Log.w(TAG,"Impact WAV unavailable; using quiet swoosh fallback",e);
         }
         try {
             File launch=EffectCompiler.render(context,R.raw.swoosh_source,
@@ -119,12 +121,16 @@ final class GameAudio {
     void impact(int tier,float speed) {
         if(released)return;
         int id=AudioPolicy.impactSample(impactId,ready.contains(impactId),
-                bloops[1],ready.contains(bloops[1]));
+                impactFallbackId,ready.contains(impactFallbackId));
         if(id==0)return;
         long now=SystemClock.elapsedRealtime();
         if(now-lastImpactMs<88L||now-lastMergeMs<100L)return;
         float volume=AudioPolicy.impactVolume(speed);
-        int streamId=sounds.play(id,volume,volume,1,0,AudioPolicy.impactRate(tier));
+        // Original swoosh is longer than the edited excerpt: accelerate and attenuate it.
+        boolean fallback=id==impactFallbackId;
+        float gain=fallback?volume*.58f:volume;
+        float rate=fallback?1.85f:AudioPolicy.impactRate(tier);
+        int streamId=sounds.play(id,gain,gain,1,0,rate);
         if(streamId!=0)lastImpactMs=now;
         else Log.w(TAG,"SoundPool rejected collision playback (id="+id+")");
     }

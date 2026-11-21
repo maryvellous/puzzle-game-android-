@@ -12,8 +12,8 @@ public class AudioPolicyTest {
     @Test public void gentleApproachingContactsCanMakeSound() {
         assertFalse(AudioPolicy.shouldPlayImpact(-5f));
         assertFalse(AudioPolicy.shouldPlayImpact(0f));
-        assertFalse(AudioPolicy.shouldPlayImpact(7.9f));
-        assertTrue(AudioPolicy.shouldPlayImpact(8f));
+        assertFalse(AudioPolicy.shouldPlayImpact(8f));
+        assertFalse(AudioPolicy.shouldPlayImpact(19.9f));
         assertTrue(AudioPolicy.shouldPlayImpact(20f));
         assertTrue(AudioPolicy.shouldPlayImpact(42f));
     }
@@ -31,13 +31,32 @@ public class AudioPolicyTest {
         assertTrue(AudioPolicy.usableMonoPcm16(signal,0,signal.length));
         assertFalse(AudioPolicy.usableMonoPcm16(signal,4,2048));
     }
-    @Test public void largeCollisionIsLower() {
+    @Test public void editedImpactHasLessLowFrequencyBodyThanSource() {
+        byte[] source=new byte[4096];
+        for(int i=0;i<source.length;i+=2) {
+            int sample=(i/2)%64<32?12000:-12000;
+            source[i]=(byte)(sample&255);
+            source[i+1]=(byte)((sample>>8)&255);
+        }
+        byte[] soft=source.clone();
+        AudioPolicy.softenImpactPcm16(soft);
+        assertFalse(java.util.Arrays.equals(source,soft));
+        assertTrue(AudioPolicy.usableMonoPcm16(soft,0,soft.length));
+        long origTotal=0,softTotal=0;
+        for(int i=0;i<source.length;i+=2) {
+            origTotal+=Math.abs((short)((source[i]&255)|((source[i+1]&255)<<8)));
+            softTotal+=Math.abs((short)((soft[i]&255)|((soft[i+1]&255)<<8)));
+        }
+        assertTrue("Softening must reduce energy and sound less like a full merge",softTotal<origTotal);
+    }
+    @Test public void largeCollisionIsLighter() {
         assertTrue(AudioPolicy.impactRate(1)>AudioPolicy.impactRate(8));
-        assertTrue(AudioPolicy.impactRate(30)>=.79f);
+        assertTrue(AudioPolicy.impactRate(30)>=1.02f);
     }
     @Test public void collisionsStaySubtle() {
-        assertTrue(AudioPolicy.impactVolume(90f)>.15f);
-        assertTrue(AudioPolicy.impactVolume(500f)<=.32f);
+        assertTrue(AudioPolicy.impactVolume(90f)>.095f);
+        assertTrue(AudioPolicy.impactVolume(500f)<=.18f);
         assertTrue(AudioPolicy.impactVolume(200f)>AudioPolicy.impactVolume(80f));
+        assertTrue(AudioPolicy.impactVolume(200f)<.56f);
     }
 }

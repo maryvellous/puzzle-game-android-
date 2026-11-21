@@ -20,17 +20,30 @@ final class AudioPolicy {
         return Math.max(.92f, 1f - .01f * Math.max(0, tier - 1));
     }
     static boolean shouldPlayImpact(float approachSpeed) {
-        return approachSpeed >= 8f;
+        return approachSpeed >= 20f;
     }
-    /** Prefer the edited contact clip; the already bundled Bloop 2 is a reliable fallback. */
+    /** Prefer the edited impact, then a different bundled source (never the merge Bloop). */
     static int impactSample(int editedId, boolean editedReady, int fallbackId, boolean fallbackReady) {
         if(editedId>0 && editedReady)return editedId;
         return fallbackId>0 && fallbackReady ? fallbackId : 0;
     }
+    /** Remove the rounded low-frequency body that makes an impact sound like a merge.
+     * Leaves a short, lighter 'wip' from the original sampled sound, not a new synth. */
+    static void softenImpactPcm16(byte[] pcm) {
+        float low=0f;
+        for(int i=0;i+1<pcm.length;i+=2) {
+            int raw=(short)((pcm[i]&255)|((pcm[i+1]&255)<<8));
+            low+=.075f*(raw-low);
+            int soft=Math.round((raw-low)*.68f);
+            soft=Math.max(-32768,Math.min(32767,soft));
+            pcm[i]=(byte)(soft&255);
+            pcm[i+1]=(byte)((soft>>8)&255);
+        }
+    }
     static float impactRate(int tier) {
-        return Math.max(.79f, Math.min(1.42f, 1.38f - .07f * Math.max(0, tier)));
+        return Math.max(1.02f, Math.min(1.55f, 1.51f - .055f * Math.max(0, tier)));
     }
     static float impactVolume(float speed) {
-        return Math.min(.32f, .15f + Math.max(0f, speed - 42f) * .00075f);
+        return Math.min(.18f, .095f + Math.max(0f, speed - 20f) * .00030f);
     }
 }
