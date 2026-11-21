@@ -9,8 +9,9 @@ public class AudioPolicyTest {
         assertFalse(AudioPolicy.effectsAllowed(false,false,true));
         assertFalse(AudioPolicy.effectsAllowed(true,true,true));
         assertFalse(AudioPolicy.effectsAllowed(true,false,false));
-        // Disabling all effects must not change the collision threshold or merge tuning.
-        assertEquals(42f,42f,.0001f);
+        // The effects toggle must not affect collision thresholds.
+        assertTrue(AudioPolicy.shouldPlayImpact(42f));
+        assertFalse(AudioPolicy.shouldPlayImpact(41.9f));
     }
 
     @Test public void mergesSlowOnlySlightly() {
