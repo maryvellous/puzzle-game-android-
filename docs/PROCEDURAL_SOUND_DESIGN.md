@@ -1,8 +1,8 @@
 # Lava Blobs — Sound design procedurale guidato dalla fisica
 
 **Documento progettuale · Versione 1.0 · 21 novembre 2026**  
-**Stato:** direzione progettuale approvata; **fase A (analisi dei Bloop) completata**, **fase B (ricostruzioni offline) in attesa di approvazione d'ascolto**. Motore procedurale **non integrato nel gioco**.  
-**Risultati:** [laboratorio A/B/C/D del 21 novembre 2026](PROCEDURAL_AUDIO_LAB_2026-11-21.md).  
+**Stato:** direzione progettuale approvata; **fase A completata**, **fase B giudicata complessivamente buona all'ascolto con lieve disturbo residuo aperto**, **fase C (prototipo a due blob con fisica reale) generata e in attesa d'ascolto**. Motore procedurale **non integrato nel gioco**.  
+**Risultati:** [laboratorio A/B/C/D](PROCEDURAL_AUDIO_LAB_2026-11-21.md) e [prototipo fisico a due blob](PROCEDURAL_AUDIO_TWO_BLOB_PROTOTYPE.md).  
 **Base di riferimento:** Lava Blob Android **1.0.11**, repository `maryvellous/puzzle-game-android-`.  
 **Ambito:** tutti gli **effetti sonori** (fusioni, urti, deformazioni, attriti, rilascio, lancio e POP). **Musica separata**.
 
@@ -313,4 +313,4 @@ Le fasi possono essere implementate in PR piccole; nessuna nuova versione di gio
 
 ---
 
-**Stato di avanzamento:** `FASE A MISURATA — FASE B RENDERIZZATA / ASCOLTO PENDENTE — MOTORE ANDROID NON INTEGRATO`. I primi risultati e file di confronto sono descritti in [PROCEDURAL_AUDIO_LAB_2026-11-21.md](PROCEDURAL_AUDIO_LAB_2026-11-21.md). L'ultima build utilizzabile rimane la **1.0.11**; nessun effetto esistente è stato sostituito.
+**Stato di avanzamento:** `FASE A MISURATA — FASE B TIMBRO APPROVATO CON DISTURBO RESIDUO — FASE C OFFLINE ESEGUITA, ASCOLTO PENDENTE — MOTORE ANDROID NON INTEGRATO`. I risultati sono in [PROCEDURAL_AUDIO_LAB_2026-11-21.md](PROCEDURAL_AUDIO_LAB_2026-11-21.md) e [PROCEDURAL_AUDIO_TWO_BLOB_PROTOTYPE.md](PROCEDURAL_AUDIO_TWO_BLOB_PROTOTYPE.md). L'ultima build utilizzabile rimane la **1.0.11**; nessun effetto esistente è stato sostituito.

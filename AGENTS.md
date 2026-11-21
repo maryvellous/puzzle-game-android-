@@ -29,8 +29,8 @@
 - L'utente gestisce personalmente la rinomina futura del repository; non rinominarlo senza richiesta esplicita.
 
 ## Nuovo sound design procedurale — documentazione di riferimento
-- Specifica ufficiale: [`docs/PROCEDURAL_SOUND_DESIGN.md`](docs/PROCEDURAL_SOUND_DESIGN.md). La [fase A e i prototipi offline B](docs/PROCEDURAL_AUDIO_LAB_2026-11-21.md) sono disponibili; **il motore procedurale NON è implementato nel gioco**. La build attuale 1.0.11 continua a usare `SoundPool` e gli asset classici.
+- Specifica ufficiale: [`docs/PROCEDURAL_SOUND_DESIGN.md`](docs/PROCEDURAL_SOUND_DESIGN.md). [Fasi A/B](docs/PROCEDURAL_AUDIO_LAB_2026-11-21.md) disponibili e ascoltate: timbro complessivamente approvato, leggero disturbo ancora aperto. [Fase C a due blob](docs/PROCEDURAL_AUDIO_TWO_BLOB_PROTOTYPE.md) generata dalla fisica reale e da ascoltare. **Il motore procedurale NON è implementato nel gioco**: la 1.0.11 continua a usare `SoundPool` e gli asset classici.
 - Obiettivo: un solo modello acustico ibrido, fondato sui quattro Bloop di floraphonic, per **fusioni incluse**, urti, compressioni, attriti, lancio e POP; il suono deve descrivere la fisica delle membrane senza modificarla.
-- Non cancellare i Bloop, non sostituire i suoni di fusione riusciti e non pubblicare nuove release soltanto perché esiste la specifica. Le misure PCM sono state eseguite; il **gate d'ascolto** delle ricostruzioni A/B/C/D resta da superare prima della fase a due blob.
+- Non cancellare i Bloop, non sostituire i suoni di fusione riusciti e non pubblicare nuove release soltanto perché esiste la specifica. Il prototipo a due blob è solo offline: **ascoltarlo prima di sviluppare il DSP Android**; il lieve disturbo nei precedenti C/D resta un difetto noto.
 - Conservare la preferenza SFX `sound_effects_enabled_v1`; musica futura con mute distinto. Le soglie/volume numerici in `AudioPolicy` sono valori dell'implementazione classica, non vincoli per il futuro motore.
 - Per ogni iterazione procedurale: probe fisico passivo, deduplica contatti nei cinque passaggi del solver, test audio/CPU e confronto sul telefono prima di qualsiasi rollout.
