@@ -29,7 +29,7 @@ public class ImpactRegressionTest {
         }
         assertNotNull("Fast upward hit on another tier must enqueue an audible collision",first);
         assertTrue("Approach speed should exceed the sound threshold",
-                first.speed>=8f);
+                first.speed>=20f);
         assertEquals("Different-tier contact must not fuse the blobs",2,world.blobs.size());
     }
 
