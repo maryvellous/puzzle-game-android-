@@ -1,0 +1,98 @@
+name: Installable Lava Blob AUDIO TEST APK (experimental)
+
+on:
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'tools/audio_lab/**'
+      - '.github/workflows/lava-blob-audio-test.apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android-audio-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Android SDK 35
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"
+      - name: Python 3.11 for experimental sound material
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install DSP dependencies
+        run: |
+          python -m pip install --disable-pip-version-check numpy==1.26.4 scipy==1.15.3 matplotlib==3.10.3 imageio-ffmpeg==0.6.0
+      - name: Run Java physics and audio-control regression tests
+        run: |
+          gradle --no-daemon :app:testDebugUnitTest
+          test -s app/build/audio_lab/two_blob_physics.csv
+      - name: Generate WAVs from REAL physics and C4.1 chosen sounds
+        run: |
+          python tools/audio_lab/render_physics_prototype.py \
+            --traces app/build/audio_lab/two_blob_physics.csv \
+            --sources app/src/main/res/raw \
+            --output build/audio_lab/two_blob
+          python tools/audio_lab/rework_impact_compression.py \
+            --traces app/build/audio_lab/two_blob_physics.csv \
+            --sources app/src/main/res/raw \
+            --old build/audio_lab/two_blob \
+            --output build/audio_lab/two_blob_rework
+          python tools/audio_lab/refine_subtle_mix.py \
+            --old build/audio_lab/two_blob \
+            --c2 build/audio_lab/two_blob_rework \
+            --traces app/build/audio_lab/two_blob_physics.csv \
+            --output build/audio_lab/two_blob_subtle
+          python tools/audio_lab/refine_c4.py \
+            --c3 build/audio_lab/two_blob_subtle \
+            --old build/audio_lab/two_blob \
+            --traces app/build/audio_lab/two_blob_physics.csv \
+            --output build/audio_lab/two_blob_c4
+          python tools/audio_lab/prepare_c41_previews.py \
+            --c4 build/audio_lab/two_blob_c4 \
+            --output build/audio_lab/two_blob_c41
+          python tools/audio_lab/prepare_android_audio_test.py \
+            --c41 build/audio_lab/two_blob_c41 \
+            --out app/src/audioTest/res/raw \
+            --report build/audio_test_assets
+          test -s app/src/audioTest/res/raw/lava_test_impact.wav
+          test -s app/src/audioTest/res/raw/lava_test_friction.wav
+          test -s app/src/audioTest/res/raw/lava_test_compression.wav
+          cat build/audio_test_assets/android_audio_material.json >> "$GITHUB_STEP_SUMMARY"
+      - name: Build signed, side-by-side audio-test APK
+        run: |
+          gradle --no-daemon :app:assembleAudioTest
+          mkdir -p distribution
+          APK=$(find app/build/outputs/apk/audioTest -type f -name '*.apk' | head -1)
+          test -n "$APK" && test -s "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee distribution/apk-info.txt
+          grep -q "package: name='com.maryvellous.lavablobs.audiotest'" distribution/apk-info.txt
+          grep -q "Lava Blob - Audio Test" distribution/apk-info.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump resources "$APK" | grep -E 'lava_test_(impact|friction|compression)' | tee distribution/resources.txt
+          test "$(wc -l < distribution/resources.txt)" -ge 3
+          unzip -t "$APK" >/dev/null
+          cp "$APK" distribution/LavaBlob-AudioTest.apk
+      - name: Upload installable test APK — independent of original game
+        uses: actions/upload-artifact@v4
+        with:
+          name: LavaBlob-AudioTest-installable-APK
+          path: |
+            distribution/LavaBlob-AudioTest.apk
+            distribution/apk-info.txt
+            distribution/resources.txt
+            build/audio_test_assets/android_audio_material.json
+          retention-days: 30
+          if-no-files-found: error
