@@ -224,9 +224,9 @@ public final class LavaView extends View {
             }
             performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
         }
-        for(BlobWorld.Impact impact : world.consumeImpacts()) {
-            audio.impact(impact.tier,impact.speed);
-        }
+        // Several blobs may collide in a frame: only the strongest can sound.
+        BlobWorld.Impact strongest=BlobWorld.strongestImpact(world.consumeImpacts());
+        if(strongest!=null)audio.impact();
         if (world.score > best) best=world.score;
         if(world.gameOver&&!finalized) {
             progress.save(spec,world,true,activeSeconds);

@@ -1,3 +1,19 @@
+# Lava Blob 1.0.10 — Android
+
+## Nuova taratura collisioni sonore (21 novembre 2026)
+
+Feedback sulla 1.0.9: collisioni ancora troppo frequenti, suono leggermente fastidioso e ancora troppo simile a quello delle fusioni.
+
+- **Soglia 42** (prima 20), senza toccare la fisica soft-body.
+- **350 ms** minimi fra suoni di urti diversi; **700 ms** minimi prima di ripetere il suono per la stessa coppia di blob. Rimane il breve filtro dopo una fusione.
+- Quando avvengono più collisioni nella stessa elaborazione del frame, **suona soltanto la più intensa**; il buffer mantiene i sei candidati più forti durante un burst.
+- Nuovo file audio WAV originale `app/src/main/res/raw/lava_impact_soft.wav` (112 ms, PCM mono, 24 kHz): effetto sintetizzato di impatto gommoso, ovattato e breve, con attacco morbido e decadimento. **Non è derivato da un suono delle fusioni.** Caricato direttamente come risorsa, senza dipendere da conversioni runtime o fallback Bloop/Swoosh.
+- Volume della collisione fisso **0,08**, contro **0,56** delle fusioni; rate collisioni fisso a 1.0. Suoni delle fusioni, del lancio e del POP immutati.
+- Test regressione: velocità di collisione 42, collisione reale dal basso, scelta del più energico, pausa globale di 350 ms, pausa per coppia di 700 ms, volume fisso e validità WAV in CI.
+- Versione 1.0.10 / versionCode 16. Finché il repository non usa una chiave firma persistente, il file APK può richiedere la disinstallazione della versione installata prima dell'upgrade, con possibile perdita dei salvataggi locali.
+
+---
+
 # Lava Blob 1.0.9 — Android
 
 ## Collisioni — taratura su test reale (21 novembre 2026)

@@ -38,6 +38,24 @@ jobs:
       - name: Android SDK 35
         run: |
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"
+      - name: Validate bundled soft impact WAV
+        run: |
+          python3 - <<'PY'
+          import math, struct, wave
+          path="app/src/main/res/raw/lava_impact_soft.wav"
+          with wave.open(path,"rb") as audio:
+              assert audio.getnchannels()==1
+              assert audio.getsampwidth()==2
+              assert audio.getframerate()==24000
+              assert 0.08 <= audio.getnframes()/audio.getframerate() <= 0.12
+              data=audio.readframes(audio.getnframes())
+          pcm=struct.unpack("<"+"h"*(len(data)//2),data)
+          peak=max(abs(x) for x in pcm)
+          rms=math.sqrt(sum(x*x for x in pcm)/len(pcm))
+          assert 4000 < peak < 26000, peak
+          assert 1000 < rms < 10000, rms
+          print(f"Valid 112ms mono PCM WAV; peak={peak}, RMS={rms:.0f}")
+          PY
       - name: Test game physics and collision SFX regression
         run: gradle --no-daemon :app:testDebugUnitTest
       - name: Build APKs

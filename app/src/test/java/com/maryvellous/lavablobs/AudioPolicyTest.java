@@ -5,58 +5,46 @@ import static org.junit.Assert.*;
 
 public class AudioPolicyTest {
     @Test public void mergesSlowOnlySlightly() {
-        assertEquals(1f, AudioPolicy.mergeRate(1),.00001f);
-        assertTrue(AudioPolicy.mergeRate(5)<AudioPolicy.mergeRate(2));
-        assertEquals(.92f, AudioPolicy.mergeRate(100),.00001f);
+        assertEquals(1f,AudioPolicy.mergeRate(1),.00001f);
+        assertEquals(.92f,AudioPolicy.mergeRate(100),.00001f);
     }
-    @Test public void gentleApproachingContactsCanMakeSound() {
+
+    @Test public void onlyEnergeticContactMakesSound() {
         assertFalse(AudioPolicy.shouldPlayImpact(-5f));
         assertFalse(AudioPolicy.shouldPlayImpact(0f));
-        assertFalse(AudioPolicy.shouldPlayImpact(8f));
-        assertFalse(AudioPolicy.shouldPlayImpact(19.9f));
-        assertTrue(AudioPolicy.shouldPlayImpact(20f));
+        assertFalse(AudioPolicy.shouldPlayImpact(20f));
+        assertFalse(AudioPolicy.shouldPlayImpact(41.99f));
         assertTrue(AudioPolicy.shouldPlayImpact(42f));
+        assertTrue(AudioPolicy.shouldPlayImpact(310f));
     }
-    @Test public void impactSelectsEditedClipAndFallsBackToBundledSource() {
-        assertEquals(12,AudioPolicy.impactSample(12,true,2,true));
-        assertEquals(2,AudioPolicy.impactSample(12,false,2,true));
-        assertEquals(2,AudioPolicy.impactSample(0,false,2,true));
-        assertEquals(0,AudioPolicy.impactSample(12,false,2,false));
+
+    @Test public void globalImpactSpacingRequires350Milliseconds() {
+        assertEquals(350L,AudioPolicy.IMPACT_MIN_GAP_MS);
+        assertTrue(AudioPolicy.allowImpactAt(1000L,0L,0L));
+        assertFalse(AudioPolicy.allowImpactAt(1349L,1000L,0L));
+        assertTrue(AudioPolicy.allowImpactAt(1350L,1000L,0L));
+        assertFalse(AudioPolicy.allowImpactAt(1500L,1000L,1450L));
+        assertTrue(AudioPolicy.allowImpactAt(1550L,1000L,1450L));
     }
-    @Test public void silentOrDamagedImpactSampleIsRejected() {
+
+    @Test public void samePairNeeds700MillisecondsBeforeAnotherEvent() {
+        assertEquals(.70f,AudioPolicy.IMPACT_PAIR_COOLDOWN_SECONDS,.0001f);
+        assertTrue(AudioPolicy.allowPairImpactAt(1.0f,null));
+        assertFalse(AudioPolicy.allowPairImpactAt(1.699f,1f));
+        assertTrue(AudioPolicy.allowPairImpactAt(1.7001f,1f));
+    }
+
+    @Test public void impactHasConstantVeryLowVolume() {
+        assertEquals(.08f,AudioPolicy.impactVolume(),.00001f);
+        assertTrue(AudioPolicy.impactVolume()<.56f);
+    }
+
+    @Test public void silenceAndDamagedPcmAreRejectedForOtherEffects() {
         byte[] silent=new byte[2048];
         assertFalse(AudioPolicy.usableMonoPcm16(silent,0,silent.length));
         byte[] signal=new byte[2048];
-        for(int i=0;i<signal.length;i+=2) {signal[i]=(byte)0x00;signal[i+1]=(byte)0x10;}
+        for(int i=0;i<signal.length;i+=2) {signal[i]=0;signal[i+1]=16;}
         assertTrue(AudioPolicy.usableMonoPcm16(signal,0,signal.length));
         assertFalse(AudioPolicy.usableMonoPcm16(signal,4,2048));
-    }
-    @Test public void editedImpactHasLessLowFrequencyBodyThanSource() {
-        byte[] source=new byte[4096];
-        for(int i=0;i<source.length;i+=2) {
-            int sample=(i/2)%64<32?12000:-12000;
-            source[i]=(byte)(sample&255);
-            source[i+1]=(byte)((sample>>8)&255);
-        }
-        byte[] soft=source.clone();
-        AudioPolicy.softenImpactPcm16(soft);
-        assertFalse(java.util.Arrays.equals(source,soft));
-        assertTrue(AudioPolicy.usableMonoPcm16(soft,0,soft.length));
-        long origTotal=0,softTotal=0;
-        for(int i=0;i<source.length;i+=2) {
-            origTotal+=Math.abs((short)((source[i]&255)|((source[i+1]&255)<<8)));
-            softTotal+=Math.abs((short)((soft[i]&255)|((soft[i+1]&255)<<8)));
-        }
-        assertTrue("Softening must reduce energy and sound less like a full merge",softTotal<origTotal);
-    }
-    @Test public void largeCollisionIsLighter() {
-        assertTrue(AudioPolicy.impactRate(1)>AudioPolicy.impactRate(8));
-        assertTrue(AudioPolicy.impactRate(30)>=1.02f);
-    }
-    @Test public void collisionsStaySubtle() {
-        assertTrue(AudioPolicy.impactVolume(90f)>.095f);
-        assertTrue(AudioPolicy.impactVolume(500f)<=.18f);
-        assertTrue(AudioPolicy.impactVolume(200f)>AudioPolicy.impactVolume(80f));
-        assertTrue(AudioPolicy.impactVolume(200f)<.56f);
     }
 }

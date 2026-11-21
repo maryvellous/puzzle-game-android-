@@ -28,7 +28,8 @@ final class GameAudio {
     private final Random rng=new Random();
     private int bagCursor=4,previousBloop=-1;
     private volatile boolean released;
-    private volatile int impactId,impactFallbackId,launchId,popId;
+    private final int impactId;
+    private volatile int launchId,popId;
     private long lastImpactMs,lastMergeMs;
 
     GameAudio(Context context) {
@@ -44,26 +45,14 @@ final class GameAudio {
         bloops[1]=sounds.load(context,R.raw.bloop_2,1);
         bloops[2]=sounds.load(context,R.raw.bloop_3,1);
         bloops[3]=sounds.load(context,R.raw.bloop_4,1);
-        // Independent, non-merge sound for impact fallback; never play a full merge Bloop as a collision.
-        impactFallbackId=sounds.load(context,R.raw.swoosh_source,1);
+        // Distinct, pre-rendered 112ms rubber thump; no runtime conversion or Bloop fallback.
+        impactId=sounds.load(context,R.raw.lava_impact_soft,1);
         Context app=context.getApplicationContext();
         worker.execute(()->prepareClips(app));
     }
 
     private void prepareClips(Context context) {
-        // Separate preparations: a failed launch/POP conversion cannot affect collisions.
-        // Impact is a new, shorter filtered excerpt (v3 busts the old cached v2 WAV).
-        try {
-            File impact=EffectCompiler.renderSoftImpact(context,R.raw.bloop_2,
-                    "lava_impact_v3.wav",.28f,.53f,false,5,40);
-            synchronized(this) {
-                if(released)return;
-                impactId=sounds.load(impact.getAbsolutePath(),1);
-                if(impactId==0)Log.w(TAG,"Impact WAV load rejected; using quiet swoosh fallback");
-            }
-        }catch(Exception e){
-            Log.w(TAG,"Impact WAV unavailable; using quiet swoosh fallback",e);
-        }
+        // Only launch and POP need conversion; a conversion failure cannot mute impacts.
         try {
             File launch=EffectCompiler.render(context,R.raw.swoosh_source,
                     "lava_launch_v2.wav",.47f,.94f,true,5,13);
@@ -118,21 +107,14 @@ final class GameAudio {
         sounds.play(launchId,.16f,.16f,0,0,rate);
     }
 
-    void impact(int tier,float speed) {
-        if(released)return;
-        int id=AudioPolicy.impactSample(impactId,ready.contains(impactId),
-                impactFallbackId,ready.contains(impactFallbackId));
-        if(id==0)return;
+    void impact() {
+        if(released||!ready.contains(impactId))return;
         long now=SystemClock.elapsedRealtime();
-        if(now-lastImpactMs<88L||now-lastMergeMs<100L)return;
-        float volume=AudioPolicy.impactVolume(speed);
-        // Original swoosh is longer than the edited excerpt: accelerate and attenuate it.
-        boolean fallback=id==impactFallbackId;
-        float gain=fallback?volume*.58f:volume;
-        float rate=fallback?1.85f:AudioPolicy.impactRate(tier);
-        int streamId=sounds.play(id,gain,gain,1,0,rate);
+        if(!AudioPolicy.allowImpactAt(now,lastImpactMs,lastMergeMs))return;
+        float volume=AudioPolicy.impactVolume();
+        int streamId=sounds.play(impactId,volume,volume,1,0,1f);
         if(streamId!=0)lastImpactMs=now;
-        else Log.w(TAG,"SoundPool rejected collision playback (id="+id+")");
+        else Log.w(TAG,"SoundPool rejected soft impact playback (id="+impactId+")");
     }
 
     void pop() {
