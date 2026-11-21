@@ -74,3 +74,19 @@ Nessun test d'ascolto da parte dell'utente è stato ancora eseguito. Nessuna pro
 ## 6. Licenze
 
 Gli input sono quattro Bloop di floraphonic da Pixabay, già accreditati nel README del progetto. I file WAV derivati nell'artifact sono **materiale di valutazione interno**; evitare pubblicazione o vendita come raccolta di effetti sonori separata dal gioco. La PR contiene solo codice e documentazione, non nuovi sample derivati.
+
+## 7. Iterazione dopo ascolto: eliminare il suono "fritto" (C e D)
+
+**Feedback dell'utente:** il Bloop originale **A** non presenta il difetto; le ricostruzioni **C e D** sono abbastanza piacevoli, ma con un leggero crepitio/fruscio "fritto" che potrebbe risultare fastidioso dopo molti minuti.
+
+**Ipotesi tecnica verificabile:** il primo granular renderer sceglieva frammenti da posizioni temporali arbitrarie a ogni salto di circa 22 ms e li sovrapponeva tramite finestre Hann. Questo non garantiva la continuità della fase, delle frequenze locali o del movimento del pitch; di conseguenza poteva introdurre piccole discontinuità e interferenze non presenti nell'originale. Il clipping non basta a spiegare questo difetto.
+
+**Correzione sperimentale, non ancora approvata all'ascolto:**
+- Nuovo *overlap-add* a sorgente temporalmente allineata: finestra Hann da circa 70 ms, salto pari a un quarto della finestra (sovrapposizione 75%), normalizzazione stabile.
+- Niente salti casuali nei punti di lettura: in questa modalità di riferimento la componente granulare conserva esattamente la forma d'onda originale, inclusa la fase. I parametri della parte modale e le due percentuali C/D restano invariati.
+- **Non è ancora un time-stretch o un contatto fisico granulare completo:** è una base trasparente per stabilire se il crepitio viene dall'algoritmo precedente. Gli spostamenti temporali/pitch per la fisica richiederanno in seguito una strategia coerente di riallineamento della fase (es. WSOLA o time-stretch dedicato).
+- Il vecchio algoritmo viene conservato soltanto per il confronto diagnostico: non viene perso il campione che l'utente ha ascoltato.
+- Test di regressione: la versione overlap-add ricostruisce il segnale di riferimento senza nuovi salti; C/D nuovi restano diversi dalle varianti precedenti e non clippano.
+- I file di confronto sono generati come artefatto temporaneo da GitHub Actions; aprire **`listen_A_C_old_C_clean_D_old_D_clean.wav`** per confrontare in ordine A originale, C vecchia, C pulita, D vecchia, D pulita, con pause di 400 ms e livelli bilanciati.
+
+**Gate aperto:** confermare all'ascolto che C e D pulite non siano più "fritte", mantenendo l'identità sonora soddisfacente. Solo allora sperimentare con i blob fisici; non modificare `GameAudio` o il gameplay della 1.0.11 sulla base dei soli test automatici.
