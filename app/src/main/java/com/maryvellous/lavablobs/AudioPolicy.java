@@ -22,6 +22,11 @@ final class AudioPolicy {
         return peak>=256 && sum/(size/2)>=64;
     }
 
+    /** The one gate shared by merge, launch, impact and POP effects. */
+    static boolean effectsAllowed(boolean effectsEnabled,boolean released,boolean sampleReady) {
+        return effectsEnabled&&!released&&sampleReady;
+    }
+
     static float mergeRate(int tier) {
         return Math.max(.92f, 1f - .01f * Math.max(0, tier - 1));
     }
