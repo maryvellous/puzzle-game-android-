@@ -21,8 +21,8 @@ jobs:
           python-version: '3.11'
       - name: Install offline signal processing dependencies
         run: |
-          python -m pip install --disable-pip-version-check numpy==1.26.4 scipy==1.15.3 matplotlib==3.10.3
-          ffmpeg -version | head -1
+          python -m pip install --disable-pip-version-check numpy==1.26.4 scipy==1.15.3 matplotlib==3.10.3 imageio-ffmpeg==0.6.0
+          python -c "import imageio_ffmpeg; print('Audio decoder:', imageio_ffmpeg.get_ffmpeg_exe())"
       - name: Unit tests with deterministic synthetic samples
         run: python -m unittest discover -s tools/audio_lab -p 'test_*.py' -v
       - name: Analyze four original Bloop MP3 and render A/B/C fusion tests
