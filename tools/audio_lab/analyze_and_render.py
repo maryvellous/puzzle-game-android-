@@ -196,17 +196,25 @@ def granular_texture(src: np.ndarray, seed: int) -> np.ndarray:
     return protect(out)
 
 
-def hybrid_synthesis(src: np.ndarray, modal: np.ndarray, seed: int) -> np.ndarray:
+def hybrid_synthesis(src: np.ndarray, modal: np.ndarray, seed: int,
+                     grain_share: float = .36, onset_end: float = .07) -> np.ndarray:
     granular = granular_texture(src,seed)
-    result = .64*modal + .36*granular
+    result = (1.-grain_share)*modal + grain_share*granular
     n = len(result)
     t = np.arange(n)/SAMPLE_RATE
-    original_amount = np.clip((.07-t)/.055, 0, 1)**2
+    original_amount = np.clip((onset_end-t)/max(.01,onset_end-.015), 0, 1)**2
     result = original_amount*src+(1-original_amount)*result
     fade=int(.02*SAMPLE_RATE)
     if fade<n:
         result[-fade:]*=np.linspace(1,0,fade)
     return protect(result)
+
+
+def level_match(x: np.ndarray, ref_rms: float) -> np.ndarray:
+    rms = float(np.sqrt(np.mean(x*x)))
+    if rms < 1e-7:
+        return np.zeros_like(x)
+    return protect(x * min(12., ref_rms / rms))
 
 
 def variation(src: np.ndarray, size: str, energy: float) -> np.ndarray:
@@ -261,10 +269,12 @@ def run(input_dir: Path, output: Path) -> None:
         modes=features['candidate_modes_hz']
         b=modal_synthesis(active,modes)
         c=hybrid_synthesis(active,b,seed=idx+1234)
-        info_by_name[name]={'decoded':x, 'active':active, 'modal':b, 'hybrid':c}
+        d=hybrid_synthesis(active,b,seed=idx+1234,grain_share=.78,onset_end=.105)
+        info_by_name[name]={'decoded':x, 'active':active, 'modal':b, 'hybrid':c, 'natural':d}
         feature_report[name]={**meta,**features, 'source_sha256':__import__('hashlib').sha256(source_path.read_bytes()).hexdigest()}
         save_wav(output/'comparisons'/f'{name}_B_modal.wav',b)
         save_wav(output/'comparisons'/f'{name}_C_hybrid.wav',c)
+        save_wav(output/'comparisons'/f'{name}_D_texture_preserved.wav',d)
         print(f'{name}: {meta["active_seconds"]}s active, centroid {features["median_spectral_centroid_hz"]}Hz, modes={modes}',flush=True)
     master=info_by_name['bloop_2']['hybrid']
     for size in ['small','medium','large']:
@@ -272,8 +282,13 @@ def run(input_dir: Path, output: Path) -> None:
             save_wav(output/'variations'/f'fusion_{size}_{energy_label}.wav',variation(master,size,energy))
     spacing=np.zeros(int(SAMPLE_RATE*.4))
     ref=info_by_name['bloop_2']
-    montage=np.concatenate([ref['active'],spacing,ref['modal'],spacing,ref['hybrid']])
-    save_wav(output/'listen_A_original_B_modal_C_hybrid.wav',montage)
+    source_rms = float(np.sqrt(np.mean(ref['active']**2)))
+    montage=np.concatenate([
+        level_match(ref['active'],source_rms),spacing,
+        level_match(ref['modal'],source_rms),spacing,
+        level_match(ref['hybrid'],source_rms),spacing,
+        level_match(ref['natural'],source_rms)])
+    save_wav(output/'listen_A_original_B_modal_C_hybrid_D_natural.wav',montage)
     for path in output.rglob('*.wav'):
         with wave.open(str(path)) as w:
             assert w.getframerate()==SAMPLE_RATE and w.getnchannels()==1 and w.getsampwidth()==2
@@ -285,7 +300,12 @@ def run(input_dir: Path, output: Path) -> None:
         'method':'ffmpeg float PCM mono 44.1kHz; STFT nfft2048 hop256; active RMS -50dBFS or -32dB relative',
         'note':'Candidate modes are broad spectral peaks, not verified physical resonances or music notes',
         'samples':feature_report,
-        'synthetic_prototypes':{'B':'modal additive baseline','C':'hybrid: real attack + 64% modal / 36% scrambled granular body'},
+        'synthetic_prototypes':{
+            'B':'modal additive baseline',
+            'C':'hybrid: original attack + 64% modal / 36% granular body',
+            'D':'sample-faithful: longer original attack + 22% modal / 78% granular body',
+            'montage':'A/B/C/D loudness-matched with 0.4s pauses'
+        },
     },ensure_ascii=False,indent=2),encoding='utf8')
     lines=[
         '# Lava Blobs — A/B/C audio lab results', '',
@@ -299,9 +319,9 @@ def run(input_dir: Path, output: Path) -> None:
         lines.append(f'| {name} | {metrics["original_decoded_seconds"]:.3f} | {metrics["active_seconds"]:.3f} | {metrics["peak"]:.3f} | {metrics["rms"]:.3f} | {metrics["median_spectral_centroid_hz"]:.0f} | {freqs} |')
     lines += ['', 'Values extracted from decoded mono PCM; the peak frequencies are **candidate modes**, not validated fundamentals.', '',
         '## Listening instructions', '',
-        '1. Start with listen_A_original_B_modal_C_hybrid.wav: A is the ORIGINAL, B the modal reconstruction, C the hybrid. There is 0.4 seconds of silence between them. This is an internal comparison file, not a redistributable sound pack.',
-        '2. Listen to comparisons/bloop_N_B_modal.wav and comparisons/bloop_N_C_hybrid.wav for all four references.',
-        '3. Listen to variations/fusion_small_soft.wav through fusion_large_strong.wav to assess whether changes in dimension and energy sound natural.',
+        '1. Start with listen_A_original_B_modal_C_hybrid_D_natural.wav: A is original, B is fully modal, C is hybrid and D preserves more original texture. The versions are RMS-balanced before safe peak limiting; each is separated by 0.4 seconds of silence.',
+        '2. Compare comparisons/bloop_N_B_modal.wav, bloop_N_C_hybrid.wav and bloop_N_D_texture_preserved.wav for all four references.',
+        '3. Listen to variations/fusion_small_soft.wav through fusion_large_strong.wav to assess size and energy. These initially derive from C; this is a parameter test, not final acoustic physics.',
         '4. Compare on headphones and on the actual Android phone. Note whether the attack retains the original charm, whether there is metallic ringing, and whether the grain texture loops audibly.',
         '', '## Decision gate', '',
         'A synthesis is **not approved** by a passing test or the measured spectra. It must sound at least as convincing as the existing fusion Bloop to the user. If not, iterate without changing GameAudio.',
@@ -309,7 +329,7 @@ def run(input_dir: Path, output: Path) -> None:
         'Input tracks are by floraphonic, from Pixabay, as credited in the main README. This ZIP is an internal evaluation artifact, not a sound library for independent redistribution. Do not publish the derivatives as stand-alone assets.',
     ]
     (output/'LISTENING_NOTES.md').write_text('\n'.join(lines)+'\n',encoding='utf8')
-    print('SUCCESS: all four MP3 files analyzed; B/C prototypes, size/energy variations, plots and measured report generated.',flush=True)
+    print('SUCCESS: all four MP3 files analyzed; B/C/D prototypes, size/energy variations, plots and measured report generated.',flush=True)
 
 
 if __name__=='__main__':
