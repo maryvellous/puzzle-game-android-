@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 from analyze_and_render import (
     SAMPLE_RATE, active_excerpt, spectral_features, modal_synthesis,
-    hybrid_synthesis, protect, variation,
+    hybrid_synthesis, granular_texture, granular_texture_legacy, protect, variation,
 )
 
 
@@ -40,6 +40,28 @@ class AudioLabTest(unittest.TestCase):
         self.assertGreater(float(np.sqrt(np.mean(c*c))), .01)
         self.assertLess(float(np.max(np.abs(c))), .95)
         self.assertGreater(float(np.sqrt(np.mean((b-c)**2))), .01)
+
+    def test_phase_coherent_grains_have_no_extra_edges_or_phase_jumps(self):
+        # The clean renderer intentionally preserves source-phase in this
+        # reference mode: overlap-add must reconstruct every sample exactly.
+        clean = granular_texture(self.sample, 123)
+        old = granular_texture_legacy(self.sample, 123)
+        self.assertEqual(len(clean), len(self.sample))
+        self.assertTrue(np.allclose(clean, self.sample, atol=1e-10))
+        self.assertGreater(float(np.sqrt(np.mean((old-self.sample)**2))), .01)
+
+    def test_legacy_and_clean_hybrids_are_distinct(self):
+        modes = spectral_features(self.sample)['candidate_modes_hz']
+        modal = modal_synthesis(self.sample, modes)
+        for share, onset in ((.36,.07),(.78,.105)):
+            clean = hybrid_synthesis(self.sample,modal,123,
+                                     grain_share=share,onset_end=onset)
+            legacy = hybrid_synthesis(self.sample,modal,123,
+                                      grain_share=share,onset_end=onset,
+                                      use_legacy_grains=True)
+            self.assertTrue(np.all(np.isfinite(clean)))
+            self.assertLess(float(np.max(np.abs(clean))),.95)
+            self.assertGreater(float(np.sqrt(np.mean((legacy-clean)**2))),.003)
 
     def test_size_affects_length_and_energy_affects_gain(self):
         small = variation(self.sample, 'small', .8)
