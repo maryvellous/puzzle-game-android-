@@ -313,4 +313,4 @@ Le fasi possono essere implementate in PR piccole; nessuna nuova versione di gio
 
 ---
 
-**Stato di avanzamento:** `FASE A MISURATA — FASE B TIBRO APPROVATO CON DISTURBO RESIDUO — FASE C OFFLINE ESEGUITA, ASCOLTO PENDENTE — MOTORE ANDROID NON INTEGRATO`. I risultati sono in [PROCEDURAL_AUDIO_LAB_2026-11-21.md](PROCEDURAL_AUDIO_LAB_2026-11-21.md) e [PROCEDURAL_AUDIO_TWO_BLOB_PROTOTYPE.md](PROCEDURAL_AUDIO_TWO_BLOB_PROTOTYPE.md). L'ultima build utilizzabile rimane la **1.0.11**; nessun effetto esistente è stato sostituito.
+**Stato di avanzamento:** `FASE A MISURATA — FASE B TIMBRO APPROVATO CON DISTURBO RESIDUO — FASE C OFFLINE ESEGUITA, ASCOLTO PENDENTE — MOTORE ANDROID NON INTEGRATO`. I risultati sono in [PROCEDURAL_AUDIO_LAB_2026-11-21.md](PROCEDURAL_AUDIO_LAB_2026-11-21.md) e [PROCEDURAL_AUDIO_TWO_BLOB_PROTOTYPE.md](PROCEDURAL_AUDIO_TWO_BLOB_PROTOTYPE.md). L'ultima build utilizzabile rimane la **1.0.11**; nessun effetto esistente è stato sostituito.
