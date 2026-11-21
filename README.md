@@ -1,3 +1,17 @@
+# Lava Blobs — Documentazione progettuale
+
+## Nuovo sound design procedurale (direzione approvata, non implementata)
+
+**[Leggi il progetto dettagliato: Sound design procedurale guidato dalla fisica](docs/PROCEDURAL_SOUND_DESIGN.md)**
+
+La direzione futura è un **unico modello acustico derivato dai quattro Bloop originali di floraphonic**, che generi proceduralmente **anche le fusioni**, oltre a urti, compressioni, sfregamenti, rilascio, lancio e POP. Il suono seguirà velocità, dimensione, deformazione e contatti delle membrane, senza modificare la fisica del gioco.
+
+**Primo esperimento:** analisi PCM dei quattro Bloop e ricostruzione A/B di una fusione; nessuna sostituzione dell'audio esistente prima dell'approvazione d'ascolto. Il progetto comprende architettura Android, osservazione passiva della fisica, parametri, controlli prestazionali, rischi, licenze e roadmap a gate.
+
+**Stato dell'app:** la release utilizzabile resta **1.0.11**. Gli effetti attuali e il tasto **SUONI/MUTO** non sono stati modificati; non esiste ancora una musica integrata. I changelog successivi documentano versioni storiche, **non** il sistema procedurale futuro.
+
+---
+
 # Lava Blob 1.0.11 — Android
 
 ## Pulsante effetti sonori (21 novembre 2026)
