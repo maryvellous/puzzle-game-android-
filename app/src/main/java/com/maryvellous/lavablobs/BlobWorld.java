@@ -27,7 +27,17 @@ final class BlobWorld {
     static final class Impact {
         final int tier;
         final float speed;
-        Impact(int tier,float speed){this.tier=tier;this.speed=speed;}
+        // Actual dimensions of the two membranes, sampled when they collide.
+        // The physics itself does not depend on the audio test.
+        final float radiusA,radiusB;
+        Impact(int tier,float speed) {
+            this(tier,speed,Blob.RADII[Math.min(tier,Blob.RADII.length-1)],
+                    Blob.RADII[Math.min(tier,Blob.RADII.length-1)]);
+        }
+        Impact(int tier,float speed,float radiusA,float radiusB) {
+            this.tier=tier;this.speed=speed;
+            this.radiusA=radiusA;this.radiusB=radiusB;
+        }
     }
 
     static final class Adhesion {
@@ -360,7 +370,8 @@ final class BlobWorld {
         long key=(low<<32)|high;
         Float previous=impactTimes.get(key);
         if(!AudioPolicy.allowPairImpactAt(time,previous))return;
-        Impact event=new Impact((a.tier+b.tier)/2,approach);
+        Impact event=new Impact((a.tier+b.tier)/2,approach,
+                a.radiusTarget,b.radiusTarget);
         if(impacts.size()<6) {
             impacts.add(event);
         } else {
