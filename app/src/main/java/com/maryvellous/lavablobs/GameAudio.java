@@ -1,6 +1,7 @@
 package com.maryvellous.lavablobs;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.media.AudioAttributes;
 import android.media.SoundPool;
 import android.os.SystemClock;
@@ -19,7 +20,13 @@ import java.util.concurrent.Executors;
  */
 final class GameAudio {
     private static final String TAG="LavaAudio";
+    private static final String EFFECTS_KEY="sound_effects_enabled_v1";
     private final SoundPool sounds;
+    private final SharedPreferences preferences;
+    private boolean effectsEnabled;
+    // Remember recent streams so muting cuts off sounds that are already playing.
+    private final int[] recentStreams=new int[16];
+    private int streamCursor;
     private final ExecutorService worker=Executors.newSingleThreadExecutor(r->{
         Thread t=new Thread(r,"LavaAudioClips");t.setDaemon(true);return t;
     });
@@ -33,6 +40,8 @@ final class GameAudio {
     private long lastImpactMs,lastMergeMs;
 
     GameAudio(Context context) {
+        preferences=context.getSharedPreferences("lava_blobs",Context.MODE_PRIVATE);
+        effectsEnabled=preferences.getBoolean(EFFECTS_KEY,true);
         sounds=new SoundPool.Builder().setMaxStreams(8)
                 .setAudioAttributes(new AudioAttributes.Builder()
                         .setUsage(AudioAttributes.USAGE_GAME)
@@ -77,6 +86,29 @@ final class GameAudio {
         }
     }
 
+    boolean effectsEnabled(){return effectsEnabled;}
+
+    void setEffectsEnabled(boolean enabled) {
+        if(released||effectsEnabled==enabled)return;
+        effectsEnabled=enabled;
+        preferences.edit().putBoolean(EFFECTS_KEY,enabled).apply();
+        if(!enabled) {
+            for(int streamId:recentStreams)if(streamId!=0)sounds.stop(streamId);
+            java.util.Arrays.fill(recentStreams,0);
+        }
+    }
+
+    private boolean canPlay(int soundId) {
+        return AudioPolicy.effectsAllowed(effectsEnabled,released,
+                soundId>0&&ready.contains(soundId));
+    }
+
+    private int playEffect(int soundId,float volume,int priority,float rate) {
+        int streamId=sounds.play(soundId,volume,volume,priority,0,rate);
+        if(streamId!=0)recentStreams[streamCursor++%recentStreams.length]=streamId;
+        return streamId;
+    }
+
     private int nextBloop() {
         if(bagCursor==bag.length) {
             for(int i=bag.length-1;i>0;i--) {
@@ -94,32 +126,32 @@ final class GameAudio {
     }
 
     void merge(int mergedTier) {
-        if(released)return;
+        if(released||!effectsEnabled)return;
         int id=bloops[nextBloop()];
-        if(!ready.contains(id))return;
-        lastMergeMs=SystemClock.elapsedRealtime();
-        sounds.play(id,.56f,.56f,2,0,AudioPolicy.mergeRate(mergedTier));
+        if(!canPlay(id))return;
+        if(playEffect(id,.56f,2,AudioPolicy.mergeRate(mergedTier))!=0)
+            lastMergeMs=SystemClock.elapsedRealtime();
     }
 
     void launch(int tier) {
-        if(released||!ready.contains(launchId))return;
+        if(!canPlay(launchId))return;
         float rate=Math.max(1.08f,1.23f-.035f*Math.max(0,tier));
-        sounds.play(launchId,.16f,.16f,0,0,rate);
+        playEffect(launchId,.16f,0,rate);
     }
 
     void impact() {
-        if(released||!ready.contains(impactId))return;
+        if(!canPlay(impactId))return;
         long now=SystemClock.elapsedRealtime();
         if(!AudioPolicy.allowImpactAt(now,lastImpactMs,lastMergeMs))return;
         float volume=AudioPolicy.impactVolume();
-        int streamId=sounds.play(impactId,volume,volume,1,0,1f);
+        int streamId=playEffect(impactId,volume,1,1f);
         if(streamId!=0)lastImpactMs=now;
         else Log.w(TAG,"SoundPool rejected soft impact playback (id="+impactId+")");
     }
 
     void pop() {
-        if(released||!ready.contains(popId))return;
-        sounds.play(popId,.29f,.29f,1,0,1.30f);
+        if(!canPlay(popId))return;
+        playEffect(popId,.29f,1,1.30f);
     }
 
     void pause(){if(!released)sounds.autoPause();}
