@@ -52,4 +52,6 @@ Il laboratorio deve produrre:
 
 Test automatici: una bolla con contatto **statico e deformazione costante** deve rimanere silenziosa dopo gli eventuali transitori iniziali; l'urto deve rispondere a velocità normale non nulla; i WAV devono avere valori finiti e assenza di clipping.
 
+**Risultato di verifica tecnica C2:** 11 test Python completati (inclusi 5 nuovi test del movimento e del silenzio a pressione statica); test e traccia reali del solver Java riusciti. La [run CI 44935362278](https://github.com/maryvellous/puzzle-game-android-/actions/runs/44935362278) ha generato i nuovi WAV. Picchi misurati: urto A 0,420, urto B 0,371, compressione A 0,136, compressione B 0,142 (campioni normalizzati, sotto il limite di 0,70). Nessun ascolto della nuova versione ancora effettuato dall'utente.
+
 **Gate d'ascolto non ancora superato:** urto e compressione devono sembrare effettivamente i movimenti della bolla, non semplicemente due suoni diversi. Se nessuno convince, continuare a cercare un modello di eccitazione più adatto; non forzare la promozione al codice Android. **Il gioco resta alla versione 1.0.11.**
