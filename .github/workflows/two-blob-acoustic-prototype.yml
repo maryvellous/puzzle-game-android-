@@ -40,20 +40,31 @@ jobs:
       - name: Install offline DSP and decoder
         run: |
           python -m pip install --disable-pip-version-check numpy==1.26.4 scipy==1.15.3 matplotlib==3.10.3 imageio-ffmpeg==0.6.0
-      - name: Render Bloop-derived sounds controlled by actual mesh physics
+      - name: Test motion-driven rework independently of real samples
+        run: python -m unittest discover -s tools/audio_lab -p 'test_*.py' -v
+      - name: Render baseline and redesigned Bloop-driven sounds from actual mesh physics
         run: |
           python tools/audio_lab/render_physics_prototype.py \
             --traces app/build/audio_lab/two_blob_physics.csv \
             --sources app/src/main/res/raw \
             --output build/audio_lab/two_blob
+          python tools/audio_lab/rework_impact_compression.py \
+            --traces app/build/audio_lab/two_blob_physics.csv \
+            --sources app/src/main/res/raw \
+            --old build/audio_lab/two_blob \
+            --output build/audio_lab/two_blob_rework
           test -s build/audio_lab/two_blob/listen_real_physics_four_behaviors.wav
           test -s build/audio_lab/two_blob/real_physics_trace.png
-          test -s build/audio_lab/two_blob/physics_audio_metrics.json
-          cat build/audio_lab/two_blob/physics_audio_metrics.json >> "$GITHUB_STEP_SUMMARY"
+          test -s build/audio_lab/two_blob_rework/listen_impact_old_newA_newB.wav
+          test -s build/audio_lab/two_blob_rework/listen_compression_old_newA_newB.wav
+          test -s build/audio_lab/two_blob_rework/listen_all_new_impact_compression_sliding_fusion.wav
+          cat build/audio_lab/two_blob_rework/C2_METRICS_AND_FEEDBACK.json >> "$GITHUB_STEP_SUMMARY"
       - name: Upload offline acoustic listening tests (not an APK)
         uses: actions/upload-artifact@v4
         with:
-          name: lava-blobs-physics-to-sound-two-blob
-          path: build/audio_lab/two_blob/
+          name: lava-blobs-reworked-impact-compression
+          path: |
+            build/audio_lab/two_blob/
+            build/audio_lab/two_blob_rework/
           retention-days: 14
           if-no-files-found: error
