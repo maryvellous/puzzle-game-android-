@@ -27,3 +27,10 @@
 - La release principale è `lava-blob-v1.0.11`; la workflow di pubblicazione è **manuale** e non va avviata senza incarico dell'utente. Per configurare una chiave stabile servono i secret GitHub previsti nel README. Non distribuire automaticamente nuovi APK.
 - I file Android dell'originario Rovina Puzzle sono rimossi dal branch principale. I tag/release storici restano nella cronologia Git; non riaggiungere Rovina né confonderlo con il puzzle web di Scintilla nel diverso repository `junior-games-scintilla`.
 - L'utente gestisce personalmente la rinomina futura del repository; non rinominarlo senza richiesta esplicita.
+
+## Nuovo sound design procedurale — documentazione di riferimento
+- Specifica ufficiale: [`docs/PROCEDURAL_SOUND_DESIGN.md`](docs/PROCEDURAL_SOUND_DESIGN.md). **Direzione approvata, NON implementata**; la build attuale 1.0.11 continua a usare `SoundPool` e gli asset classici.
+- Obiettivo: un solo modello acustico ibrido, fondato sui quattro Bloop di floraphonic, per **fusioni incluse**, urti, compressioni, attriti, lancio e POP; il suono deve descrivere la fisica delle membrane senza modificarla.
+- Non cancellare i Bloop, non sostituire i suoni di fusione riusciti e non pubblicare nuove release soltanto perché esiste la specifica. Primo gate: misurazione dei quattro PCM e ricostruzione di una fusione approvata in A/B.
+- Conservare la preferenza SFX `sound_effects_enabled_v1`; musica futura con mute distinto. Le soglie/volume numerici in `AudioPolicy` sono valori dell'implementazione classica, non vincoli per il futuro motore.
+- Per ogni iterazione procedurale: probe fisico passivo, deduplica contatti nei cinque passaggi del solver, test audio/CPU e confronto sul telefono prima di qualsiasi rollout.
