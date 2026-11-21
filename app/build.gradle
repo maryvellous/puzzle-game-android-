@@ -40,9 +40,11 @@ android {
     buildTypes {
         debug {
             buildConfigField 'boolean', 'AUDIO_TEST', 'false'
+            buildConfigField 'boolean', 'AUDIO_SIZE_TEST', 'false'
         }
         release {
             buildConfigField 'boolean', 'AUDIO_TEST', 'false'
+            buildConfigField 'boolean', 'AUDIO_SIZE_TEST', 'false'
             if (signingConfigs.findByName('stable') != null)
                 signingConfig signingConfigs.stable
         }
@@ -57,8 +59,28 @@ android {
             applicationIdSuffix '.audiotest'
             versionNameSuffix '-audio-test'
             buildConfigField 'boolean', 'AUDIO_TEST', 'true'
+            buildConfigField 'boolean', 'AUDIO_SIZE_TEST', 'false'
             manifestPlaceholders = [appLabel: 'Lava Blob - Audio Test']
             matchingFallbacks = ['debug']
+        }
+        audioSizeTest {
+            initWith debug
+            // Distinct ID: this new APK installs next to BOTH the normal game
+            // and the old Audio Test without overwriting test save data.
+            applicationIdSuffix '.audiosizetest'
+            versionNameSuffix '-audio-size-test'
+            buildConfigField 'boolean', 'AUDIO_TEST', 'true'
+            buildConfigField 'boolean', 'AUDIO_SIZE_TEST', 'true'
+            manifestPlaceholders = [appLabel: 'Lava Blob - Audio Size Test']
+            matchingFallbacks = ['debug']
+        }
+    }
+
+    // Reuse the three generated C4.1 audioTest resources as-is for the size
+    // test: changes are ONLY runtime pitch/speed mapping.
+    sourceSets {
+        audioSizeTest {
+            res.srcDirs += ['src/audioTest/res']
         }
     }
 
