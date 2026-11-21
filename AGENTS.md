@@ -36,3 +36,6 @@
 - Non cancellare i Bloop, non sostituire i suoni di fusione riusciti e non pubblicare nuove release soltanto perché esiste la specifica. Il prototipo a due blob è solo offline: **ascoltarlo prima di sviluppare il DSP Android**; il lieve disturbo nei precedenti C/D resta un difetto noto.
 - Conservare la preferenza SFX `sound_effects_enabled_v1`; musica futura con mute distinto. Le soglie/volume numerici in `AudioPolicy` sono valori dell'implementazione classica, non vincoli per il futuro motore.
 - Per ogni iterazione procedurale: probe fisico passivo, deduplica contatti nei cinque passaggi del solver, test audio/CPU e confronto sul telefono prima di qualsiasi rollout.
+
+- [APK sperimentale Audio Test](docs/ANDROID_AUDIO_TEST_APK.md) **installata e giudicata promettente** dall'utente il 22 novembre 2026. Difetto principale: taglie piccole e grandi suonano simili.
+- [APK Audio Size Test](docs/ANDROID_AUDIO_SIZE_TEST.md) **nuova variante di confronto**, con ID separato e stessi WAV dell'Audio Test. Urto, adhesive friction e compression B variano in pitch e durata secondo la **radice cubica del volume medio** dei due blob, con smoothing circa 100ms per contatti continui. Non modificare il timbro o il volume già apprezzati; non toccare la release di produzione. Test su dispositivo ancora da svolgere.
