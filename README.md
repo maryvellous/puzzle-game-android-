@@ -1,3 +1,16 @@
+# Lava Blob 1.0.9 — Android
+
+## Collisioni — taratura su test reale (21 novembre 2026)
+
+- Confermato sul telefono: la 1.0.8 riproduce i suoni delle collisioni, ma troppo spesso e con timbro simile a una fusione.
+- Soglia della velocità relativa riportata a **20** (dalla precedente 8), senza modificare la fisica o il cooldown.
+- Nuovo estratto del `Bloop 2` per gli urti: `lava_impact_v3.wav`, più corto e filtrato (rimozione del corpo a bassa frequenza), frequenze di riproduzione più alte rispetto alle fusioni. Volume degli urti ridotto a 0,095–0,18 rispetto a 0,56 delle fusioni.
+- Il fallback ora usa `swoosh_source` (campione non usato nelle fusioni), riprodotto più veloce e più piano; non riproduce più la registrazione intera di `Bloop 2` come collisione.
+- Test aggiornati per soglia di 20, filtro del campione, basso volume, contatto rapido dal basso e non-fusione. Controllo timbrico finale su telefono ancora necessario.
+- Versione Android 1.0.9 / code 15, stesso identificativo dell'app. APK firmato temporaneamente se non è configurata una chiave stabile; può essere richiesta la disinstallazione con perdita dei dati locali non esportati.
+
+---
+
 # Lava Blob 1.0.8 — Android
 
 ## Collisioni sonore: correzioni e test (21 novembre 2026)
