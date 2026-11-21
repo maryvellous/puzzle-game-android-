@@ -32,7 +32,7 @@ jobs:
             --output build/audio_lab
           test -s build/audio_lab/features.json
           test -s build/audio_lab/LISTENING_NOTES.md
-          test -s build/audio_lab/listen_A_original_B_modal_C_hybrid.wav
+          test -s build/audio_lab/listen_A_original_B_modal_C_hybrid_D_natural.wav
           test -s build/audio_lab/bloop_analysis.png
           cat build/audio_lab/LISTENING_NOTES.md >> "$GITHUB_STEP_SUMMARY"
       - name: Upload listening previews and measured spectrograms (internal evaluation)
