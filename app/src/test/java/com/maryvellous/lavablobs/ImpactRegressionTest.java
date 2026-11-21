@@ -29,8 +29,20 @@ public class ImpactRegressionTest {
         }
         assertNotNull("Fast upward hit on another tier must enqueue an audible collision",first);
         assertTrue("Approach speed should exceed the sound threshold",
-                first.speed>=20f);
+                first.speed>=42f);
         assertEquals("Different-tier contact must not fuse the blobs",2,world.blobs.size());
+    }
+
+    @Test public void strongestImpactIsSelectedFromSimultaneousCollisions() {
+        List<BlobWorld.Impact> impacts=java.util.Arrays.asList(
+                new BlobWorld.Impact(1,48f),
+                new BlobWorld.Impact(4,152f),
+                new BlobWorld.Impact(3,75f));
+        BlobWorld.Impact strongest=BlobWorld.strongestImpact(impacts);
+        assertNotNull(strongest);
+        assertEquals(152f,strongest.speed,.00001f);
+        assertEquals(4,strongest.tier);
+        assertNull(BlobWorld.strongestImpact(java.util.Collections.emptyList()));
     }
 
     @Test public void sameTierContactFusesInsteadOfEnqueueingImpact() {
