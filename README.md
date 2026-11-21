@@ -6,7 +6,7 @@
 
 La direzione futura è un **unico modello acustico derivato dai quattro Bloop originali di floraphonic**, che generi proceduralmente **anche le fusioni**, oltre a urti, compressioni, sfregamenti, rilascio, lancio e POP. Il suono seguirà velocità, dimensione, deformazione e contatti delle membrane, senza modificare la fisica del gioco.
 
-**Primo esperimento:** analisi PCM dei quattro Bloop e ricostruzione A/B di una fusione; nessuna sostituzione dell'audio esistente prima dell'approvazione d'ascolto. Il progetto comprende architettura Android, osservazione passiva della fisica, parametri, controlli prestazionali, rischi, licenze e roadmap a gate.
+**Avanzamento:** analisi PCM dei quattro Bloop completata e quattro varianti (A originale, B modale, C ibrida, D con maggiore texture originale) prodotte da un laboratorio offline. I WAV sono disponibili come artifact di GitHub Actions, **in attesa di valutazione d'ascolto**. Nessuna sostituzione dell'audio esistente prima dell'approvazione. Vedi [misure e test del primo laboratorio](docs/PROCEDURAL_AUDIO_LAB_2026-11-21.md), oltre alla specifica architetturale.
 
 **Stato dell'app:** la release utilizzabile resta **1.0.11**. Gli effetti attuali e il tasto **SUONI/MUTO** non sono stati modificati; non esiste ancora una musica integrata. I changelog successivi documentano versioni storiche, **non** il sistema procedurale futuro.
 
