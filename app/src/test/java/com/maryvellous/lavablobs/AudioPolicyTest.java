@@ -9,6 +9,14 @@ public class AudioPolicyTest {
         assertTrue(AudioPolicy.mergeRate(5)<AudioPolicy.mergeRate(2));
         assertEquals(.92f, AudioPolicy.mergeRate(100),.00001f);
     }
+    @Test public void gentleApproachingContactsCanMakeSound() {
+        assertFalse(AudioPolicy.shouldPlayImpact(-5f));
+        assertFalse(AudioPolicy.shouldPlayImpact(0f));
+        assertFalse(AudioPolicy.shouldPlayImpact(7.9f));
+        assertTrue(AudioPolicy.shouldPlayImpact(8f));
+        assertTrue(AudioPolicy.shouldPlayImpact(20f));
+        assertTrue(AudioPolicy.shouldPlayImpact(42f));
+    }
     @Test public void largeCollisionIsLower() {
         assertTrue(AudioPolicy.impactRate(1)>AudioPolicy.impactRate(8));
         assertTrue(AudioPolicy.impactRate(30)>=.79f);
