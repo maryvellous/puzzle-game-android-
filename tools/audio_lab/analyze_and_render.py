@@ -23,10 +23,15 @@ SOURCE_NAMES = [f"bloop_{i}" for i in range(1, 5)]
 
 
 def decode_mp3(path: Path) -> np.ndarray:
-    if not shutil.which("ffmpeg"):
-        raise RuntimeError("ffmpeg required for MP3 decoding")
+    binary = shutil.which("ffmpeg")
+    if not binary:
+        try:
+            import imageio_ffmpeg
+            binary = imageio_ffmpeg.get_ffmpeg_exe()
+        except ImportError as exc:
+            raise RuntimeError("ffmpeg decoder unavailable") from exc
     p = subprocess.run([
-        "ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin", "-i", str(path),
+        binary, "-hide_banner", "-loglevel", "error", "-nostdin", "-i", str(path),
         "-f", "f32le", "-acodec", "pcm_f32le", "-ac", "1", "-ar", str(SAMPLE_RATE), "pipe:1"
     ], capture_output=True, check=True)
     arr = np.frombuffer(p.stdout, dtype="<f4").astype(np.float64)
