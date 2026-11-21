@@ -50,4 +50,25 @@ final class AudioTestModel {
     static float impactIntensity(float approach) {
         return clamp((approach-42f)/250f,0f,1f);
     }
+
+    // The game renders a 2D membrane, but the intended acoustic body has
+    // volume. Cube-mean the CURRENT membrane radii so the larger of two
+    // unequal blobs contributes proportionately more acoustic mass.
+    static float pairRadius(float radiusA,float radiusB) {
+        float a=Math.max(8f,radiusA),b=Math.max(8f,radiusB);
+        return (float)Math.cbrt((a*a*a+b*b*b)*.5);
+    }
+
+    /** SoundPool changes playback speed and pitch together (0.5..2.0). */
+    static float sizePlaybackRate(float effectiveRadius) {
+        float radius=Math.max(8f,effectiveRadius);
+        float scale=(float)Math.pow(Blob.RADII[2]/radius,.46);
+        return clamp(scale,.56f,1.34f);
+    }
+
+    /** A ~100ms glide prevents discontinuous pitch jumps as contacts change. */
+    static float smoothPlaybackRate(float previous,float target,float dt) {
+        float alpha=(float)(1.0-Math.exp(-10.0*Math.max(0f,dt)));
+        return previous+(target-previous)*clamp(alpha,0f,1f);
+    }
 }
