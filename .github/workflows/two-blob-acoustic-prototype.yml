@@ -75,15 +75,22 @@ jobs:
           test -s build/audio_lab/two_blob_c4/B_friction_C3_vs_C4_wet.wav
           test -s build/audio_lab/two_blob_c4/C_compression_silent_vs_whisper.wav
           test -s build/audio_lab/two_blob_c4/C4_METRICS.json
-          cat build/audio_lab/two_blob_c4/C4_METRICS.json >> "$GITHUB_STEP_SUMMARY"
+          python tools/audio_lab/prepare_c41_previews.py \
+            --c4 build/audio_lab/two_blob_c4 \
+            --output build/audio_lab/two_blob_c41
+          test -s build/audio_lab/two_blob_c41/07_COMPARE_ONLY_IMPACTS_NO_MERGE.wav
+          test -s build/audio_lab/two_blob_c41/08_COMPARE_IMPACT_FRICTION_COMPRESSION_NO_MERGE.wav
+          test -s build/audio_lab/two_blob_c41/C41_AUDIT.json
+          cat build/audio_lab/two_blob_c41/C41_AUDIT.json >> "$GITHUB_STEP_SUMMARY"
       - name: Upload offline acoustic listening tests (not an APK)
         uses: actions/upload-artifact@v4
         with:
-          name: lava-blobs-c4-organic-impacts-friction-compression
+          name: lava-blobs-c41-no-extra-fusion-audible-impact
           path: |
             build/audio_lab/two_blob/
             build/audio_lab/two_blob_rework/
             build/audio_lab/two_blob_subtle/
             build/audio_lab/two_blob_c4/
+            build/audio_lab/two_blob_c41/
           retention-days: 14
           if-no-files-found: error
