@@ -339,8 +339,9 @@ final class BlobWorld {
             if(pushPointFromPolygon(a,i,b,contactBoundsA,contactBoundsB,createAdhesion))touched=true;
             if(pushPointFromPolygon(b,i,a,contactBoundsB,contactBoundsA,createAdhesion))touched=true;
         }
-        // Pass zero reports existing physical contacts without changing solver forces.
-        if(createAdhesion&&touched)recordImpact(a,b);
+        // Later solver passes may create the first actual contact; audio must
+        // observe them too. Per-pair cooldown in recordImpact prevents repeats.
+        if(touched)recordImpact(a,b);
     }
 
     private void recordImpact(Blob a,Blob b) {
@@ -359,7 +360,8 @@ final class BlobWorld {
         long key=(low<<32)|high;
         Float previous=impactTimes.get(key);
         if(previous!=null&&time-previous<.34f)return;
-        if(impacts.size()<6)impacts.add(new Impact((a.tier+b.tier)/2,approach));
+        if(impacts.size()>=6)return; // Never cooldown an event we did not queue.
+        impacts.add(new Impact((a.tier+b.tier)/2,approach));
         impactTimes.put(key,time);
         if(impactTimes.size()>400)
             impactTimes.entrySet().removeIf(e->time-e.getValue()>1.2f);

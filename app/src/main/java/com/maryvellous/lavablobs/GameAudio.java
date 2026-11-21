@@ -49,21 +49,40 @@ final class GameAudio {
     }
 
     private void prepareClips(Context context) {
+        // Each effect is independent. A failed launch or POP conversion cannot
+        // block impact playback; the bundled Bloop 2 remains the fallback.
+        try {
+            File impact=EffectCompiler.render(context,R.raw.bloop_2,
+                    "lava_impact_v2.wav",.31f,.68f,false,14,52);
+            synchronized(this) {
+                if(released)return;
+                impactId=sounds.load(impact.getAbsolutePath(),1);
+                if(impactId==0)Log.w(TAG,"Edited impact WAV refused by SoundPool; using Bloop 2");
+            }
+        }catch(Exception e){
+            Log.w(TAG,"Edited impact WAV unavailable; using bundled Bloop 2",e);
+        }
         try {
             File launch=EffectCompiler.render(context,R.raw.swoosh_source,
                     "lava_launch_v2.wav",.47f,.94f,true,5,13);
-            File impact=EffectCompiler.render(context,R.raw.bloop_2,
-                    "lava_impact_v2.wav",.31f,.68f,false,14,52);
-            File pop=EffectCompiler.render(context,R.raw.bloop_2,
-                    "lava_pop_v1.wav",.04f,.23f,false,3,22);
-            synchronized(this){
+            synchronized(this) {
                 if(released)return;
                 launchId=sounds.load(launch.getAbsolutePath(),1);
-                impactId=sounds.load(impact.getAbsolutePath(),1);
-                popId=sounds.load(pop.getAbsolutePath(),1);
+                if(launchId==0)Log.w(TAG,"Launch WAV refused by SoundPool");
             }
         }catch(Exception e){
-            Log.w(TAG,"Optional launch/impact preparation failed",e);
+            Log.w(TAG,"Launch effect unavailable",e);
+        }
+        try {
+            File pop=EffectCompiler.render(context,R.raw.bloop_2,
+                    "lava_pop_v1.wav",.04f,.23f,false,3,22);
+            synchronized(this) {
+                if(released)return;
+                popId=sounds.load(pop.getAbsolutePath(),1);
+                if(popId==0)Log.w(TAG,"POP WAV refused by SoundPool");
+            }
+        }catch(Exception e){
+            Log.w(TAG,"POP effect unavailable",e);
         }
     }
 
@@ -98,12 +117,16 @@ final class GameAudio {
     }
 
     void impact(int tier,float speed) {
-        if(released||!ready.contains(impactId))return;
+        if(released)return;
+        int id=AudioPolicy.impactSample(impactId,ready.contains(impactId),
+                bloops[1],ready.contains(bloops[1]));
+        if(id==0)return;
         long now=SystemClock.elapsedRealtime();
         if(now-lastImpactMs<88L||now-lastMergeMs<100L)return;
-        lastImpactMs=now;
         float volume=AudioPolicy.impactVolume(speed);
-        sounds.play(impactId,volume,volume,0,0,AudioPolicy.impactRate(tier));
+        int streamId=sounds.play(id,volume,volume,1,0,AudioPolicy.impactRate(tier));
+        if(streamId!=0)lastImpactMs=now;
+        else Log.w(TAG,"SoundPool rejected collision playback (id="+id+")");
     }
 
     void pop() {

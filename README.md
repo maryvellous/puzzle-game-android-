@@ -1,3 +1,16 @@
+# Lava Blob 1.0.8 — Android
+
+## Collisioni sonore: correzioni e test (21 novembre 2026)
+
+- La preparazione dei campioni è indipendente: errori di conversione su lancio/POP non possono impedire il caricamento delle collisioni. Il campione originale `Bloop 2` già incorporato è usato come **fallback per gli urti** se il campione derivato non è disponibile, manca o è silenzioso; la selezione mantiene sempre l'effetto derivato quando pronto.
+- La conversione PCM verifica che l'estratto audio non sia vuoto/quasi silenzioso; la cache WAV viene convalidata prima di riutilizzarla.
+- Gli urti tra blob differenti vengono registrati anche quando si manifesta il primo contatto nei passaggi successivi del solver; rimangono la soglia di velocità 8, il cooldown per coppia e il filtro globale anti-ripetizione. Non cambia il moto delle bolle.
+- Test di regressione: bolla veloce dal basso contro bolla quasi ferma in alto, non-fusione, niente suoni a distanza, scelta del fallback e rigetto di sample silenziosi.
+- Il controllo esito di `SoundPool.play()` registra gli errori, senza bloccare il gameplay. La riuscita CI non è ancora un collaudo sul telefono.
+- Versione 1.0.8 (versionCode 14). Senza firma persistente il normale APK della CI non è garantito aggiornabile sopra la versione precedente: per l'installazione può essere necessaria disinstallazione (con perdita dati locali non esportati).
+
+---
+
 # Lava Blob 1.0.7 — Android
 
 Aggiornamento audio (21 novembre 2026): soglia di avvicinamento per il suono degli urti tra blob differenti ridotta da 42 a 8. Nessuna modifica a volume, asset sonori, frequenza, anti-ripetizione o fisica. È una prova da ascoltare su dispositivo, non una conferma che il suono sia riprodotto.

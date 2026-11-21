@@ -22,7 +22,7 @@ final class EffectCompiler {
     static File render(Context ctx,int raw,String filename,float from,float to,
                        boolean reverse,int fadeInMs,int fadeOutMs) throws Exception {
         File output=new File(ctx.getCacheDir(),filename);
-        if(output.isFile()&&output.length()>48)return output;
+        if(cachedWavIsUsable(output))return output;
         Decoded d=decode(ctx,raw);
         if(d.channels<1||d.channels>2)throw new IOException("Unsupported audio channels");
         int frameBytes=d.channels*2,frames=d.pcm.length/frameBytes;
@@ -41,6 +41,8 @@ final class EffectCompiler {
             short sample=(short)(sum/d.channels*gain);
             mono[2*i]=(byte)(sample&255);mono[2*i+1]=(byte)((sample>>8)&255);
         }
+        if(!AudioPolicy.usableMonoPcm16(mono,0,mono.length))
+            throw new IOException("Selected audio excerpt is effectively silent");
         File tmp=new File(ctx.getCacheDir(),filename+".tmp");
         try(FileOutputStream out=new FileOutputStream(tmp)) {
             out.write(new byte[]{'R','I','F','F'});le32(out,36+mono.length);
@@ -55,6 +57,19 @@ final class EffectCompiler {
             if(!tmp.renameTo(output))throw new IOException("Cannot save cached sample");
         }
         return output;
+    }
+    private static boolean cachedWavIsUsable(File output) {
+        if(!output.isFile()||output.length()<512||output.length()>2_000_000)return false;
+        try {
+            byte[] wav=java.nio.file.Files.readAllBytes(output.toPath());
+            return wav.length>44
+                    &&wav[0]=='R'&&wav[1]=='I'&&wav[2]=='F'&&wav[3]=='F'
+                    &&wav[8]=='W'&&wav[9]=='A'&&wav[10]=='V'&&wav[11]=='E'
+                    &&wav[36]=='d'&&wav[37]=='a'&&wav[38]=='t'&&wav[39]=='a'
+                    &&AudioPolicy.usableMonoPcm16(wav,44,wav.length-44);
+        }catch(IOException e) {
+            return false;
+        }
     }
     private static void le16(FileOutputStream o,int v)throws IOException {
         o.write(v&255);o.write((v>>8)&255);
