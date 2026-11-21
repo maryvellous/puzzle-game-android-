@@ -1,11 +1,6 @@
 name: Publish Lava Blob Android
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'app/build.gradle'
   workflow_dispatch:
 
 permissions:
