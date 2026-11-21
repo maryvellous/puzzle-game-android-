@@ -28,6 +28,7 @@ final class ExperimentalAudio {
     private final int impactId, frictionId, compressionId;
     private int frictionStream,compressionStream,lastImpactStream;
     private float frictionLevel,compressionLevel;
+    private float frictionPlaybackRate=1f,compressionPlaybackRate=1f;
     private boolean enabled,paused,released;
     private long lastImpactMs,lastMergeMs;
     private int countFrames;
@@ -73,14 +74,19 @@ final class ExperimentalAudio {
         stopContinuous();
     }
 
-    void impact(int tier,float speed) {
+    void impact(int tier,float radiusA,float radiusB,float speed) {
         if(!available(impactId))return;
         long now=SystemClock.elapsedRealtime();
         if(now-lastMergeMs<140 || now-lastImpactMs<115)return;
         float energy=AudioTestModel.impactIntensity(speed);
-        // Keep this below merge level, but don't bury a brief impact in silence.
+        // Keep collision loudness tied to energy; pitch AND duration are tied
+        // to the acoustic volume of the two colliding membranes only in the
+        // separate AUDIO SIZE TEST variant. The old Audio Test remains a
+        // consistent comparison control.
         float volume=.48f+.42f*(float)Math.sqrt(energy);
-        float rate=AudioTestModel.clamp(1.0f-.012f*Math.max(0,tier-1),.87f,1.08f);
+        float rate=BuildConfig.AUDIO_SIZE_TEST
+                ?AudioTestModel.sizePlaybackRate(AudioTestModel.pairRadius(radiusA,radiusB))
+                :AudioTestModel.clamp(1.0f-.012f*Math.max(0,tier-1),.87f,1.08f);
         int stream=pool.play(impactId,volume,volume,2,0,rate);
         if(stream!=0){
             lastImpactMs=now;
@@ -107,12 +113,29 @@ final class ExperimentalAudio {
 
         if(!enabled)return;
         float maxSlip=0f,maxCompression=0f;
+        float frictionRadiusSum=0f,frictionWeight=0f;
+        float compressionRadiusSum=0f,compressionWeight=0f;
         // Existing short-lived adhesion links are the actual contact sensor:
         // no circle-vs-circle collision and no additional physics simulation.
         for(BlobWorld.Adhesion link:world.adhesions) {
-            maxSlip=Math.max(maxSlip,AudioTestModel.slip(link));
+            float slip=AudioTestModel.slip(link);
+            maxSlip=Math.max(maxSlip,slip);
             Float a=shapeChanges.get(link.a),b=shapeChanges.get(link.b);
-            maxCompression=Math.max(maxCompression,Math.max(a==null?0:a,b==null?0:b));
+            float shapeChange=Math.max(a==null?0f:a,b==null?0f:b);
+            maxCompression=Math.max(maxCompression,shapeChange);
+            if(BuildConfig.AUDIO_SIZE_TEST) {
+                float radius=AudioTestModel.pairRadius(
+                        link.a.radiusTarget,link.b.radiusTarget);
+                float slipWeight=AudioTestModel.frictionIntensity(slip);
+                if(slipWeight>0f) {
+                    frictionRadiusSum+=radius*slipWeight;
+                    frictionWeight+=slipWeight;
+                }
+                if(shapeChange>0f) {
+                    compressionRadiusSum+=radius*shapeChange;
+                    compressionWeight+=shapeChange;
+                }
+            }
         }
 
         float targetFriction=AudioTestModel.frictionIntensity(maxSlip)*.50f;
@@ -123,16 +146,40 @@ final class ExperimentalAudio {
         frictionLevel+=(targetFriction-frictionLevel)*fAlpha;
         compressionLevel+=(targetCompression-compressionLevel)*cAlpha;
 
-        // Looping timbral material is separate from physical event triggering.
-        // A surface resting against another generates no scraping.
+        // Looping acoustic material still starts/stops with real contact.
+        // Pitch changes continuously with the effective volume of the blobs,
+        // not with their impact energy or the number of solver iterations.
+        float targetFrictionRate=.78f+.18f*AudioTestModel.frictionIntensity(maxSlip);
+        float targetCompressionRate=1f;
+        if(BuildConfig.AUDIO_SIZE_TEST) {
+            float frictionRadius=frictionWeight>0f
+                    ?frictionRadiusSum/frictionWeight:Blob.RADII[2];
+            float compressionRadius=compressionWeight>0f
+                    ?compressionRadiusSum/compressionWeight:Blob.RADII[2];
+            float sizeSlipRate=AudioTestModel.sizePlaybackRate(frictionRadius);
+            targetFrictionRate=AudioTestModel.clamp(sizeSlipRate*
+                    (.90f+.06f*AudioTestModel.frictionIntensity(maxSlip)),.52f,1.50f);
+            targetCompressionRate=AudioTestModel.sizePlaybackRate(compressionRadius);
+        }
+        // A new contact starts at the correct pitch. During continued contact
+        // the playback rate glides slowly instead of jumping between pairs.
+        frictionPlaybackRate=frictionStream==0?targetFrictionRate
+                :AudioTestModel.smoothPlaybackRate(
+                        frictionPlaybackRate,targetFrictionRate,dt);
+        compressionPlaybackRate=compressionStream==0?targetCompressionRate
+                :AudioTestModel.smoothPlaybackRate(
+                        compressionPlaybackRate,targetCompressionRate,dt);
         frictionStream=updateLoop(frictionStream,frictionId,frictionLevel,
-                .78f+.18f*AudioTestModel.frictionIntensity(maxSlip));
-        compressionStream=updateLoop(compressionStream,compressionId,compressionLevel,1f);
+                frictionPlaybackRate);
+        compressionStream=updateLoop(compressionStream,compressionId,compressionLevel,
+                compressionPlaybackRate);
 
         if(++countFrames%600==0) {
             Log.d(TAG,"contactLinks="+world.adhesions.size()+
                     " slip="+maxSlip+" friction="+frictionLevel+
-                    " compression="+compressionLevel);
+                    " compression="+compressionLevel+
+                    " slipRate="+frictionPlaybackRate+
+                    " squeezeRate="+compressionPlaybackRate);
         }
     }
 
@@ -173,6 +220,8 @@ final class ExperimentalAudio {
         compressionStream=0;
         frictionLevel=0;
         compressionLevel=0;
+        frictionPlaybackRate=1f;
+        compressionPlaybackRate=1f;
     }
 
     private void stopEverything(){
