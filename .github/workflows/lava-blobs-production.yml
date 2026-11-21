@@ -1,12 +1,6 @@
 name: Publish Lava Blob Android
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'lava-blobs/**'
-      - '.github/workflows/lava-blobs-production.yml'
   workflow_dispatch:
 
 permissions:
@@ -35,7 +29,7 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"
 
       - name: Verify gameplay and palette tests
-        run: gradle --no-daemon -p lava-blobs :app:testDebugUnitTest
+        run: gradle --no-daemon :app:testDebugUnitTest
 
       - name: Configure optional persistent signing key
         env:
@@ -45,8 +39,8 @@ jobs:
           LAVA_SIGNING_KEY_ALIAS: ${{ secrets.LAVA_SIGNING_KEY_ALIAS }}
         run: |
           if [[ -n "$LAVA_KEYSTORE_BASE64" && -n "$LAVA_SIGNING_STORE_PASSWORD" && -n "$LAVA_SIGNING_KEY_ALIAS" && -n "$LAVA_SIGNING_KEY_PASSWORD" ]]; then
-            printf '%s' "$LAVA_KEYSTORE_BASE64" | base64 --decode > "$GITHUB_WORKSPACE/lava-blobs/signing.keystore"
-            echo "LAVA_SIGNING_STORE_FILE=$GITHUB_WORKSPACE/lava-blobs/signing.keystore" >> "$GITHUB_ENV"
+            printf '%s' "$LAVA_KEYSTORE_BASE64" | base64 --decode > "$GITHUB_WORKSPACE/signing.keystore"
+            echo "LAVA_SIGNING_STORE_FILE=$GITHUB_WORKSPACE/signing.keystore" >> "$GITHUB_ENV"
             echo "LAVA_STABLE_SIGNING=1" >> "$GITHUB_ENV"
           else
             echo "LAVA_STABLE_SIGNING=0" >> "$GITHUB_ENV"
@@ -60,18 +54,18 @@ jobs:
           LAVA_SIGNING_KEY_ALIAS: ${{ secrets.LAVA_SIGNING_KEY_ALIAS }}
         run: |
           if [[ "$LAVA_STABLE_SIGNING" == "1" ]]; then
-            gradle --no-daemon -p lava-blobs :app:assembleRelease
+            gradle --no-daemon :app:assembleRelease
           else
-            gradle --no-daemon -p lava-blobs :app:assembleDebug
+            gradle --no-daemon :app:assembleDebug
           fi
 
       - name: Stage distribution APK
         run: |
           mkdir -p release
           if [[ "$LAVA_STABLE_SIGNING" == "1" ]]; then
-            cp lava-blobs/app/build/outputs/apk/release/app-release.apk release/lava-blob-v1.0.6.apk
+            cp app/build/outputs/apk/release/app-release.apk release/lava-blob-v1.0.6.apk
           else
-            cp lava-blobs/app/build/outputs/apk/debug/app-debug.apk release/lava-blob-v1.0.6.apk
+            cp app/build/outputs/apk/debug/app-debug.apk release/lava-blob-v1.0.6.apk
           fi
 
       - name: Upload versioned APK artifact
