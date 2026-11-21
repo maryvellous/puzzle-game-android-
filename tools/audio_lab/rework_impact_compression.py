@@ -85,13 +85,26 @@ def contact_excitation(controls: dict) -> np.ndarray:
 def elastic_impact(trace: dict, material: np.ndarray,
                    peak_gain: float=.42) -> tuple[np.ndarray,dict]:
     timeline,c=resample_controls(trace)
-    excitation = contact_excitation(c)
-    audible=float(np.sum(excitation))
     radius=float(trace["radius"][0])
     response=bloop_resonance(material,radius)
+    excitation = np.zeros(len(timeline),dtype=float)
+    contact=np.asarray(trace["contact"])>.5
+    normal=np.asarray(trace["normal_speed"])
+    # Solver contact begins in discrete steps. A collision excites the
+    # material as a physically weighted impulse, then it freely decays.
+    # Convolving a wide 6ms ramp with a ~220Hz waveform phase-cancels most
+    # of its energy; a compact impulse is the correct physical excitation.
+    previous=False
+    for i,touching in enumerate(contact):
+        if touching and not previous:
+            strength=np.clip((normal[i]-110.)/180.,0.,1.)**1.2
+            idx=int(round(float(trace["time"][i])*SAMPLE_RATE))
+            if idx<len(excitation):
+                excitation[idx]+=strength
+        previous=bool(touching)
     output=fftconvolve(excitation,response,mode="full")[:len(timeline)]
     output=protect(output*peak_gain,peak_limit=.70)
-    return output, {"driver_integral":round(audible,4),
+    return output, {"driver_integral":round(float(np.sum(excitation)),4),
                     "rms":round(float(np.sqrt(np.mean(output**2))),5),
                     "peak":round(float(np.max(np.abs(output))),4)}
 
@@ -108,15 +121,27 @@ def deformation_driver(controls: dict) -> np.ndarray:
 
 
 def wet_flex(trace: dict, material: np.ndarray) -> tuple[np.ndarray,dict]:
-    """Compression candidate 1: many tiny physical changes excite Bloop 3."""
+    """Compression A: small resonant impulses from measured frame-to-frame flex.
+
+    A fixed compressed shape produces no additional stimulation. No body-
+    wide continuous sine. An irregular sequence of membrane shape changes
+    modulates how much original Bloop 3 material is excited.
+    """
     t,c=resample_controls(trace)
-    driver=deformation_driver(c)
+    comp=np.asarray(trace["compression"],dtype=float)
+    contact=np.asarray(trace["contact"])>.5
+    delta=np.abs(np.diff(comp,prepend=comp[0]))
+    driver=np.zeros(len(t),dtype=float)
+    for i,change in enumerate(delta):
+        if contact[i] and change>.003:
+            strength=float(np.clip(change/.13,0,.28))
+            idx=int(round(float(trace["time"][i])*SAMPLE_RATE))
+            if idx<len(driver):driver[idx]+=strength
     radius=float(trace["radius"][0])
     impulse=bloop_resonance(material,radius,length_ms=126)
     response=fftconvolve(driver,impulse,mode="full")[:len(t)]
-    # Responds to sustained *motion*, releases as deformation stops.
-    response=protect(response*.48,peak_limit=.70)
-    return response, {"deformation_motion":round(float(np.sum(driver)),4),
+    response=protect(response*.22,peak_limit=.70)
+    return response, {"deformation_motion":round(float(np.sum(delta*contact)),4),
                       "peak":round(float(np.max(np.abs(response))),4),
                       "rms":round(float(np.sqrt(np.mean(response**2))),5)}
 
