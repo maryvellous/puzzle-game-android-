@@ -1,6 +1,13 @@
-# Lava Blobs — Sound design procedurale guidato dalla fisica
+# Lava Blobs — Sound design procedurale V1 (ARCHIVIO, SUPERATO)
 
-**Documento progettuale · Versione 1.0 · 21 novembre 2026**  
+> **DOCUMENTO STORICO, NON PIÙ NORMATIVO — 22 novembre 2026.**
+> La specifica progettuale attuale è **[AUDIO_ENGINE_V2_MATERIAL_TO_SOUND.md](AUDIO_ENGINE_V2_MATERIAL_TO_SOUND.md)**. Faro: **«Un sistema in cui il comportamento della materia diventa suono».**
+> **Fusione = uno dei quattro Bloop originali COMPLETI, compresa la parte centrale.**
+> **Urto, sfregamento, compressione e distacco = manifestazioni parziali ricavate dall'inizio e/o dalla coda degli stessi Bloop, senza parte centrale.**
+> Tutte le proposte V1 che prevedono di ricostruire o sostituire la fusione completa, oppure di usare C4/C4.1 come sorgenti canoniche, sono **superate**. Restano qui esclusivamente per storia e confronto.
+> Tre APK audio sperimentali archiviate; l'utente intende disinstallarle dal telefono. Nessuna modifica alla release 1.0.11.
+
+**Documento progettuale storico · Versione 1.0 · 21 novembre 2026 · ARCHIVIATO**  
 **Stato:** direzione progettuale approvata; **fase A completata**, **fase B giudicata complessivamente buona all'ascolto con lieve disturbo residuo aperto**, **fase C1 (due blob) bocciata artisticamente per urti e compressione**; **fase C2 non convincente**, ma l'urto forse va nella direzione giusta; **fase C3 ascoltata: impatto abbastanza giusto ma grave, sfregamento ancora poco credibile, compressione bocciata come «laser»**; **C4 ascoltata: compression B e friction adhesive gradite, impatti inudibili; fusione inserita erroneamente nei montaggi di ascolto**, ora **C4.1 correttiva in attesa di ascolto**. Motore procedurale **non integrato nel gioco**.  
 **Risultati:** [laboratorio A/B/C/D](PROCEDURAL_AUDIO_LAB_2026-11-21.md) e [prototipo fisico a due blob](PROCEDURAL_AUDIO_TWO_BLOB_PROTOTYPE.md), con [feedback negativo e revisione C2](PROCEDURAL_AUDIO_C2_FEEDBACK_REWORK.md) e [mix discreto C3](PROCEDURAL_AUDIO_C3_SUBTLE_MIX.md) e [confronti C4](PROCEDURAL_AUDIO_C4_ORGANIC_CONTACT.md) con [correzione C4.1 dei montaggi](PROCEDURAL_AUDIO_C41_PREVIEW_FIX.md).  
 **Base di riferimento:** Lava Blob Android **1.0.11**, repository `maryvellous/puzzle-game-android-`.  
@@ -63,7 +70,7 @@ Fonte/autore e licenza:
 
 **Decisione:** i quattro Bloop sono il *materiale sorgente* della futura sintesi, non semplici sample da assegnare a quattro livelli. Il vecchio motore resta il riferimento sonoro da superare.
 
-## 3. Metodo di sintesi selezionato
+## 3. Metodo di sintesi ipotizzato nella V1 (STORICO — non applicare senza rivedere la V2)
 
 **Sintesi ibrida, informata da esempi e guidata dalla fisica**:
 
@@ -138,7 +145,7 @@ Prevedere smoothing distinto per inviluppo di attacco (breve), evoluzione del co
 
 Preferire identificatori di blob espliciti e stabili per la durata della loro vita; non usare `identityHashCode` come chiave duratura del nuovo sistema.
 
-### 4.5 Fusione: transizione di materiale e massa
+### 4.5 Fusione: vecchia ipotesi di risintesi (SUPERATA: nella V2 il Bloop resta COMPLETO)
 
 **Primo obiettivo qualitativo del progetto.** Oggi le fusioni fra blob dello stesso tier vengono rilevate **prima** della risoluzione della membrana e rimpiazzano i due blob con uno nuovo. Il nuovo `MergeAcousticEvent` deve essere catturato prima della rimozione e contenere:
 - ID, raggio e tier dei due genitori.
@@ -169,7 +176,7 @@ Non si deve pretendere che due note distinte siano udibili per ogni fusione: l'e
 
 Le pareti del vaso sono una **fase successiva opzionale**: prima validare blob-blob e fusione, poi decidere se il contatto col vaso debba usare lo stesso materiale o una caratteristica diversa.
 
-## 5. Architettura software proposta
+## 5. Architettura software V1 (STORICA — la pipeline attuale è nella V2)
 
 ```text
 BlobWorld (simulazione 60 Hz, 5 passaggi di vincoli)
