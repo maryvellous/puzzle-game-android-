@@ -1,4 +1,4 @@
-name: Installable Lava Blob AUDIO SIZE TEST APK (experimental)
+name: Installable Lava Blob AUDIO MIX TEST APK (experimental)
 
 on:
   pull_request:
@@ -69,28 +69,30 @@ jobs:
             --out app/src/audioTest/res/raw \
             --report build/audio_test_assets
           test -s app/src/audioTest/res/raw/lava_test_impact.wav
+          test -s app/src/audioTest/res/raw/lava_test_impact_variant.wav
           test -s app/src/audioTest/res/raw/lava_test_friction.wav
           test -s app/src/audioTest/res/raw/lava_test_compression.wav
           cat build/audio_test_assets/android_audio_material.json >> "$GITHUB_STEP_SUMMARY"
-      - name: Build signed, side-by-side Audio Size Test APK
+      - name: Build signed, parallel-installable Audio Mix Test APK
         run: |
-          gradle --no-daemon :app:assembleAudioSizeTest
+          gradle --no-daemon :app:assembleAudioMixTest
           mkdir -p distribution
-          APK=$(find app/build/outputs/apk/audioSizeTest -type f -name '*.apk' | head -1)
+          APK=$(find app/build/outputs/apk/audioMixTest -type f -name '*.apk' | head -1)
           test -n "$APK" && test -s "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee distribution/apk-info.txt
-          grep -q "package: name='com.maryvellous.lavablobs.audiosizetest'" distribution/apk-info.txt
-          grep -q "Lava Blob - Audio Size Test" distribution/apk-info.txt
+          grep -q "package: name='com.maryvellous.lavablobs.audiomixtest'" distribution/apk-info.txt
+          grep -q "Lava Blob - Audio Mix Test" distribution/apk-info.txt
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump resources "$APK" | grep -E 'lava_test_(impact|friction|compression)' | tee distribution/resources.txt
-          test "$(wc -l < distribution/resources.txt)" -ge 3
+          grep -q "lava_test_impact_variant" distribution/resources.txt
+          test "$(wc -l < distribution/resources.txt)" -ge 4
           unzip -t "$APK" >/dev/null
-          cp "$APK" distribution/LavaBlob-AudioSizeTest.apk
-      - name: Upload installable Audio Size Test APK — independent of previous versions
+          cp "$APK" distribution/LavaBlob-AudioMixTest.apk
+      - name: Upload installable Audio Mix Test APK — independent of previous versions
         uses: actions/upload-artifact@v4
         with:
-          name: LavaBlob-AudioSizeTest-installable-APK
+          name: LavaBlob-AudioMixTest-installable-APK
           path: |
-            distribution/LavaBlob-AudioSizeTest.apk
+            distribution/LavaBlob-AudioMixTest.apk
             distribution/apk-info.txt
             distribution/resources.txt
             build/audio_test_assets/android_audio_material.json
