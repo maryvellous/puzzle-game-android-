@@ -18,9 +18,15 @@ final class BlobWorld {
     static final class Merge {
         final float x, y, radius;
         final int tier, points;
-        Merge(float x, float y, float radius, int tier, int points) {
+        // Non-breaking acoustic metadata; legacy SoundPool still reads x/y/tier.
+        final int parentAId, parentBId, resultId;
+        final float simulationTime;
+        Merge(float x, float y, float radius, int tier, int points,
+                int parentAId, int parentBId, int resultId, float simulationTime) {
             this.x=x; this.y=y; this.radius=radius;
             this.tier=tier; this.points=points;
+            this.parentAId=parentAId; this.parentBId=parentBId;
+            this.resultId=resultId; this.simulationTime=simulationTime;
         }
     }
 
@@ -49,6 +55,9 @@ final class BlobWorld {
     private final ArrayList<Impact> impacts = new ArrayList<>();
     private final Map<Long,Float> impactTimes = new HashMap<>();
     final ArrayList<Adhesion> adhesions = new ArrayList<>();
+    // IDs are monotonic for one game, including deleted/merged blobs and saves.
+    int nextBlobId=1;
+    private ContactProbe contactProbe; // Null in 1.0.11: zero DSP/probe overhead.
     Random random;
     final GameSpec spec;
     Vessel vessel;
@@ -68,6 +77,42 @@ final class BlobWorld {
         reset();
     }
 
+    /**
+     * Diagnostic-only subscription for physics/acoustic tests and future V2.
+     * No listener is installed by the current gameplay/audio implementation.
+     */
+    void setContactProbe(ContactProbe.Listener listener) {
+        contactProbe=listener==null?null:new ContactProbe(listener);
+    }
+
+    // Canonical unordered key; both IDs must be positive. No identityHashCode.
+    static long pairKey(int idA,int idB) {
+        if(idA<=0||idB<=0||idA==idB)
+            throw new IllegalArgumentException("Invalid blob pair");
+        long lo=Math.min(idA,idB)&0xffffffffL;
+        long hi=Math.max(idA,idB)&0xffffffffL;
+        return (lo<<32)|hi;
+    }
+
+    void ensureBlobIds() {
+        int max=nextBlobId-1;
+        for(Blob b:blobs) {
+            if(b.id<0)throw new IllegalStateException("Invalid blob ID");
+            max=Math.max(max,b.id);
+        }
+        if(max>=Integer.MAX_VALUE-1)
+            throw new IllegalStateException("Exhausted blob IDs");
+        if(nextBlobId<=max)nextBlobId=max+1;
+        for(Blob b:blobs)if(b.id==0)assignBlobId(b);
+    }
+
+    private void assignBlobId(Blob b) {
+        if(b.id!=0)throw new IllegalStateException("Blob ID already assigned");
+        if(nextBlobId>=Integer.MAX_VALUE)
+            throw new IllegalStateException("Exhausted blob IDs");
+        b.id=nextBlobId++;
+    }
+
     float bottom(){return vessel.bottom;}
     void setHeight(float height){
         float h=Math.max(620f,height);
@@ -78,6 +123,8 @@ final class BlobWorld {
     }
     void reset(){
         blobs.clear();merges.clear();impacts.clear();impactTimes.clear();adhesions.clear();
+        nextBlobId=1;
+        if(contactProbe!=null)contactProbe.clear();
         score=0;time=0f;blockedTime=0f;checkClock=0f;gameOver=false;
         dropCount=0;mergeCount=0;maxTierReached=0;
         earnedErases=0;usedErases=0;eraseCount=0;
@@ -115,6 +162,7 @@ final class BlobWorld {
             b.vy[i]=-180f;
             b.vx[i]=(random.nextFloat()-.5f)*24f;
         }
+        assignBlobId(b);
         blobs.add(b);
         dropCount++;
         maxTierReached=Math.max(maxTierReached,nextTier);
@@ -184,6 +232,8 @@ final class BlobWorld {
     private void step(float dt) {
         if(dt<=0f)return;
         time+=dt;
+        ensureBlobIds(); // Also supports test worlds that inject Blob instances directly.
+        if(contactProbe!=null)contactProbe.beginStep();
         for(Blob b:blobs)b.integrate(dt,time);
 
         // Merge detection uses actual mesh boundaries. No spherical "sum of
@@ -221,6 +271,7 @@ final class BlobWorld {
         }
         for(Blob b:blobs)b.finish(dt);
         updateAdhesions(dt);
+        if(contactProbe!=null)contactProbe.finishStep(time,dt);
     }
 
     private boolean nearEnough(Blob a,Blob b,float scale) {
@@ -240,12 +291,14 @@ final class BlobWorld {
         mergeCount++;
         if(a.tier<mergesByTier.length)mergesByTier[a.tier]++;
         maxTierReached=Math.max(maxTierReached,nextTier);
-        merges.add(new Merge(cx,cy,new Blob(cx,cy,nextTier,.72f).radius(),nextTier,points));
+        Blob born=new Blob(cx,cy,nextTier,.72f);
+        assignBlobId(born);
+        merges.add(new Merge(cx,cy,born.radius(),nextTier,points,
+                a.id,b.id,born.id,time));
         if(spec!=null&&spec.endless) {
             int earned=(int)Math.min(2_000_000_000L,score/ERASE_EVERY_POINTS);
             if(earned>earnedErases) {eraseCount+=earned-earnedErases;earnedErases=earned;}
         }
-        Blob born=new Blob(cx,cy,nextTier,.72f);
         // Preserve some fluid motion through merging.
         for(int k=0;k<Blob.NODES;k++) {
             born.vx[k]=(a.vx[k]+b.vx[k])*.36f;
@@ -355,9 +408,7 @@ final class BlobWorld {
         }
         float approach=((avx-bvx)*dx+(avy-bvy)*dy)/(Blob.NODES*distance);
         if(!AudioPolicy.shouldPlayImpact(approach))return;
-        int ida=System.identityHashCode(a),idb=System.identityHashCode(b);
-        long low=Math.min(ida,idb)&0xffffffffL,high=Math.max(ida,idb)&0xffffffffL;
-        long key=(low<<32)|high;
+        long key=pairKey(a.id,b.id);
         Float previous=impactTimes.get(key);
         if(!AudioPolicy.allowPairImpactAt(time,previous))return;
         Impact event=new Impact((a.tier+b.tier)/2,approach);
@@ -400,6 +451,11 @@ final class BlobWorld {
             else { nx=1f;ny=0f; }
         }
         float overlap=inside?edge.distance+SKIN:SKIN-edge.distance;
+        // Observe pre-projection local speeds, direction and penetration. The
+        // probe is passive and is disabled in the current shipping game.
+        if(contactProbe!=null)
+            contactProbe.observe(source,i,target,j,edge.t,nx,ny,overlap,
+                    (x+edge.qx)*.5f,(y+edge.qy)*.5f);
         float shift=Math.min(7f,overlap)*.70f;
         source.px[i]+=nx*shift*.62f;
         source.py[i]+=ny*shift*.62f;
