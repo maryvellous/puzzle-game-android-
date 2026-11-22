@@ -92,6 +92,8 @@ final class GameSave {
 
     static JSONObject encode(GameSpec spec,BlobWorld w,float aimX,boolean eraseMode,
             float activeSeconds) throws Exception {
+        // Give even test-injected blobs stable IDs before encoding.
+        w.ensureBlobIds();
         JSONObject state=new JSONObject();
         state.put("version",VERSION);
         state.put("scoringVersion",2);
@@ -104,6 +106,7 @@ final class GameSave {
         state.put("merges",w.mergeCount);
         state.put("maxTier",w.maxTierReached);
         state.put("nextTier",w.nextTier);
+        state.put("nextBlobId",w.nextBlobId);
         state.put("blockedTime",w.blockedTime);
         state.put("checkClock",w.checkClock);
         state.put("eraseEarned",w.earnedErases);
@@ -124,6 +127,7 @@ final class GameSave {
         for(Blob b:w.blobs){
             JSONObject body=new JSONObject();
             body.put("tier",b.tier);
+            body.put("blobId",b.id);
             body.put("age",b.age);
             body.put("radiusTarget",b.radiusTarget);
             body.put("launchScale",b.launchScale);
@@ -192,11 +196,17 @@ final class GameSave {
 
         JSONArray bodies=state.getJSONArray("blobs");
         if(bodies.length()>90)throw new IllegalArgumentException("Too many blobs");
+        java.util.HashSet<Integer> seenIds=new java.util.HashSet<>();
         for(int j=0;j<bodies.length();j++){
             JSONObject body=bodies.getJSONObject(j);
             int tier=body.getInt("tier");
             if(tier<0||tier>64)throw new IllegalArgumentException("Invalid tier");
             Blob b=new Blob(210,400,tier,new Random());
+            // Previous VERSION=1 saves have no blobId: assign new IDs below.
+            int id=body.optInt("blobId",0);
+            if(id<0||id>=Integer.MAX_VALUE||(id>0&&!seenIds.add(id)))
+                throw new IllegalArgumentException("Invalid or duplicate blob ID");
+            b.id=id;
             b.age=(float)body.getDouble("age");
             b.radiusTarget=(float)body.getDouble("radiusTarget");
             b.launchScale=(float)body.getDouble("launchScale");
@@ -212,6 +222,11 @@ final class GameSave {
             }
             b.recenter();w.blobs.add(b);
         }
+        int savedNextId=state.optInt("nextBlobId",1);
+        if(savedNextId<=0||savedNextId>=Integer.MAX_VALUE)
+            throw new IllegalArgumentException("Invalid next blob ID");
+        w.nextBlobId=savedNextId;
+        w.ensureBlobIds();
         JSONArray links=state.getJSONArray("links");
         for(int i=0;i<links.length();i++){
             JSONArray link=links.getJSONArray(i);
