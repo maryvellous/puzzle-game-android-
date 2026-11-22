@@ -1,0 +1,131 @@
+package com.maryvellous.lavablobs;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Passive acoustic observation of actual vertex/edge contacts.
+ *
+ * A probe is optional and never alters particle positions, velocities, RNG or
+ * contact resolution. It aggregates every projection in the five solver passes
+ * into ONE measurement per unordered pair per physics substep. A zero-contact
+ * step is still delivered, so a future Contact Tracker can detect releases.
+ *
+ * All callbacks run synchronously on the simulation thread; they must be cheap.
+ * The receiver must copy measurements before handing them to another thread.
+ */
+final class ContactProbe {
+    interface Listener {
+        void onContactStep(float simulationTime, float dt, List<Contact> contacts);
+    }
+
+    static final class Contact {
+        final int blobA, blobB; // Stable IDs in ascending order.
+        final float time, dt;
+        final float radiusA, radiusB;
+        final float x, y, nx, ny; // Weighted contact point and A -> B normal.
+        final float approachSpeed, slideSpeed; // Max closing speed, mean tangential slip.
+        final float compression; // Bounded geometric proxy, NOT force or impulse.
+        final int projectionSamples; // Includes repeat observations across solver passes.
+
+        Contact(Accumulator a, float time, float dt) {
+            blobA=a.a.id;
+            blobB=a.b.id;
+            this.time=time;
+            this.dt=dt;
+            radiusA=a.a.radiusTarget;
+            radiusB=a.b.radiusTarget;
+            float inv=1f/a.samples;
+            x=a.x*inv;
+            y=a.y*inv;
+            float length=(float)Math.hypot(a.nx,a.ny);
+            if(length>1e-5f) {
+                nx=a.nx/length;
+                ny=a.ny/length;
+            } else {
+                float dx=a.b.x-a.a.x, dy=a.b.y-a.a.y;
+                float centerDistance=(float)Math.hypot(dx,dy);
+                nx=centerDistance>1e-5f?dx/centerDistance:1f;
+                ny=centerDistance>1e-5f?dy/centerDistance:0f;
+            }
+            approachSpeed=a.peakApproach;
+            slideSpeed=a.slide*inv;
+            // Area loss is a global membrane proxy; depth is local. Neither is
+            // an exact contact force in this position-based solver.
+            compression=Math.max(a.localCompression,
+                    Math.max(areaLoss(a.a),areaLoss(a.b)));
+            projectionSamples=a.samples;
+        }
+
+        private static float areaLoss(Blob blob) {
+            float expected=Math.max(.01f,blob.expectedArea());
+            return Blob.clamp((expected-Math.abs(blob.area()))/expected,0f,1f);
+        }
+    }
+
+    private static final class Accumulator {
+        final Blob a,b;
+        float x,y,nx,ny,peakApproach,slide,localCompression;
+        int samples;
+        Accumulator(Blob first, Blob second) {
+            if(first.id<second.id) { a=first; b=second; }
+            else { a=second; b=first; }
+        }
+    }
+
+    private final Listener listener;
+    // LinkedHashMap keeps contact order deterministic for offline traces.
+    private final Map<Long,Accumulator> contacts=new LinkedHashMap<>();
+
+    ContactProbe(Listener listener) {
+        if(listener==null)throw new IllegalArgumentException("Missing probe listener");
+        this.listener=listener;
+    }
+
+    void beginStep() {contacts.clear();}
+
+    void observe(Blob source,int node,Blob target,int edgeNode,float t,
+            float nx,float ny,float overlap,float x,float y) {
+        if(source.id<=0||target.id<=0||source.id==target.id)
+            throw new IllegalStateException("Contact requires distinct registered blob IDs");
+        long key=BlobWorld.pairKey(source.id,target.id);
+        Accumulator a=contacts.get(key);
+        if(a==null) {
+            a=new Accumulator(source,target);
+            contacts.put(key,a);
+        }
+        int next=(edgeNode+1)%Blob.NODES;
+        float tvx=target.vx[edgeNode]*(1f-t)+target.vx[next]*t;
+        float tvy=target.vy[edgeNode]*(1f-t)+target.vy[next]*t;
+        float dvx=source.vx[node]-tvx,dvy=source.vy[node]-tvy;
+        // The outward correction normal points from target to source. Closing
+        // velocity is its NEGATIVE projection, before any contact correction.
+        float approach=Math.max(0f,-(dvx*nx+dvy*ny));
+        float slip=Math.abs(-dvx*ny+dvy*nx);
+        a.peakApproach=Math.max(a.peakApproach,approach);
+        a.slide+=slip;
+        float radius=Math.max(1f,Math.min(source.radiusTarget,target.radiusTarget));
+        a.localCompression=Math.max(a.localCompression,
+                Blob.clamp(overlap/radius,0f,1f));
+        a.x+=x;
+        a.y+=y;
+        // The normal in the event is always from lower ID to higher ID.
+        float direction=source.id<target.id?-1f:1f;
+        a.nx+=nx*direction;
+        a.ny+=ny*direction;
+        a.samples++;
+    }
+
+    void finishStep(float time,float dt) {
+        List<Contact> result=new ArrayList<>(contacts.size());
+        for(Accumulator a:contacts.values())
+            result.add(new Contact(a,time,dt));
+        contacts.clear();
+        listener.onContactStep(time,dt,Collections.unmodifiableList(result));
+    }
+
+    void clear() {contacts.clear();}
+}
