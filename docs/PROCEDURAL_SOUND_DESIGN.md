@@ -1,6 +1,12 @@
-# Lava Blobs — Sound design procedurale guidato dalla fisica
+# Lava Blobs — Sound design procedurale guidato dalla fisica (archivio V1)
 
-**Documento progettuale · Versione 1.0 · 21 novembre 2026**  
+> **ATTENZIONE — Documento storico, superato il 22 novembre 2026.**
+>
+> **SPECIFICA VIGENTE: [Motore audio V2 — la materia diventa suono](AUDIO_ENGINE_V2_MATERIAL_BLOOP.md).**  
+> **«Un sistema in cui il comportamento della materia diventa suono.»**  
+> La fusione è il principio gerarchico: **uno dei quattro Bloop originali intero, dall'inizio alla fine**. Tutti gli altri fenomeni acustici devono derivare da frammenti e trasformazioni dello **stesso materiale Bloop** (per esempio attacco e coda, senza il nucleo della fusione). La proposta V1 di risintetizzare proceduralmente anche il Bloop completo **non è più la direzione approvata**. C1–C4.1 e le tre APK di prova rimangono risultati storici, non generatori di riferimento. Non sviluppare né distribuire una nuova APK prima della valutazione del Contact Probe, della grammatica Bloop e del mixer offline.
+
+**Documento progettuale storico · Versione 1.0 · 21 novembre 2026**  
 **Stato:** direzione progettuale approvata; **fase A completata**, **fase B giudicata complessivamente buona all'ascolto con lieve disturbo residuo aperto**, **fase C1 (due blob) bocciata artisticamente per urti e compressione**; **fase C2 non convincente**, ma l'urto forse va nella direzione giusta; **fase C3 ascoltata: impatto abbastanza giusto ma grave, sfregamento ancora poco credibile, compressione bocciata come «laser»**; **C4 ascoltata: compression B e friction adhesive gradite, impatti inudibili; fusione inserita erroneamente nei montaggi di ascolto**, ora **C4.1 correttiva in attesa di ascolto**. Motore procedurale **non integrato nel gioco**.  
 **Risultati:** [laboratorio A/B/C/D](PROCEDURAL_AUDIO_LAB_2026-11-21.md) e [prototipo fisico a due blob](PROCEDURAL_AUDIO_TWO_BLOB_PROTOTYPE.md), con [feedback negativo e revisione C2](PROCEDURAL_AUDIO_C2_FEEDBACK_REWORK.md) e [mix discreto C3](PROCEDURAL_AUDIO_C3_SUBTLE_MIX.md) e [confronti C4](PROCEDURAL_AUDIO_C4_ORGANIC_CONTACT.md) con [correzione C4.1 dei montaggi](PROCEDURAL_AUDIO_C41_PREVIEW_FIX.md).  
 **Base di riferimento:** Lava Blob Android **1.0.11**, repository `maryvellous/puzzle-game-android-`.  
@@ -17,7 +23,7 @@
 4. **Dimensione:** blob più grandi generano in generale risonanze più gravi, corpose e persistenti; non necessariamente più rumorose.
 5. **Dinamica:** l'intensità dipende dall'energia dell'interazione e non solo dal raggio. Un blob grande quasi fermo può essere silenzioso.
 6. **Silenzio:** nessun suono percepibile per oscillazioni irrilevanti o un semplice contatto statico; evitare affaticamento sonoro.
-7. **Fusione:** la nuova fusione procedurale deve essere *almeno altrettanto convincente* dei quattro Bloop attuali prima di sostituirli.
+7. **Fusione (indicazione V1 SUPERATA):** la vecchia proposta di generare un nuovo Bloop procedurale è stata **abbandonata**. La V2 mantiene **uno dei quattro Bloop originali completo** come suono della fusione. Vedere la specifica vigente.
 8. **Musica:** futuro controllo ON/OFF e mix indipendenti dagli effetti sonori; il nuovo motore non sceglie né produce la colonna sonora.
 
 ### Vincoli tecnici e di prodotto
