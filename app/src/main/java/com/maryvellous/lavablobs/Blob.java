@@ -20,6 +20,8 @@ final class Blob {
     private static final float AREA_FACTOR = (float) (NODES * .5 * Math.sin(TWO_PI / NODES));
 
     final int tier;
+    // Assigned by BlobWorld (0 means not registered). Never derived from object identity.
+    int id;
     final float[] px = new float[NODES], py = new float[NODES];
     final float[] vx = new float[NODES], vy = new float[NODES];
     private final float[] lastX = new float[NODES], lastY = new float[NODES];
