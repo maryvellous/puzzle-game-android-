@@ -1,14 +1,20 @@
 # Lava Blobs — Documentazione progettuale
 
-## Nuovo sound design procedurale (direzione approvata, non implementata)
+## Motore audio V2 — la materia diventa suono (direzione approvata, da implementare)
 
-**[Leggi il progetto dettagliato: Sound design procedurale guidato dalla fisica](docs/PROCEDURAL_SOUND_DESIGN.md)**
+> **«Un sistema in cui il comportamento della materia diventa suono.»**
 
-La direzione futura è un **unico modello acustico derivato dai quattro Bloop originali di floraphonic**, che generi proceduralmente **anche le fusioni**, oltre a urti, compressioni, sfregamenti, rilascio, lancio e POP. Il suono seguirà velocità, dimensione, deformazione e contatti delle membrane, senza modificare la fisica del gioco.
+**[Specifica vigente: Motore audio V2 — Bloop completi per le fusioni e grammatica comune del materiale](docs/AUDIO_ENGINE_V2_MATERIAL_BLOOP.md)**
+
+**Decisione del 22 novembre 2026:** **la fusione è l'evento principe** e deve riprodurre **uno dei quattro Bloop originali COMPLETO**. **Tutti gli altri suoni** sono espressioni parziali della stessa materia: attacchi, code e microtrame dei Bloop senza il corpo centrale riconoscibile della fusione, ricombinati con inviluppi morbidi e guidati dalle reali interazioni fra membrane. L'esempio «inizio e coda, senza il centro» è una direzione timbrica da sperimentare, non un taglio fisso applicato indiscriminatamente a ogni registrazione.
+
+Un Contact Probe rileverà i contatti fisici reali, un Contact Tracker conserverà la memoria delle coppie, il Material Engine utilizzerà i quattro Bloop come **unica sorgente timbrica** e un Scene Mixer gestirà insieme i comportamenti e l'energia sonora senza frittura, tagli bruschi o Bloop completi fuori dalle fusioni. La dimensione continuerà a influenzare pitch e durata; la fusione deve rimanere l'espressione completa e dominante.
+
+**La precedente [specifica V1](docs/PROCEDURAL_SOUND_DESIGN.md) e i laboratori C1–C4.1 sono conservati come storia del progetto, ma sono superati dove propongono una fusione sintetizzata o suoni C4 come base definitiva.**
 
 **Avanzamento:** analisi dei quattro Bloop completata; varianti A/B/C/D generate e ascoltate. **Feedback:** suono complessivamente buono, con un lieve disturbo residuo da risolvere. Il [primo prototipo a due blob](docs/PROCEDURAL_AUDIO_TWO_BLOB_PROTOTYPE.md) ha dimostrato il collegamento fisica/audio, **ma l'ascolto ha bocciato completamente urto e compressione**; sfregamento solo vagamente promettente, fusione accettabile. Anche il [laboratorio C2](docs/PROCEDURAL_AUDIO_C2_FEEDBACK_REWORK.md) non ha convinto: l'urto comincia forse a trovare la direzione giusta, ma tutti gli effetti devono essere più discreti della fusione. Il nuovo [esperimento C3](docs/PROCEDURAL_AUDIO_C3_SUBTLE_MIX.md) mantiene la fusione invariata, attenua molto urto e compressione e **ricava lo sfregamento soltanto dalla parte finale del vecchio suono**, quasi impercettibile. **Feedback C3:** l'urto comincia a funzionare ma è troppo grave; lo sfregamento deve sembrare davvero quello di due blob viscosi; la compressione ricorda un colpo di fucile laser lontano ed è completamente da scartare. Nel [laboratorio C4](docs/PROCEDURAL_AUDIO_C4_ORGANIC_CONTACT.md) provo due urti leggermente più acuti, due attriti più organici, e compressione **completamente muta** oppure ridotta a un accenno di texture mentre la forma cambia. **C4 era sperimentale. Feedback successivo:** nei montaggi si sentiva una fusione indesiderata, perché veniva aggiunta automaticamente alla fine di ogni prova; gli urti erano inudibili. **Compressione B e friction adhesive sono invece considerate buone.** La [correzione C4.1](docs/PROCEDURAL_AUDIO_C41_PREVIEW_FIX.md) elimina la fusione dai confronti isolati, conserva byte-identici i due suoni graditi e rende gli impatti ascoltabili. Nessuna integrazione nel gioco. Le misure e le prime ricostruzioni sono nel [laboratorio A/B/C/D](docs/PROCEDURAL_AUDIO_LAB_2026-11-21.md).
 
-**Stato dell'app:** la release utilizzabile resta **1.0.11**. Gli effetti attuali e il tasto **SUONI/MUTO** non sono stati modificati; non esiste ancora una musica integrata. I changelog successivi documentano versioni storiche, **non** il sistema procedurale futuro.
+**Stato dell'app:** la release utilizzabile resta **1.0.11**. Gli effetti attuali e il tasto **SUONI/MUTO** non sono stati modificati; non esiste ancora una musica integrata. L'utente disinstallerà le tre APK sperimentali **Audio Test, Audio Size Test e Audio Mix Test**, che hanno identificativi separati dal gioco normale. Le PR sperimentali #23 e #24 **non sono approvate per il merge**. Non è stata generata nessuna nuova APK per questa decisione. I changelog successivi documentano versioni storiche.
 
 ---
 
