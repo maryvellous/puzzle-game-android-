@@ -124,7 +124,7 @@ final class BlobWorld {
     void reset(){
         blobs.clear();merges.clear();impacts.clear();impactTimes.clear();adhesions.clear();
         nextBlobId=1;
-        if(contactProbe!=null)contactProbe.clear();
+        if(contactProbe!=null)contactProbe.reset();
         score=0;time=0f;blockedTime=0f;checkClock=0f;gameOver=false;
         dropCount=0;mergeCount=0;maxTierReached=0;
         earnedErases=0;usedErases=0;eraseCount=0;
@@ -206,6 +206,7 @@ final class BlobWorld {
             lastPoppedRadius=b.radius();
             lastPoppedTier=b.tier;
             blobs.remove(i);
+            if(contactProbe!=null)contactProbe.popped(b.id,time);
             adhesions.removeIf(link->link.a==b||link.b==b);
             eraseCount--;usedErases++;
             blockedTime=0;checkClock=.2f;
@@ -293,8 +294,10 @@ final class BlobWorld {
         maxTierReached=Math.max(maxTierReached,nextTier);
         Blob born=new Blob(cx,cy,nextTier,.72f);
         assignBlobId(born);
-        merges.add(new Merge(cx,cy,born.radius(),nextTier,points,
-                a.id,b.id,born.id,time));
+        Merge event=new Merge(cx,cy,born.radius(),nextTier,points,
+                a.id,b.id,born.id,time);
+        merges.add(event);
+        if(contactProbe!=null)contactProbe.merged(event);
         if(spec!=null&&spec.endless) {
             int earned=(int)Math.min(2_000_000_000L,score/ERASE_EVERY_POINTS);
             if(earned>earnedErases) {eraseCount+=earned-earnedErases;earnedErases=earned;}
