@@ -115,4 +115,66 @@ public class ContactProbeTraceTest {
         assertTrue("Trace must contain samples",file.isFile()&&file.length()>1000);
         System.out.println("AUDIO_V2_CONTACT_TRACE: "+file.getAbsolutePath());
     }
+    /**
+     * A separate stress trace from the actual solver, NOT a synthetic event
+     * generator. Multiple contacts and real mergers share the same time axis.
+     */
+    @Test public void exportRealMultiBlobSceneTrace() throws IOException {
+        File dir=new File("build/audio_v2");
+        assertTrue(dir.isDirectory()||dir.mkdirs());
+        File file=new File(dir,"scene_stress_trace.csv");
+        BlobWorld world=new BlobWorld(new Random(1203));
+        world.setHeight(850f);
+        final int[] tiers={1,2,3,4};
+        for(int row=0;row<3;row++) {
+            for(int col=0;col<4;col++) {
+                Blob b=blob(95+75*col,270+60*row,tiers[col]);
+                speed(b,(col%2==0?1:-1)*35f,(row%2==0?1:-1)*22f);
+                world.blobs.add(b);
+            }
+        }
+        final int[] contacts={0},starts={0},merges={0};
+        try(PrintWriter csv=new PrintWriter(new FileWriter(file))) {
+            csv.println("scenario,type,time,dt,blob_a,blob_b,result_id,x,y,nx,ny,normal_speed,tangent_speed,compression,radius_a,radius_b,projection_samples,contact_age");
+            ContactTracker tracker=new ContactTracker(t->{
+                if(t.kind==ContactTracker.Kind.BEGIN)starts[0]++;
+                write(csv,"stress_real",t.kind.name().toLowerCase(Locale.US),
+                        t.time,t.contact.dt,t.blobA,t.blobB,0,t.contact,t.contactAge);
+            });
+            world.setContactProbe(new ContactProbe.Listener() {
+                @Override public void onContactStep(float time,float dt,
+                        List<ContactProbe.Contact> samples) {
+                    java.util.HashSet<Long> pairs=new java.util.HashSet<>();
+                    for(ContactProbe.Contact s:samples) {
+                        contacts[0]++;
+                        assertTrue("One observation per pair per substep",
+                                pairs.add(BlobWorld.pairKey(s.blobA,s.blobB)));
+                        write(csv,"stress_real","contact",time,dt,s.blobA,s.blobB,0,s,0f);
+                    }
+                    tracker.onContactStep(time,dt,samples);
+                }
+                @Override public void onMerge(BlobWorld.Merge m) {
+                    merges[0]++;
+                    tracker.onMerge(m);
+                    write(csv,"stress_real","merge",m.simulationTime,0f,
+                            m.parentAId,m.parentBId,m.resultId,null,0f);
+                }
+                @Override public void onPop(int blobId,float time) {
+                    tracker.onPop(blobId,time);
+                }
+                @Override public void onReset() {tracker.reset();}
+            });
+            for(int frame=0;frame<96;frame++) {
+                if(frame%20==0)world.shake(4f,-2f,3f);
+                world.tick(DT);
+            }
+        }
+        assertTrue("Many-body trace should contain real contacts",contacts[0]>12);
+        assertTrue("At least one contact lifecycle must start",starts[0]>0);
+        assertTrue(file.isFile()&&file.length()>1500);
+        System.out.printf(Locale.US,
+                "AUDIO_V2_REAL_STRESS: contacts=%d begins=%d merges=%d path=%s%n",
+                contacts[0],starts[0],merges[0],file.getAbsolutePath());
+    }
+
 }
