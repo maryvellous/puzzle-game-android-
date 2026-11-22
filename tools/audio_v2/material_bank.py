@@ -149,7 +149,7 @@ def write_wav(path: Path, samples: np.ndarray) -> None:
         handle.writeframes(pcm.tobytes())
 
 
-def measure(name: str, src: Path, result_dir: Path) -> dict:
+def measure(name: str, src: Path, result_dir: Path) -> tuple[dict, np.ndarray, dict]:
     audio = decode(src)
     r = regions(audio)
     attack, tail, partial = split(audio, r)
@@ -177,7 +177,7 @@ def measure(name: str, src: Path, result_dir: Path) -> dict:
         "tail": f"isolated_auditions/{name}_tail_only.wav",
         "partial": f"isolated_auditions/{name}_attack_tail_no_core.wav",
     }
-    return metrics
+    return metrics, audio, r
 
 
 def report_plot(sources: dict, out: Path) -> None:
@@ -207,8 +207,9 @@ def run(source_dir: Path, output_dir: Path) -> None:
     pictures = {}
     for name in BLOOPS:
         src = source_dir / f"{name}.mp3"
-        items[name] = measure(name, src, output_dir)
-        pictures[name] = {"audio": decode(src), "region": regions(decode(src))}
+        metrics, audio, r = measure(name, src, output_dir)
+        items[name] = metrics
+        pictures[name] = {"audio": audio, "region": r}
     report_plot(pictures, output_dir)
     document = {
         "schema": "lava-blobs-bloop-bank-audition-v1",
