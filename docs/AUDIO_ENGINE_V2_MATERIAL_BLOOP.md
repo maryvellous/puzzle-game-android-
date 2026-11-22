@@ -87,6 +87,19 @@ Una prima implementazione può usare direttamente le regioni PCM (e non la piena
 
 Nelle prove audio ogni file deve avere etichette fedeli e non aggiungere accidentalmente un Bloop completo a un confronto di urto o sfregamento, come accaduto nella fase C4.
 
+### Misure storiche utili (non istruzioni di sintesi)
+
+La prima analisi offline A/B, eseguita su PCM mono derivato dai quattro Bloop, aveva prodotto le seguenti **stime preliminari**, da ricalcolare e verificare ascoltando le regioni reali prima di definire il Material Bank V2:
+
+| Sorgente | Durata file decodificato | Regione attiva stimata | Centroide spettrale mediano | RMS sul tratto attivo |
+|---|---:|---:|---:|---:|
+| Bloop 1 | 627 ms | circa 190 ms | 248 Hz | 0,412 |
+| Bloop 2 | 627 ms | circa 130 ms | 384 Hz | 0,432 |
+| Bloop 3 | 1.045 ms | circa 230 ms | 187 Hz | 0,307 |
+| Bloop 4 | 1.045 ms | circa 190 ms | 240 Hz | 0,322 |
+
+Queste misure **non** indicano automaticamente i confini attacco/corpo/coda e il centroide **non** è il pitch. Sono numeri storici dipendenti dalla soglia RMS dell'esperimento, non parametri finali. Il diario originale delle prove e il codice sperimentale rimangono nella cronologia Git.
+
 ## 5. Decisioni sul lavoro precedente e sui tre prototipi
 
 - **C1–C4.1**: archivio storico di prove e lezioni; **non è più il generatore di riferimento** del nuovo motore. Le texture C4.1 possono servire soltanto come confronto percettivo, non come vincolo o fonte timbrica definitiva.
@@ -107,4 +120,4 @@ Nelle prove audio ogni file deve avere etichette fedeli e non aggiungere acciden
 
 ---
 
-**Stato:** decisione architetturale/artística approvata, implementazione ancora da avviare. Il documento è la **specifica vigente**; [`PROCEDURAL_SOUND_DESIGN.md`](PROCEDURAL_SOUND_DESIGN.md) resta una versione precedente, utile come storia tecnica, ma le sue indicazioni di ricostruire proceduralmente anche la fusione sono **superate**.
+**Stato:** decisione architetturale e artistica approvata, implementazione ancora da avviare. Questo è l'**unico documento di specifica vigente**. La precedente V1 e i diari A/B–C4.1 sono stati rimossi dal branch attivo e restano consultabili tramite la cronologia Git; le loro proposte di ricostruire proceduralmente il Bloop completo della fusione sono **superate**.
