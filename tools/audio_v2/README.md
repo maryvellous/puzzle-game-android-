@@ -12,6 +12,7 @@ Questo laboratorio sul branch `experiment/lava-blobs-audio-v2-engine` non modifi
 - `synthetic_mixer_stress.wav`: stress tecnico volutamente **sintetico, non fisica reale** con 12 fusioni intere e 80 attacchi corti; nessuna fusione viene interrotta. L'headroom del mix viene regolato globalmente: non è ancora un mix bus realtime con priorità e budget voci.
 - `real_12_blob_scene_stress.wav`: sovrapposizione **da 12 blob simulati davvero in `BlobWorld`**, con contatti, scorrimento e fusioni effettivamente rilevati. I dati provengono da `scene_stress_trace.csv`. Il rendering gestisce una texture collettiva con guadagno sublineare e conserva ogni Bloop di fusione completo.
 - Test con sorgenti sintetiche per segmentazione, decadimenti, campioni non validi, mapping dimensione→durata, assenza di Bloop completi nei non-fusione, mix e preservazione integrale dei Bloop sulle fusioni.
+- **Video sincronizzati:** `render_sync_video.py` usa gli snapshot di **tutti i 24 nodi** delle membrane esportati dal vero `ContactProbeTraceTest` (CSV `two_blob_mesh_frames.csv` e `scene_stress_mesh_frames.csv`) e allinea i video MP4 agli WAV di ricerca: cinque comportamenti, scena con 12 blob. I punti chiari sono contatti misurati. **Il recipiente è schematico e non è l'UI Android:** il test verifica causalità audiovisiva, non latenza su dispositivo.
 
 ## Rigenerazione
 
@@ -26,6 +27,13 @@ gradle --no-daemon :app:testDebugUnitTest
 python -m unittest discover -s tools/audio_v2 -p 'test_*.py' -v
 python tools/audio_v2/material_bank.py --sources app/src/main/res/raw --output build/audio_v2/material
 python tools/audio_v2/render_auditions.py --sources app/src/main/res/raw --trace app/build/audio_v2/contact_probe_trace.csv --output build/audio_v2/listening
+python tools/audio_v2/render_sync_video.py \
+  --mesh-two app/build/audio_v2/two_blob_mesh_frames.csv \
+  --mesh-stress app/build/audio_v2/scene_stress_mesh_frames.csv \
+  --contacts-two app/build/audio_v2/contact_probe_trace.csv \
+  --contacts-stress app/build/audio_v2/scene_stress_trace.csv \
+  --listen-dir build/audio_v2/listening \
+  --output build/audio_v2/visual
 ```
 
 ## Come valutare i file
@@ -35,6 +43,7 @@ python tools/audio_v2/render_auditions.py --sources app/src/main/res/raw --trace
 3. Controllare i dati `listening/metrics.json`, in particolare picchi e headroom. Non considerare un preview WAV riuscito equivalente a una resa convincente sul telefono.
 4. Testare da ultimo `synthetic_mixer_stress.wav`, che rappresenta solo un caso limite di sovrapposizione.
 5. Ascoltare anche `real_12_blob_scene_stress.wav`, ottenuto esclusivamente dalla simulazione multi-blob. Confrontare `metrics.json` e `scene_stress_trace.csv`.
+6. **Preferire i video sincronizzati:** `visual/lava_v2_five_physical_behaviors_synced.mp4` e `visual/lava_v2_12_real_blobs_synced.mp4`. Permettono di giudicare il suono alla vista del movimento reale senza anticipare un'APK; i primi cinque scenari sono separati da pause di 300 ms. Alla fine di ogni prova le membrane restano ferme per lasciare terminare le code audio. Il video non misura latenza né prova che il risultato funzioni in Android.
 
 ## Blocchi prima dell'APK diagnostica
 
