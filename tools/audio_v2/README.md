@@ -10,6 +10,7 @@ Questo laboratorio sul branch `experiment/lava-blobs-audio-v2-engine` non modifi
 - Audizioni isolate: per ognuno dei quattro Bloop, **completo**, **attacco**, **coda** e **attacco+coda senza nucleo**. Non si committano file estratti né si distribuiscono sound pack.
 - `render_auditions.py`: legge `ContactProbeTraceTest` (vero solver Java), riproduce **un Bloop intero** solo su fusione; urto e scorrimento sono fatti con attacchi e code. La compressione modula solo la risposta già attiva; la quiete è ammessa. L'anteprima è **un esperimento Python da ascoltare**, non il DSP da copiare nell'app.
 - `synthetic_mixer_stress.wav`: stress tecnico volutamente **sintetico, non fisica reale** con 12 fusioni intere e 80 attacchi corti; nessuna fusione viene interrotta. L'headroom del mix viene regolato globalmente: non è ancora un mix bus realtime con priorità e budget voci.
+- `real_12_blob_scene_stress.wav`: sovrapposizione **da 12 blob simulati davvero in `BlobWorld`**, con contatti, scorrimento e fusioni effettivamente rilevati. I dati provengono da `scene_stress_trace.csv`. Il rendering gestisce una texture collettiva con guadagno sublineare e conserva ogni Bloop di fusione completo.
 - Test con sorgenti sintetiche per segmentazione, decadimenti, campioni non validi, mapping dimensione→durata, assenza di Bloop completi nei non-fusione, mix e preservazione integrale dei Bloop sulle fusioni.
 
 ## Rigenerazione
@@ -33,6 +34,7 @@ python tools/audio_v2/render_auditions.py --sources app/src/main/res/raw --trace
 2. Ascoltare separatamente `impact`, `slide`, `pressure`, `release`, `fusion`. **Solo `fusion` contiene un Bloop completo.** Il file `listen_real_physics_v2.wav` mette in fila queste cinque prove, separate da 300 ms di silenzio (non aggiunge fusioni agli altri test).
 3. Controllare i dati `listening/metrics.json`, in particolare picchi e headroom. Non considerare un preview WAV riuscito equivalente a una resa convincente sul telefono.
 4. Testare da ultimo `synthetic_mixer_stress.wav`, che rappresenta solo un caso limite di sovrapposizione.
+5. Ascoltare anche `real_12_blob_scene_stress.wav`, ottenuto esclusivamente dalla simulazione multi-blob. Confrontare `metrics.json` e `scene_stress_trace.csv`.
 
 ## Blocchi prima dell'APK diagnostica
 
