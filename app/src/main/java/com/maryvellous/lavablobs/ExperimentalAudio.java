@@ -25,17 +25,18 @@ final class ExperimentalAudio {
     private final IdentityHashMap<Blob,Float> previousShape=new IdentityHashMap<>();
     private final IdentityHashMap<Blob,Float> shapeChanges=new IdentityHashMap<>();
 
-    private final int impactId, frictionId, compressionId;
+    private final int impactId, impactVariantId, frictionId, compressionId;
     private int frictionStream,compressionStream,lastImpactStream;
     private float frictionLevel,compressionLevel;
     private float frictionPlaybackRate=1f,compressionPlaybackRate=1f;
     private boolean enabled,paused,released;
     private long lastImpactMs,lastMergeMs;
     private int countFrames;
+    private int impactVariationCounter;
 
     ExperimentalAudio(Context context,boolean enabled) {
         this.enabled=enabled;
-        pool=new SoundPool.Builder().setMaxStreams(5)
+        pool=new SoundPool.Builder().setMaxStreams(BuildConfig.AUDIO_MIX_TEST?2:5)
                 .setAudioAttributes(new AudioAttributes.Builder()
                         .setUsage(AudioAttributes.USAGE_GAME)
                         .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
@@ -45,6 +46,8 @@ final class ExperimentalAudio {
             else if(status!=0)Log.e(TAG,"Failed to load experimental material "+id+", status="+status);
         });
         impactId=load(context,"lava_test_impact");
+        impactVariantId=BuildConfig.AUDIO_MIX_TEST
+                ?load(context,"lava_test_impact_variant"):0;
         frictionId=load(context,"lava_test_friction");
         compressionId=load(context,"lava_test_compression");
         Log.i(TAG,"Experimental physics-driven SFX selected, loaded ids: "+
@@ -71,18 +74,43 @@ final class ExperimentalAudio {
 
     void onMerge() {
         lastMergeMs=SystemClock.elapsedRealtime();
-        stopContinuous();
+        // Fusion takes exclusive priority in the new mix test. Previously
+        // simultaneous merge + impact + two loops could crackle.
+        if(BuildConfig.AUDIO_MIX_TEST)stopEverything();
+        else stopContinuous();
     }
 
     void impact(int tier,float radiusA,float radiusB,float speed) {
         if(!available(impactId))return;
         long now=SystemClock.elapsedRealtime();
+        if(BuildConfig.AUDIO_MIX_TEST) {
+            // The solver may report tiny close-contact corrections. Only a
+            // genuine incoming collision makes an audible sound in this test.
+            if(!AudioTestModel.isAudibleImpact(speed))return;
+            if(now-lastMergeMs<230 || now-lastImpactMs<255)return;
+            // Exactly one impact at a time, and NO continuous bed underneath.
+            stopContinuous();
+            if(lastImpactStream!=0)pool.stop(lastImpactStream);
+            float force=AudioTestModel.audibleImpactIntensity(speed);
+            float volume=.30f+.35f*(float)Math.sqrt(force);
+            int variation=(impactVariationCounter++)%4;
+            int sampleId=(variation==1||variation==3)&&available(impactVariantId)
+                    ?impactVariantId:impactId;
+            float sizeRate=AudioTestModel.sizePlaybackRate(
+                    AudioTestModel.pairRadius(radiusA,radiusB));
+            // Deliberate tiny variation around the *physically-sized* pitch.
+            // The user liked that size mapping: never override it with random pitch.
+            float timbreRate=variation==2?1.025f:(variation==3?.978f:1f);
+            float rate=AudioTestModel.clamp(sizeRate*timbreRate,.50f,1.50f);
+            int stream=pool.play(sampleId,volume,volume,2,0,rate);
+            if(stream!=0) {
+                lastImpactMs=now;
+                lastImpactStream=stream;
+            }
+            return;
+        }
         if(now-lastMergeMs<140 || now-lastImpactMs<115)return;
         float energy=AudioTestModel.impactIntensity(speed);
-        // Keep collision loudness tied to energy; pitch AND duration are tied
-        // to the acoustic volume of the two colliding membranes only in the
-        // separate AUDIO SIZE TEST variant. The old Audio Test remains a
-        // consistent comparison control.
         float volume=.48f+.42f*(float)Math.sqrt(energy);
         float rate=BuildConfig.AUDIO_SIZE_TEST
                 ?AudioTestModel.sizePlaybackRate(AudioTestModel.pairRadius(radiusA,radiusB))
@@ -138,7 +166,9 @@ final class ExperimentalAudio {
             }
         }
 
-        float targetFriction=AudioTestModel.frictionIntensity(maxSlip)*.50f;
+        float targetFriction=(BuildConfig.AUDIO_MIX_TEST
+                ?AudioTestModel.audibleFrictionIntensity(maxSlip)*.62f
+                :AudioTestModel.frictionIntensity(maxSlip)*.50f);
         // C4 Compression B is intentionally nearly inaudible.
         float targetCompression=AudioTestModel.clamp(maxCompression,0f,1f)*.20f;
         float fAlpha=Math.min(1f,Math.max(.02f,dt*11f));
@@ -169,10 +199,30 @@ final class ExperimentalAudio {
         compressionPlaybackRate=compressionStream==0?targetCompressionRate
                 :AudioTestModel.smoothPlaybackRate(
                         compressionPlaybackRate,targetCompressionRate,dt);
-        frictionStream=updateLoop(frictionStream,frictionId,frictionLevel,
-                frictionPlaybackRate);
-        compressionStream=updateLoop(compressionStream,compressionId,compressionLevel,
-                compressionPlaybackRate);
+        if(BuildConfig.AUDIO_MIX_TEST) {
+            long now=SystemClock.elapsedRealtime();
+            if(now-lastMergeMs<230L || now-lastImpactMs<160L) {
+                // One sonic material at a time around transients: merger
+                // remains foreground, collision has an unobscured tail.
+                stopContinuous();
+            } else if(AudioTestModel.shouldPreferFriction(
+                    targetFriction,targetCompression)) {
+                compressionStream=updateLoop(compressionStream,compressionId,0f,
+                        compressionPlaybackRate);
+                frictionStream=updateLoop(frictionStream,frictionId,frictionLevel,
+                        frictionPlaybackRate);
+            } else {
+                frictionStream=updateLoop(frictionStream,frictionId,0f,
+                        frictionPlaybackRate);
+                compressionStream=updateLoop(compressionStream,compressionId,
+                        compressionLevel,compressionPlaybackRate);
+            }
+        } else {
+            frictionStream=updateLoop(frictionStream,frictionId,frictionLevel,
+                    frictionPlaybackRate);
+            compressionStream=updateLoop(compressionStream,compressionId,compressionLevel,
+                    compressionPlaybackRate);
+        }
 
         if(++countFrames%600==0) {
             Log.d(TAG,"contactLinks="+world.adhesions.size()+
