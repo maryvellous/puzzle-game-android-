@@ -1,5 +1,7 @@
 # Lava Blobs — Sound Design C4: urto, sfregamento viscoso, compressione senza laser
 
+> **ARCHIVIO SPERIMENTALE, NON SORGENTE DEL MOTORE V2.** Dal 22 novembre 2026 la specifica ufficiale è [Motore audio V2 — la materia diventa suono](AUDIO_ENGINE_V2_MATERIAL_TO_SOUND.md): **fusione = Bloop originale completo**, altri comportamenti = **attacco e/o coda** dei quattro Bloop, senza la parte centrale. I WAV C4/C4.1 sono conservati per confronto storico, non vanno assunti come campioni canonici né trasferiti automaticamente nella prossima APK.
+
 **Data:** 21 novembre 2026. **Stato:** esperimento audio offline; ascolto e approvazione artistica ancora necessari. **Release Android:** resta 1.0.11 senza alterazioni.
 
 ## 1. Feedback che guida questa iterazione
