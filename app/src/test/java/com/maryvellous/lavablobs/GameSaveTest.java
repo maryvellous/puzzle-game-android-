@@ -87,6 +87,61 @@ public class GameSaveTest {
         catch(IllegalArgumentException expected){}
     }
 
+    @Test public void blobIdentityAndNextCounterSurviveSaveRestore() throws Exception {
+        BlobWorld world=new BlobWorld(new Random(31),GameSpec.ENDLESS[0]);
+        world.nextTier=0;
+        assertTrue(world.launch(210f));
+        int removedId=world.blobs.get(0).id;
+        world.blobs.clear(); // Identity may not be reused after deletion.
+        world.nextTier=0;
+        assertTrue(world.launch(210f));
+        int savedId=world.blobs.get(0).id;
+        assertTrue(savedId>removedId);
+        int next=world.nextBlobId;
+        JSONObject data=GameSave.encode(GameSpec.ENDLESS[0],world,210f,false);
+        BlobWorld loaded=new BlobWorld(new Random(5),GameSpec.ENDLESS[0]);
+        GameSave.restore(loaded,new JSONObject(data.toString()));
+        assertEquals(savedId,loaded.blobs.get(0).id);
+        assertEquals(next,loaded.nextBlobId);
+        loaded.blobs.clear();
+        loaded.nextTier=0;
+        assertTrue(loaded.launch(210f));
+        assertEquals(next,loaded.blobs.get(0).id);
+    }
+
+    @Test public void legacySavesWithoutIdsAreMigratedWithoutVersionBump() throws Exception {
+        BlobWorld world=new BlobWorld(new Random(32),GameSpec.LEVELS[0]);
+        world.blobs.add(new Blob(130,450,2,new Random(1)));
+        world.blobs.add(new Blob(270,450,3,new Random(2)));
+        JSONObject data=GameSave.encode(GameSpec.LEVELS[0],world,210f,false);
+        data.remove("nextBlobId");
+        org.json.JSONArray bodies=data.getJSONArray("blobs");
+        for(int i=0;i<bodies.length();i++)bodies.getJSONObject(i).remove("blobId");
+        BlobWorld loaded=new BlobWorld(new Random(2),GameSpec.LEVELS[0]);
+        GameSave.restore(loaded,data);
+        assertEquals(2,loaded.blobs.size());
+        assertTrue(loaded.blobs.get(0).id>0);
+        assertTrue(loaded.blobs.get(1).id>0);
+        assertNotEquals(loaded.blobs.get(0).id,loaded.blobs.get(1).id);
+        assertTrue(loaded.nextBlobId>loaded.blobs.get(1).id);
+    }
+
+    @Test public void duplicatePersistedBlobIdsAreRejected() throws Exception {
+        BlobWorld world=new BlobWorld(new Random(33),GameSpec.LEVELS[0]);
+        world.blobs.add(new Blob(130,450,2,new Random(1)));
+        world.blobs.add(new Blob(270,450,3,new Random(2)));
+        JSONObject data=GameSave.encode(GameSpec.LEVELS[0],world,210f,false);
+        org.json.JSONArray bodies=data.getJSONArray("blobs");
+        bodies.getJSONObject(1).put("blobId",bodies.getJSONObject(0).getInt("blobId"));
+        BlobWorld loaded=new BlobWorld(new Random(2),GameSpec.LEVELS[0]);
+        try {
+            GameSave.restore(loaded,data);
+            fail("Duplicate IDs must not reach the acoustic tracker");
+        } catch(IllegalArgumentException expected) {
+            // No silently aliased pair identity.
+        }
+    }
+
     @Test public void mappingForEverySavedMode() {
         for(GameSpec s:GameSpec.LEVELS)assertSame(s,GameSave.findSpec(s.id));
         for(GameSpec s:GameSpec.ENDLESS)assertSame(s,GameSave.findSpec(s.id));
