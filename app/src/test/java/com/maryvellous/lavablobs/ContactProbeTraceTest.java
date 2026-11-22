@@ -39,7 +39,26 @@ public class ContactProbeTraceTest {
                 c==null?0f:c.radiusB,c==null?0:c.projectionSamples,age);
     }
 
-    private static void run(PrintWriter csv,String name,long seed) {
+    /**
+     * Capture exactly the simulated 24 membrane nodes, without rebuilding
+     * circles or inventing motion for the synchronized video preview.
+     * `frame=0` precedes the first tick; frame N uses world.time after tick N.
+     */
+    private static void writeMesh(PrintWriter mesh,String scenario,int frame,BlobWorld world) {
+        for(Blob blob:world.blobs) {
+            for(int node=0;node<Blob.NODES;node++) {
+                mesh.printf(Locale.US,"%s,%d,%.8f,%d,%d,%d,%.6f,%.6f%n",
+                        scenario,frame,world.time,blob.id,blob.tier,node,
+                        blob.px[node],blob.py[node]);
+            }
+        }
+    }
+
+    private static void writeMeshHeader(PrintWriter mesh) {
+        mesh.println("scenario,frame,time,blob_id,tier,node,x,y");
+    }
+
+    private static void run(PrintWriter csv,PrintWriter mesh,String name,long seed) {
         BlobWorld world=new BlobWorld(new Random(seed));
         Blob a,b;
         switch(name) {
@@ -59,6 +78,8 @@ public class ContactProbeTraceTest {
             default: throw new IllegalArgumentException(name);
         }
         world.blobs.add(a);world.blobs.add(b);
+        world.ensureBlobIds();
+        writeMesh(mesh,name,0,world);
         final int[] raw={0},begins={0},ends={0},merges={0};
         ContactTracker tracker=new ContactTracker(t->{
             if(t.kind==ContactTracker.Kind.BEGIN)begins[0]++;
@@ -91,6 +112,7 @@ public class ContactProbeTraceTest {
             if(name.equals("pressure")&&i<25)
                 for(int n=0;n<Blob.NODES;n++)b.vy[n]-=10f;
             world.tick(DT);
+            writeMesh(mesh,name,i+1,world);
         }
         if(name.equals("fusion"))assertEquals(1,merges[0]);
         else assertTrue("Expected actual membrane contacts in "+name,raw[0]>0);
@@ -104,15 +126,20 @@ public class ContactProbeTraceTest {
         File dir=new File("build/audio_v2");
         assertTrue(dir.isDirectory()||dir.mkdirs());
         File file=new File(dir,"contact_probe_trace.csv");
-        try(PrintWriter csv=new PrintWriter(new FileWriter(file))) {
+        File meshFile=new File(dir,"two_blob_mesh_frames.csv");
+        try(PrintWriter csv=new PrintWriter(new FileWriter(file));
+            PrintWriter mesh=new PrintWriter(new FileWriter(meshFile))) {
             csv.println("scenario,type,time,dt,blob_a,blob_b,result_id,x,y,nx,ny,normal_speed,tangent_speed,compression,radius_a,radius_b,projection_samples,contact_age");
-            run(csv,"impact",91L);
-            run(csv,"slide",92L);
-            run(csv,"pressure",93L);
-            run(csv,"release",94L);
-            run(csv,"fusion",95L);
+            writeMeshHeader(mesh);
+            run(csv,mesh,"impact",91L);
+            run(csv,mesh,"slide",92L);
+            run(csv,mesh,"pressure",93L);
+            run(csv,mesh,"release",94L);
+            run(csv,mesh,"fusion",95L);
         }
         assertTrue("Trace must contain samples",file.isFile()&&file.length()>1000);
+        assertTrue("Mesh trace must contain real polygon geometry",
+                meshFile.isFile()&&meshFile.length()>10000);
         System.out.println("AUDIO_V2_CONTACT_TRACE: "+file.getAbsolutePath());
     }
     /**
@@ -123,6 +150,7 @@ public class ContactProbeTraceTest {
         File dir=new File("build/audio_v2");
         assertTrue(dir.isDirectory()||dir.mkdirs());
         File file=new File(dir,"scene_stress_trace.csv");
+        File meshFile=new File(dir,"scene_stress_mesh_frames.csv");
         BlobWorld world=new BlobWorld(new Random(1203));
         world.setHeight(850f);
         final int[] tiers={1,2,3,4};
@@ -134,8 +162,12 @@ public class ContactProbeTraceTest {
             }
         }
         final int[] contacts={0},starts={0},merges={0};
-        try(PrintWriter csv=new PrintWriter(new FileWriter(file))) {
+        world.ensureBlobIds();
+        try(PrintWriter csv=new PrintWriter(new FileWriter(file));
+            PrintWriter mesh=new PrintWriter(new FileWriter(meshFile))) {
             csv.println("scenario,type,time,dt,blob_a,blob_b,result_id,x,y,nx,ny,normal_speed,tangent_speed,compression,radius_a,radius_b,projection_samples,contact_age");
+            writeMeshHeader(mesh);
+            writeMesh(mesh,"stress_real",0,world);
             ContactTracker tracker=new ContactTracker(t->{
                 if(t.kind==ContactTracker.Kind.BEGIN)starts[0]++;
                 write(csv,"stress_real",t.kind.name().toLowerCase(Locale.US),
@@ -167,8 +199,11 @@ public class ContactProbeTraceTest {
             for(int frame=0;frame<96;frame++) {
                 if(frame%20==0)world.shake(4f,-2f,3f);
                 world.tick(DT);
+                writeMesh(mesh,"stress_real",frame+1,world);
             }
         }
+        assertTrue("Multi-blob mesh export missing",
+                meshFile.isFile()&&meshFile.length()>10000);
         assertTrue("Many-body trace should contain real contacts",contacts[0]>12);
         assertTrue("At least one contact lifecycle must start",starts[0]>0);
         assertTrue(file.isFile()&&file.length()>1500);
