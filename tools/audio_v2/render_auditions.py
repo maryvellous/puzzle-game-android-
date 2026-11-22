@@ -306,7 +306,9 @@ def run(sources: Path, trace_path: Path, output: Path) -> None:
         "listen_real_physics_v2.wav contains these five clips **in this order** "
         "with 300ms silent gaps; there is no fusion at the end of clips 1–4. "
         "synthetic_mixer_stress.wav is a technical nonphysical overlap test. "
-        "real_12_blob_scene_stress.wav uses actual overlapping membrane contact "\n        "data (not manually manufactured events); fusion voices remain complete. "\n        "All previews are unapproved prototypes. No Android integration.\\n",
+        "real_12_blob_scene_stress.wav uses actual overlapping membrane contact "
+        "data (not manually manufactured events); fusion voices remain complete. "
+        "All previews are unapproved prototypes. No Android integration.\n",
         encoding="utf-8")
 
 
