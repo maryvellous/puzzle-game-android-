@@ -269,9 +269,11 @@ public final class LavaView extends View {
             letters.setTextSize(11f);
             letters.setColor(Color.argb(215,255,230,161));
             letters.setTextAlign(Paint.Align.CENTER);
-            canvas.drawText(BuildConfig.AUDIO_SIZE_TEST
+            canvas.drawText(BuildConfig.AUDIO_MIX_TEST
+                    ?"AUDIO MIX TEST - NON DEFINITIVO"
+                    :(BuildConfig.AUDIO_SIZE_TEST
                     ?"AUDIO SIZE TEST - NON DEFINITIVO"
-                    :"AUDIO TEST - NON DEFINITIVO",W*.5f,h-12f,letters);
+                    :"AUDIO TEST - NON DEFINITIVO"),W*.5f,h-12f,letters);
         }
         if(world.gameOver)drawGameOver(canvas,h);
 
