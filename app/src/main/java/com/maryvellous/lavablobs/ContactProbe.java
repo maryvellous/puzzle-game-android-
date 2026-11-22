@@ -20,6 +20,9 @@ import java.util.Map;
 final class ContactProbe {
     interface Listener {
         void onContactStep(float simulationTime, float dt, List<Contact> contacts);
+        default void onMerge(BlobWorld.Merge event) {}
+        default void onPop(int blobId,float simulationTime) {}
+        default void onReset() {}
     }
 
     static final class Contact {
@@ -127,5 +130,10 @@ final class ContactProbe {
         listener.onContactStep(time,dt,Collections.unmodifiableList(result));
     }
 
-    void clear() {contacts.clear();}
+    void merged(BlobWorld.Merge event) {listener.onMerge(event);}
+    void popped(int blobId,float time) {listener.onPop(blobId,time);}
+    void reset() {
+        contacts.clear();
+        listener.onReset();
+    }
 }
