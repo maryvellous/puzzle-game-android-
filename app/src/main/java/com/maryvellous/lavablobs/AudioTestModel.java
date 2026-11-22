@@ -51,6 +51,30 @@ final class AudioTestModel {
         return clamp((approach-42f)/250f,0f,1f);
     }
 
+    // MIX TEST: ignore very light jostling between already-nearby membranes.
+    // The solver still reports all contacts; only this sound gate changes.
+    static boolean isAudibleImpact(float approachSpeed) {
+        return approachSpeed >= 118f;
+    }
+
+    static float audibleImpactIntensity(float approachSpeed) {
+        return clamp((approachSpeed-118f)/240f,0f,1f);
+    }
+
+    // Earlier adhesion slip remained nearly silent because 13..148 units/s
+    // was mapped onto a shallow 0..1 gain. The new soft-knee curve starts
+    // after genuine motion, then develops audibly without constant clicks.
+    static float audibleFrictionIntensity(float slip) {
+        if(slip <= 8f)return 0f;
+        return (float)Math.pow(clamp((slip-8f)/88f,0f,1f),.74f);
+    }
+
+    /** Prevent sudden negative gains or sum of two continuous loop voices. */
+    static boolean shouldPreferFriction(float frictionTarget,float compressionTarget) {
+        return frictionTarget >= .035f ||
+                (frictionTarget > .010f && frictionTarget >= compressionTarget*.6f);
+    }
+
     // The game renders a 2D membrane, but the intended acoustic body has
     // volume. Cube-mean the CURRENT membrane radii so the larger of two
     // unequal blobs contributes proportionately more acoustic mass.

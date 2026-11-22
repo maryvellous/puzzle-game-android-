@@ -39,11 +39,12 @@ final class GameAudio {
     private final int impactId;
     private volatile int launchId,popId;
     private long lastImpactMs,lastMergeMs;
+    private int lastMergeStream;
 
     GameAudio(Context context) {
         preferences=context.getSharedPreferences("lava_blobs",Context.MODE_PRIVATE);
         effectsEnabled=preferences.getBoolean(EFFECTS_KEY,true);
-        sounds=new SoundPool.Builder().setMaxStreams(8)
+        sounds=new SoundPool.Builder().setMaxStreams(BuildConfig.AUDIO_MIX_TEST?3:8)
                 .setAudioAttributes(new AudioAttributes.Builder()
                         .setUsage(AudioAttributes.USAGE_GAME)
                         .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build()).build();
@@ -131,14 +132,26 @@ final class GameAudio {
     void merge(int mergedTier) {
         if(audioTest!=null)audioTest.onMerge();
         if(released||!effectsEnabled)return;
+        long now=SystemClock.elapsedRealtime();
+        if(BuildConfig.AUDIO_MIX_TEST) {
+            // In an avalanche the game can merge several pairs in a frame.
+            // Keep one Bloop at a time, never an uncontrolled sum of fusions.
+            if(lastMergeMs!=0L && now-lastMergeMs<145L)return;
+            if(lastMergeStream!=0)sounds.stop(lastMergeStream);
+        }
         int id=bloops[nextBloop()];
         if(!canPlay(id))return;
-        if(playEffect(id,.56f,2,AudioPolicy.mergeRate(mergedTier))!=0)
-            lastMergeMs=SystemClock.elapsedRealtime();
+        int stream=playEffect(id,.56f,2,AudioPolicy.mergeRate(mergedTier));
+        if(stream!=0) {
+            lastMergeMs=now;
+            if(BuildConfig.AUDIO_MIX_TEST)lastMergeStream=stream;
+        }
     }
 
     void launch(int tier) {
         if(!canPlay(launchId))return;
+        if(BuildConfig.AUDIO_MIX_TEST&&lastMergeMs!=0L
+                &&SystemClock.elapsedRealtime()-lastMergeMs<150L)return;
         float rate=Math.max(1.08f,1.23f-.035f*Math.max(0,tier));
         playEffect(launchId,.16f,0,rate);
     }
@@ -159,6 +172,8 @@ final class GameAudio {
 
     void pop() {
         if(!canPlay(popId))return;
+        if(BuildConfig.AUDIO_MIX_TEST&&lastMergeMs!=0L
+                &&SystemClock.elapsedRealtime()-lastMergeMs<180L)return;
         playEffect(popId,.29f,1,1.30f);
     }
 
