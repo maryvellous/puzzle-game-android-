@@ -120,4 +120,4 @@ Queste misure **non** indicano automaticamente i confini attacco/corpo/coda e il
 
 ---
 
-**Stato:** decisione architetturale e artistica approvata, implementazione ancora da avviare. Questo è l'**unico documento di specifica vigente**. La precedente V1 e i diari A/B–C4.1 sono stati rimossi dal branch attivo e restano consultabili tramite la cronologia Git; le loro proposte di ricostruire proceduralmente il Bloop completo della fusione sono **superate**.
+**Stato:** decisione architetturale e artistica approvata. **Fondamenta tecniche in PR #26:** identità stabili dei blob, `ContactProbe` passivo nella risoluzione delle membrane, `ContactTracker` con durata/isteresi e cancellazione alla fusione o POP, test JVM e trace CSV verificabili. Il DSP e il Material Bank V2 **non sono ancora implementati**. Questo è l'**unico documento di specifica vigente**. La precedente V1 e i diari A/B–C4.1 sono stati rimossi dal branch attivo e restano consultabili tramite la cronologia Git; le loro proposte di ricostruire proceduralmente il Bloop completo della fusione sono **superate**.
