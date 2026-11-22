@@ -37,6 +37,7 @@ jobs:
         run: |
           gradle --no-daemon :app:testDebugUnitTest
           test -s app/build/audio_v2/contact_probe_trace.csv
+          test -s app/build/audio_v2/scene_stress_trace.csv
       - name: Python 3.11
         uses: actions/setup-python@v5
         with:
@@ -62,6 +63,7 @@ jobs:
           test -s build/audio_v2/listening/fusion_from_real_membranes.wav
           test -s build/audio_v2/listening/listen_real_physics_v2.wav
           test -s build/audio_v2/listening/synthetic_mixer_stress.wav
+          test -s build/audio_v2/listening/real_12_blob_scene_stress.wav
           cat build/audio_v2/listening/LISTENING_ORDER.md >> "$GITHUB_STEP_SUMMARY"
       - name: Upload private V2 auditory research (not a distributable sound pack)
         uses: actions/upload-artifact@v4
@@ -71,5 +73,6 @@ jobs:
             build/audio_v2/material/
             build/audio_v2/listening/
             app/build/audio_v2/contact_probe_trace.csv
+            app/build/audio_v2/scene_stress_trace.csv
           retention-days: 14
           if-no-files-found: error
