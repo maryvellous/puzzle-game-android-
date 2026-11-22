@@ -1,0 +1,75 @@
+name: Lava Blobs Audio V2 — offline material and physics auditions
+
+on:
+  push:
+    branches:
+      - experiment/lava-blobs-audio-v2-engine
+    paths:
+      - 'tools/audio_v2/**'
+      - 'app/src/main/java/com/maryvellous/lavablobs/Contact*.java'
+      - 'app/src/main/java/com/maryvellous/lavablobs/Blob*.java'
+      - 'app/src/test/java/com/maryvellous/lavablobs/ContactProbeTraceTest.java'
+      - '.github/workflows/audio-v2-offline.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audition-offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Android SDK 35
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"
+      - name: Test real membrane physics and export deterministic contact trace
+        run: |
+          gradle --no-daemon :app:testDebugUnitTest
+          test -s app/build/audio_v2/contact_probe_trace.csv
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install offline-only signal processing
+        run: |
+          python -m pip install --disable-pip-version-check numpy==1.26.4 scipy==1.15.3 matplotlib==3.10.3 imageio-ffmpeg==0.6.0
+      - name: Test V2 material grammar with synthetic audio
+        run: python -m unittest discover -s tools/audio_v2 -p 'test_*.py' -v
+      - name: Analyze unaltered original Bloop materials
+        run: |
+          python tools/audio_v2/material_bank.py             --sources app/src/main/res/raw             --output build/audio_v2/material
+          test -s build/audio_v2/material/material_bank_candidates.json
+          test -s build/audio_v2/material/bloop_regions_review.png
+          test -s build/audio_v2/material/isolated_auditions/bloop_4_attack_tail_no_core.wav
+      - name: Render V2 physics audition and isolated synthetic mixer stress
+        run: |
+          python tools/audio_v2/render_auditions.py             --sources app/src/main/res/raw             --trace app/build/audio_v2/contact_probe_trace.csv             --output build/audio_v2/listening
+          test -s build/audio_v2/listening/impact_from_real_membranes.wav
+          test -s build/audio_v2/listening/slide_from_real_membranes.wav
+          test -s build/audio_v2/listening/pressure_from_real_membranes.wav
+          test -s build/audio_v2/listening/release_from_real_membranes.wav
+          test -s build/audio_v2/listening/fusion_from_real_membranes.wav
+          test -s build/audio_v2/listening/listen_real_physics_v2.wav
+          test -s build/audio_v2/listening/synthetic_mixer_stress.wav
+          cat build/audio_v2/listening/LISTENING_ORDER.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload private V2 auditory research (not a distributable sound pack)
+        uses: actions/upload-artifact@v4
+        with:
+          name: lava-blobs-v2-material-physics-auditions
+          path: |
+            build/audio_v2/material/
+            build/audio_v2/listening/
+            app/build/audio_v2/contact_probe_trace.csv
+          retention-days: 14
+          if-no-files-found: error
