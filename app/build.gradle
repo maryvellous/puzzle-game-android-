@@ -41,10 +41,12 @@ android {
         debug {
             buildConfigField 'boolean', 'AUDIO_TEST', 'false'
             buildConfigField 'boolean', 'AUDIO_SIZE_TEST', 'false'
+            buildConfigField 'boolean', 'AUDIO_MIX_TEST', 'false'
         }
         release {
             buildConfigField 'boolean', 'AUDIO_TEST', 'false'
             buildConfigField 'boolean', 'AUDIO_SIZE_TEST', 'false'
+            buildConfigField 'boolean', 'AUDIO_MIX_TEST', 'false'
             if (signingConfigs.findByName('stable') != null)
                 signingConfig signingConfigs.stable
         }
@@ -60,6 +62,7 @@ android {
             versionNameSuffix '-audio-test'
             buildConfigField 'boolean', 'AUDIO_TEST', 'true'
             buildConfigField 'boolean', 'AUDIO_SIZE_TEST', 'false'
+            buildConfigField 'boolean', 'AUDIO_MIX_TEST', 'false'
             manifestPlaceholders = [appLabel: 'Lava Blob - Audio Test']
             matchingFallbacks = ['debug']
         }
@@ -71,7 +74,18 @@ android {
             versionNameSuffix '-audio-size-test'
             buildConfigField 'boolean', 'AUDIO_TEST', 'true'
             buildConfigField 'boolean', 'AUDIO_SIZE_TEST', 'true'
+            buildConfigField 'boolean', 'AUDIO_MIX_TEST', 'false'
             manifestPlaceholders = [appLabel: 'Lava Blob - Audio Size Test']
+            matchingFallbacks = ['debug']
+        }
+        audioMixTest {
+            initWith debug
+            applicationIdSuffix '.audiomixtest'
+            versionNameSuffix '-audio-mix-test'
+            buildConfigField 'boolean', 'AUDIO_TEST', 'true'
+            buildConfigField 'boolean', 'AUDIO_SIZE_TEST', 'true'
+            buildConfigField 'boolean', 'AUDIO_MIX_TEST', 'true'
+            manifestPlaceholders = [appLabel: 'Lava Blob - Audio Mix Test']
             matchingFallbacks = ['debug']
         }
     }
@@ -80,6 +94,9 @@ android {
     // test: changes are ONLY runtime pitch/speed mapping.
     sourceSets {
         audioSizeTest {
+            res.srcDirs += ['src/audioTest/res']
+        }
+        audioMixTest {
             res.srcDirs += ['src/audioTest/res']
         }
     }
