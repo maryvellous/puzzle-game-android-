@@ -152,11 +152,17 @@ def render_scenario(scenario: str, rows: list[dict], complete: list[np.ndarray],
                     radius = (float(observations[0]["radius_a"]) +
                               float(observations[0]["radius_b"])) / 2
                     voice = playback(attacks[idx % 4], blob_rate(radius))
-                    place(result, first, voice, .28 * strength)
+                    place(result, first, voice, .18 * strength)
             if scenario in ("slide", "release", "pressure"):
                 radius = (float(observations[0]["radius_a"]) +
                           float(observations[0]["radius_b"])) / 2
                 texture = tail_texture(playback(tails[idx % 4], blob_rate(radius)), count)
+                # Quiet source tails would disappear at native level. Apply
+                # a bounded, measured texture trim BEFORE physics envelope;
+                # this is an audition calibration, not a fixed game loudness.
+                rms = float(np.sqrt(np.mean(texture * texture)))
+                if rms > 1e-7:
+                    texture *= min(4.0, .14 / rms)
                 # Sliding and changing pressure excite matter. Static pressure
                 # alone is silent; no artificial compression "laser" sample.
                 varying_pressure = np.abs(np.diff(pressure, prepend=pressure[0]))
@@ -165,7 +171,7 @@ def render_scenario(scenario: str, rows: list[dict], complete: list[np.ndarray],
                 drive = np.minimum(1.0, .75 * local_motion + .25 * deformation)
                 drive *= (slip > 4) | (varying_pressure > .002)
                 envelope = smoothed(drive, attack_s=.025, release_s=.085)
-                result += texture * envelope * .08
+                result += texture * envelope * .18
     peak_before = float(np.max(np.abs(result)))
     # Whole-mix headroom, not clipping, voice stealing, or truncation.
     if peak_before > .87:
