@@ -1,6 +1,6 @@
 package com.maryvellous.lavablobs;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -49,7 +49,7 @@ final class ContactTracker implements ContactProbe.Listener {
     }
 
     private final Listener listener;
-    private final Map<Long,State> active=new HashMap<>();
+    private final Map<Long,State> active=new LinkedHashMap<>();
     private float previousTime=-1f;
 
     ContactTracker(Listener listener) {
@@ -93,6 +93,17 @@ final class ContactTracker implements ContactProbe.Listener {
             }
         }
     }
+
+    @Override public void onMerge(BlobWorld.Merge merge) {
+        cancelBlob(merge.parentAId,merge.simulationTime);
+        cancelBlob(merge.parentBId,merge.simulationTime);
+    }
+
+    @Override public void onPop(int blobId,float time) {
+        cancelBlob(blobId,time);
+    }
+
+    @Override public void onReset() {reset();}
 
     /** A removed or merged blob must not fake a physical separation sound. */
     void cancelBlob(int blobId,float time) {
