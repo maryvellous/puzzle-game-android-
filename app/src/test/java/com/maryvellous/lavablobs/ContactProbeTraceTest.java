@@ -87,7 +87,7 @@ public class ContactProbeTraceTest {
             @Override public void onReset() {tracker.reset();}
         });
         for(int i=0;i<96;i++) {
-            if(name.equals("release")&&i==32)b.translate(140f,0f);
+            if(name.equals("release")&&i==12)b.translate(140f,0f);
             if(name.equals("pressure")&&i<25)
                 for(int n=0;n<Blob.NODES;n++)b.vy[n]-=10f;
             world.tick(DT);
