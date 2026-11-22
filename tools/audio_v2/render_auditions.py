@@ -121,6 +121,26 @@ def contact_envelope(rows: list[dict], count: int) -> tuple[np.ndarray, np.ndarr
     return slip, pressure, normal
 
 
+
+def contact_texture(observations: list[dict], tail: np.ndarray,
+                    count: int) -> np.ndarray:
+    """Continuously driven tail: quiet at rest, no independent repeated sample."""
+    slip, pressure, _ = contact_envelope(observations, count)
+    radius = (float(observations[0]["radius_a"]) +
+              float(observations[0]["radius_b"])) / 2
+    texture = tail_texture(playback(tail, blob_rate(radius)), count)
+    rms = float(np.sqrt(np.mean(texture * texture)))
+    if rms > 1e-7:
+        texture *= min(4.0, .14 / rms)
+    varying_pressure = np.abs(np.diff(pressure, prepend=pressure[0]))
+    local_motion = np.minimum(1.0, slip / 130.0) ** .65
+    deformation = np.minimum(1.0, varying_pressure * 14.0)
+    drive = np.minimum(1.0, .75 * local_motion + .25 * deformation)
+    drive *= (slip > 4) | (varying_pressure > .002)
+    envelope = smoothed(drive, attack_s=.025, release_s=.085)
+    return texture * envelope
+
+
 def render_scenario(scenario: str, rows: list[dict], complete: list[np.ndarray],
                     attacks: list[np.ndarray], tails: list[np.ndarray]) -> tuple[np.ndarray, dict]:
     count = int(TOTAL_SECONDS * RATE)
@@ -154,24 +174,7 @@ def render_scenario(scenario: str, rows: list[dict], complete: list[np.ndarray],
                     voice = playback(attacks[idx % 4], blob_rate(radius))
                     place(result, first, voice, .18 * strength)
             if scenario in ("slide", "release", "pressure"):
-                radius = (float(observations[0]["radius_a"]) +
-                          float(observations[0]["radius_b"])) / 2
-                texture = tail_texture(playback(tails[idx % 4], blob_rate(radius)), count)
-                # Quiet source tails would disappear at native level. Apply
-                # a bounded, measured texture trim BEFORE physics envelope;
-                # this is an audition calibration, not a fixed game loudness.
-                rms = float(np.sqrt(np.mean(texture * texture)))
-                if rms > 1e-7:
-                    texture *= min(4.0, .14 / rms)
-                # Sliding and changing pressure excite matter. Static pressure
-                # alone is silent; no artificial compression "laser" sample.
-                varying_pressure = np.abs(np.diff(pressure, prepend=pressure[0]))
-                local_motion = np.minimum(1.0, slip / 130.0) ** .65
-                deformation = np.minimum(1.0, varying_pressure * 14.0)
-                drive = np.minimum(1.0, .75 * local_motion + .25 * deformation)
-                drive *= (slip > 4) | (varying_pressure > .002)
-                envelope = smoothed(drive, attack_s=.025, release_s=.085)
-                result += texture * envelope * .18
+                result += contact_texture(observations, tails[idx % 4], count) * .18
     peak_before = float(np.max(np.abs(result)))
     # Whole-mix headroom, not clipping, voice stealing, or truncation.
     if peak_before > .87:
@@ -186,6 +189,51 @@ def render_scenario(scenario: str, rows: list[dict], complete: list[np.ndarray],
         "complete_fusion_voices": int(types["merge"]),
     }
     return result, metric
+
+
+
+def render_real_scene_stress(rows: list[dict], complete: list[np.ndarray],
+                             attacks: list[np.ndarray],
+                             tails: list[np.ndarray]) -> tuple[np.ndarray, dict]:
+    """Actual multiple-blob interactions; never invent a merge or contact."""
+    count = RATE * 3
+    output = np.zeros(count, dtype=np.float64)
+    groups = group_pairs(rows)
+    # Limit *collective* texture gain rather than letting N contact voices
+    # increase sound linearly. The mixer is still an offline research prototype.
+    texture_gain = .13 / math.sqrt(max(1., len(groups) / 3.0))
+    impact_count = 0
+    for i, (pair, observations) in enumerate(sorted(groups.items())):
+        output += contact_texture(observations, tails[i % 4], count) * texture_gain
+        first = float(observations[0]["time"])
+        # Only first contact is a possible attack, not each of the 5 solver
+        # passes or subsequent 60Hz contact observations.
+        early = [s for s in observations if float(s["time"]) <= first + .055]
+        peak = max(float(s["normal_speed"]) for s in early)
+        if peak > 18:
+            amount = float(np.clip(math.log1p((peak - 18) / 30) /
+                                   math.log1p(300 / 30), 0, 1))
+            radius = (float(observations[0]["radius_a"]) +
+                      float(observations[0]["radius_b"])) / 2
+            place(output, first, playback(attacks[i % 4], blob_rate(radius)),
+                  .11 * amount)
+            impact_count += 1
+    merges = [row for row in rows if row["type"] == "merge"]
+    for i, event in enumerate(merges):
+        # Include the full source, including its own natural decay/padding.
+        place(output, float(event["time"]), playback(complete[i % 4], 1.0), .42)
+    before = float(np.max(np.abs(output)))
+    if before > .87:
+        output *= .87 / before
+    return output, {
+        "label": "REAL_12_BLOB_SIMULATION_FROM_JAVA_SOLVER",
+        "measured_pair_count": len(groups),
+        "significant_initial_impacts": impact_count,
+        "full_merged_bloops": len(merges),
+        "peak_before_gain": round(before, 6),
+        "peak_after_gain": round(float(np.max(np.abs(output))), 6),
+        "no_voice_truncated": True,
+    }
 
 
 def render_stress(complete: list[np.ndarray], attacks: list[np.ndarray]) -> tuple[np.ndarray, dict]:
@@ -234,6 +282,18 @@ def run(sources: Path, trace_path: Path, output: Path) -> None:
     stress, info = render_stress(complete, attacks)
     write_wav(output / "synthetic_mixer_stress.wav", stress)
     metrics["synthetic_stress"] = info
+    real_trace = trace_path.parent / "scene_stress_trace.csv"
+    if not real_trace.is_file():
+        raise ValueError("Missing true multiple-blob stress trace")
+    with real_trace.open(newline="", encoding="utf-8") as handle:
+        scene_rows = [row for row in csv.DictReader(handle)
+                      if row["scenario"] == "stress_real"]
+    if not scene_rows:
+        raise ValueError("Real multiple-blob trace has no observations")
+    real_scene, real_info = render_real_scene_stress(
+        scene_rows, complete, attacks, tails)
+    write_wav(output / "real_12_blob_scene_stress.wav", real_scene)
+    metrics["real_scene_stress"] = real_info
     (output / "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
     (output / "LISTENING_ORDER.md").write_text(
         "# Audio V2 — offline research audition\n\n"
@@ -246,7 +306,7 @@ def run(sources: Path, trace_path: Path, output: Path) -> None:
         "listen_real_physics_v2.wav contains these five clips **in this order** "
         "with 300ms silent gaps; there is no fusion at the end of clips 1–4. "
         "synthetic_mixer_stress.wav is a technical nonphysical overlap test. "
-        "All previews are unapproved prototypes. No Android integration.\n",
+        "real_12_blob_scene_stress.wav uses actual overlapping membrane contact "\n        "data (not manually manufactured events); fusion voices remain complete. "\n        "All previews are unapproved prototypes. No Android integration.\\n",
         encoding="utf-8")
 
 
