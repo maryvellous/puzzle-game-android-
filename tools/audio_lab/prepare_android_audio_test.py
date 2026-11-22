@@ -82,12 +82,14 @@ def cyclic_excerpt(x: np.ndarray,seconds:float,amplification:float,
 def run(c41_dir:Path,out_dir:Path,report_dir:Path):
     sources={
         "impact":c41_dir/"02_impact_A_plus9_audible_40percent.wav",
+        "impact_variant":c41_dir/"03_impact_B_plus16_audible_32percent.wav",
         "friction":c41_dir/"04_friction_adhesive_UNCHANGED.wav",
         "compression":c41_dir/"05_compression_B_UNCHANGED.wav",
     }
     x={key:read_wav(path) for key,path in sources.items()}
     sounds={
         "impact":impact_excerpt(x["impact"]),
+        "impact_variant":impact_excerpt(x["impact_variant"]),
         "friction":cyclic_excerpt(x["friction"],.23,5.0,.08),
         "compression":cyclic_excerpt(x["compression"],.20,4.5,.065),
     }
@@ -105,7 +107,7 @@ def run(c41_dir:Path,out_dir:Path,report_dir:Path):
             "length_ms":round(len(samples)/SAMPLE_RATE*1000,1),
             "rms":round(float(np.sqrt(np.mean(samples*samples))),5),
             "peak":round(float(np.max(np.abs(samples))),5),
-            "type":"one-shot" if key=="impact" else "continuous loop, physics-gated",
+            "type":"one-shot" if key.startswith("impact") else "continuous loop, physics-gated",
         }
     report_dir.mkdir(parents=True,exist_ok=True)
     (report_dir/"android_audio_material.json").write_text(
