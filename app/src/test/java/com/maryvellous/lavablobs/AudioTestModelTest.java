@@ -89,4 +89,32 @@ public final class AudioTestModelTest {
         assertEquals(20f,collision.radiusA,.0001f);
         assertEquals(94f,collision.radiusB,.0001f);
     }
+
+    @Test public void microContactsAreSilentInNewMixWithoutChangingPhysics() {
+        assertFalse(AudioTestModel.isAudibleImpact(42f));
+        assertFalse(AudioTestModel.isAudibleImpact(85f));
+        assertFalse(AudioTestModel.isAudibleImpact(117.9f));
+        assertTrue(AudioTestModel.isAudibleImpact(118f));
+        assertTrue(AudioTestModel.isAudibleImpact(292f));
+        assertEquals(0f,AudioTestModel.audibleImpactIntensity(118f),1e-6f);
+        assertTrue(AudioTestModel.audibleImpactIntensity(200f)>.3f);
+        assertEquals(1f,AudioTestModel.audibleImpactIntensity(1000f),1e-6f);
+    }
+
+    @Test public void frictionIsAudibleForRealSlidingButSilentAtRest() {
+        assertEquals(0f,AudioTestModel.audibleFrictionIntensity(0f),1e-6f);
+        assertEquals(0f,AudioTestModel.audibleFrictionIntensity(8f),1e-6f);
+        assertTrue(AudioTestModel.audibleFrictionIntensity(45f)>.45f);
+        assertTrue(AudioTestModel.audibleFrictionIntensity(85f)>.8f);
+        assertEquals(1f,AudioTestModel.audibleFrictionIntensity(180f),1e-6f);
+    }
+
+    @Test public void onlyOneContinuousVoiceHasPriority() {
+        assertTrue(AudioTestModel.shouldPreferFriction(.15f,.12f));
+        assertTrue(AudioTestModel.shouldPreferFriction(.04f,.24f));
+        assertFalse(AudioTestModel.shouldPreferFriction(0f,.15f));
+        assertFalse(AudioTestModel.shouldPreferFriction(.005f,.15f));
+        // Gentle adhesive slip is not interrupted when compression is quieter.
+        assertTrue(AudioTestModel.shouldPreferFriction(.025f,.03f));
+    }
 }
