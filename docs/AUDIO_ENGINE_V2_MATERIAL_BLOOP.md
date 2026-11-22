@@ -1,6 +1,6 @@
 # Lava Blobs — Motore acustico V2: la materia diventa suono
 
-**Decisione progettuale del 22 novembre 2026 · Specifica artistica e architetturale vigente · Non ancora implementata.**
+**Decisione progettuale del 22 novembre 2026 · Specifica artistica e architetturale vigente · Fondamenta fisiche e banco d'ascolto offline sperimentali; DSP Android non ancora implementato.**
 
 > **«Un sistema in cui il comportamento della materia diventa suono.»**
 
