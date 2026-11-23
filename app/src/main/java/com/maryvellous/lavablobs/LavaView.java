@@ -44,7 +44,7 @@ public final class LavaView extends View {
     private final GameSave session;
     private float lastCheckpoint;
     private final BlobWorld world;
-    private final GameAudio audio;
+    private final GameSound audio;
     private final Random random = new Random();
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint letters = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -116,7 +116,10 @@ public final class LavaView extends View {
         super(context);
         this.spec=spec;this.progress=progress;this.onHome=onHome;
         this.session=session;
-        audio=new GameAudio(context);
+        // The standalone diagnostic app has its own package/preferences.
+        // The stable product and ordinary builds keep classic SoundPool.
+        audio=context.getPackageName().endsWith(".audiov2")?
+                new V2GameSound(context):new ClassicGameSound(context);
         theme=new ThemeStore(context).current();
         perfLogging=(context.getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE)!=0;
         world=new BlobWorld(new Random(),spec);
@@ -133,6 +136,9 @@ public final class LavaView extends View {
                 world.reset();
             }
         }
+        // Install the passive solver observation ONLY in the diagnostic app.
+        if(audio instanceof V2GameSound)
+            world.setContactProbe((V2GameSound)audio);
         setLayerType(View.LAYER_TYPE_HARDWARE,null);
         setHapticFeedbackEnabled(true);
         best=progress.record(spec.id);
@@ -210,7 +216,7 @@ public final class LavaView extends View {
             scorePulse=.33f;
         }
         for (BlobWorld.Merge merge : world.consumeMerges()) {
-            audio.merge(merge.tier);
+            audio.merge(merge);
             waves.add(new Wave(merge.x, merge.y, merge.radius, merge.tier));
             for (int i = 0; i < 16; i++) {
                 float angle = (float) (random.nextFloat() * Math.PI * 2);
@@ -224,7 +230,7 @@ public final class LavaView extends View {
         }
         // Several blobs may collide in a frame: only the strongest can sound.
         BlobWorld.Impact strongest=BlobWorld.strongestImpact(world.consumeImpacts());
-        if(strongest!=null)audio.impact();
+        if(strongest!=null)audio.discardLegacyImpacts();
         if (world.score > best) best=world.score;
         if(world.gameOver&&!finalized) {
             progress.save(spec,world,true,activeSeconds);
@@ -262,6 +268,9 @@ public final class LavaView extends View {
         drawVesselRim(canvas);
         canvas.restore();
         drawHUD(canvas,h);
+        String diagnostic=audio.diagnosticStatus();
+        if(diagnostic!=null)
+            label(canvas,diagnostic,210f,123f,11f,theme.text,false);
         if(world.gameOver)drawGameOver(canvas,h);
 
         canvas.restore();
@@ -774,7 +783,7 @@ public final class LavaView extends View {
                     if(y<centerY-50f&&world.eraseAt(x,y)){
                         pops.add(new PopFx(world.lastPoppedX,world.lastPoppedY,
                                 world.lastPoppedRadius,world.lastPoppedTier));
-                        audio.pop();
+                        audio.pop(world.lastPoppedId,world.lastPoppedRadius);
                         performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
                         popPress=1f;
                         eraseMode=false;
@@ -824,7 +833,8 @@ public final class LavaView extends View {
                     if(shouldLaunch){
                         int tier=world.nextTier;
                         if(world.launch(aimX)){
-                            audio.launch(tier);
+                            audio.launch(tier,
+                                    world.blobs.get(world.blobs.size()-1).radius());
                             performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
                             saveCheckpoint();
                         }else blockedFlash=.9f;
