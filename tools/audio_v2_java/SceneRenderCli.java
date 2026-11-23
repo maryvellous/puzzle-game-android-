@@ -33,7 +33,7 @@ public final class SceneRenderCli {
 
     private static final class Row {
         String scenario,type;
-        float time,dt,normal,slip,pressure,radiusA,radiusB;
+        float time,dt,normal,slip,pressure,radiusA,radiusB,bulkMotion;
         int a,b,result;
         int ordinal;
     }
@@ -110,13 +110,13 @@ public final class SceneRenderCli {
         try(BufferedReader reader=Files.newBufferedReader(path,StandardCharsets.UTF_8)) {
             String header=reader.readLine();
             check(header!=null&&header.equals(
-                    "scenario,type,time,dt,blob_a,blob_b,result_id,x,y,nx,ny,normal_speed,tangent_speed,compression,radius_a,radius_b,projection_samples,contact_age"),
+                    "scenario,type,time,dt,blob_a,blob_b,result_id,x,y,nx,ny,normal_speed,tangent_speed,compression,radius_a,radius_b,projection_samples,contact_age,bulk_motion"),
                     "Unexpected contact CSV schema: "+path);
             String line;
             int index=0;
             while((line=reader.readLine())!=null) {
                 String[] parts=line.split(",",-1);
-                check(parts.length==18,"Unexpected CSV row");
+                check(parts.length==19,"Unexpected CSV row");
                 Row row=new Row();
                 row.scenario=parts[0];
                 row.type=parts[1];
@@ -130,6 +130,7 @@ public final class SceneRenderCli {
                 row.pressure=Float.parseFloat(parts[13]);
                 row.radiusA=Float.parseFloat(parts[14]);
                 row.radiusB=Float.parseFloat(parts[15]);
+                row.bulkMotion=Float.parseFloat(parts[18]);
                 row.ordinal=index++;
                 check(Float.isFinite(row.time)&&row.time>=0,
                         "Nonfinite or negative timestamp");
@@ -166,7 +167,7 @@ public final class SceneRenderCli {
                     float approach=(scenario.equals("impact")||
                             scenario.equals("stress_real"))?e.normal:0f;
                     engine.contact(e.a,e.b,approach,e.slip,e.pressure,e.radiusA,e.radiusB,
-                            e.dt>0f?e.dt:1f/120f);
+                            e.dt>0f?e.dt:1f/120f,e.bulkMotion);
                     actualContacts++;
                     break;
                 case "end":
