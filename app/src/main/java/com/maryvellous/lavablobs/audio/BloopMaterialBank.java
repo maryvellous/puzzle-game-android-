@@ -61,16 +61,15 @@ public final class BloopMaterialBank {
                 }
                 texture[i]=total>.0001f?weighted/total:0f;
             }
-            // Blend the start/end edge to avoid loop jumps; preserve
-            // as much of the original material as possible.
+            // Apply a smooth endpoint correction over the final ~6.7 ms.
+            // The last sample then exactly equals the first and a repeated
+            // texture period never creates a discontinuity at its boundary.
             int seam=Math.min(period/3,Math.max(8,SAMPLE_RATE/150));
+            float delta=texture[0]-texture[period-1];
             for(int i=0;i<seam;i++) {
-                float t=(i+.5f)/seam;
+                float t=(i+1f)/seam;
                 float ease=t*t*(3f-2f*t);
-                float left=texture[i],right=texture[period-seam+i];
-                float center=left*(1-ease)+right*ease;
-                texture[i]=center;
-                texture[period-seam+i]=center;
+                texture[period-seam+i]+=delta*ease;
             }
             return texture;
         }
