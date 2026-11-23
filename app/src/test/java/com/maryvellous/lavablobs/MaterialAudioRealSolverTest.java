@@ -73,7 +73,7 @@ public class MaterialAudioRealSolverTest {
                     if(bulk>40f)bulkAbove40[0]++;
                     if(bulk>80f)bulkAbove80[0]++;
                     audio.contact(c.blobA,c.blobB,c.approachSpeed,c.slideSpeed,
-                            c.compression,c.radiusA,c.radiusB,dt);
+                            c.compression,c.radiusA,c.radiusB,dt,c.bulkMotion);
                 }
             }
             @Override public void onMerge(BlobWorld.Merge m) {
@@ -101,7 +101,9 @@ public class MaterialAudioRealSolverTest {
         // A resting vessel can still have brief infrequent physical shuffles;
         // sustained loop-generated sound is forbidden. This conservative
         // threshold will be tightened based on measured gameplay traces.
-        assertTrue("Too many sound gestures in apparently resting vessel: "+
-                audio.squishEvents(),audio.squishEvents()<=2);
+        assertEquals("Real near-resting membrane contacts must not make squish drones",
+                0,audio.squishEvents());
+        assertEquals("Solver micro-impulses must not sound like real hits",
+                0,audio.impactEvents());
     }
 }
