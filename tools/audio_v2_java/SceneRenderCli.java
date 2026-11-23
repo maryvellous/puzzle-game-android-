@@ -167,7 +167,7 @@ public final class SceneRenderCli {
                     engine.endContact(e.a,e.b);
                     break;
                 case "merge":
-                    engine.merge(e.a,e.b,Math.max(20f,e.radiusA+e.radiusB));
+                    engine.merge(e.a,e.b,e.radiusA>0?e.radiusA:32f);
                     break;
                 default:
                     // begin/update rows are tracker diagnostics; raw contact
