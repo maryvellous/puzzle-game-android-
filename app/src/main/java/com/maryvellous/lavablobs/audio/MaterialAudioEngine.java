@@ -28,7 +28,9 @@ public final class MaterialAudioEngine {
     // micro-motion, NOT absolute guarantees for all phones/scenes.
     private static final float SLIP_QUIET=45f;
     private static final float DEFORMATION_QUIET=.018f;
-    private static final float IMPACT_MIN_SPEED=45f;
+    private static final float IMPACT_MIN_SPEED=70f;
+    private static final float BULK_MOTION_QUIET=75f;
+    private static final float STRONG_DEFORMATION_QUIET=.075f;
     private static final float SQUISH_ENERGY_TRIGGER=.025f; // integrated motion-seconds
     private static final float SQUISH_MIN_INTERVAL=.100f;
     private static final float MAX_PHYSICS_DT=.042f;
@@ -118,7 +120,14 @@ public final class MaterialAudioEngine {
     /** Backward-compatible test entrypoint with the solver's normal half-step. */
     public void contact(int idA,int idB,float approach,float slide,
                         float compression,float radiusA,float radiusB) {
-        contact(idA,idB,approach,slide,compression,radiusA,radiusB,1f/120f);
+        contact(idA,idB,approach,slide,compression,radiusA,radiusB,
+                1f/120f,Math.max(Math.max(0f,approach),Math.max(0f,slide)));
+    }
+
+    public void contact(int idA,int idB,float approach,float slide,
+                        float compression,float radiusA,float radiusB,float dt) {
+        contact(idA,idB,approach,slide,compression,radiusA,radiusB,dt,
+                Math.max(Math.max(0f,approach),Math.max(0f,slide)));
     }
 
     /**
@@ -131,8 +140,10 @@ public final class MaterialAudioEngine {
      * A stationary pair only updates state. It does NOT play a texture at all.
      */
     public void contact(int idA,int idB,float approach,float slide,
-                        float compression,float radiusA,float radiusB,float dt) {
+                        float compression,float radiusA,float radiusB,float dt,
+                        float bulkMotion) {
         if(!Float.isFinite(approach)||!Float.isFinite(slide)||
+                !Float.isFinite(bulkMotion)||bulkMotion<0f||
                 !Float.isFinite(compression)||!Float.isFinite(radiusA)||
                 !Float.isFinite(radiusB)||!Float.isFinite(dt)||
                 dt<=0f||dt>MAX_PHYSICS_DT)
@@ -168,7 +179,17 @@ public final class MaterialAudioEngine {
         float slipMotion=clamp((Math.max(0f,slide)-SLIP_QUIET)/140f,0f,1f);
         float stretchMotion=clamp(
                 (realDeformation-DEFORMATION_QUIET)*14f,0f,1f);
-        float activity=clamp(.72f*slipMotion+.28f*stretchMotion,0f,1f);
+        // An immobile blob's contact patch can report surprisingly high
+        // local slip because particles oscillate under the five solver
+        // passes. Require ACTUAL bulk movement of the 24-node membrane
+        // before local slip can make sound. A single major deformation
+        // can also make a short squish even if the centre is constrained.
+        float bulkDrive=clamp(
+                (bulkMotion-BULK_MOTION_QUIET)/110f,0f,1f);
+        float strongDeformation=clamp(
+                (realDeformation-STRONG_DEFORMATION_QUIET)*12f,0f,1f);
+        float activity=clamp(bulkDrive*(.72f*slipMotion+.28f*stretchMotion)+
+                .65f*strongDeformation,0f,1f);
 
         if(activity<.10f) {
             // "Contact remains" and "sound continues" are NOT equivalent.
