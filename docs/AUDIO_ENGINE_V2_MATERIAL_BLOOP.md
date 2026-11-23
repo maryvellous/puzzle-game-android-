@@ -6,6 +6,12 @@
 
 Questa frase è il **faro del progetto**. Ogni comportamento sonoro deve avere una causa leggibile nelle membrane e appartenere alla stessa materia. Il suono non è un effetto appiccicato a un evento: è la risposta del materiale al comportamento fisico.
 
+### Riscontro audiovisivo e passaggio a codice unico (23 novembre 2026)
+
+L'utente ha giudicato **«perfetto»** il primo ascolto *insieme alle vere membrane simulate* (cinque gesti e scena reale a 12 blob). Questa è una validazione della **direzione artistica del prototipo Python sincronizzato**, non ancora una validazione della latenza su Android e neppure un'autorizzazione a integrare o pubblicare l'app.
+
+Sul branch `experiment/lava-blobs-audio-v2-engine` è stato creato un core PCM deterministico **puro Java** sotto `app/src/main/java/com/maryvellous/lavablobs/audio/`, riutilizzato da `tools/audio_v2_java/SceneRenderCli.java` per nuove anteprime audiovisive A/B. I file di riferimento approvati restano disponibili nel laboratorio offline. **Prima di collegare AudioTrack al gameplay occorre ascoltare il confronto Java vs Python**, senza scegliere arbitrariamente un nuovo timbro soltanto perché i test passano.
+
 ## 1. Decisione sonora fondamentale: la fusione è l'evento principe
 
 **La fusione usa uno dei quattro Bloop originali COMPLETO, dall'inizio alla fine.** Non lo ricostruiamo da un sintetizzatore e non eliminiamo il suo nucleo centrale. Conserviamo la varietà dei quattro Bloop, con eventuale variazione moderata di pitch/durata secondo la dimensione. La fusione è il momento più riconoscibile, pieno e gratificante del gioco.
