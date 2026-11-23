@@ -30,13 +30,14 @@ public class ContactProbeTraceTest {
     private static void write(PrintWriter csv,String scenario,String kind,float time,
             float dt,int a,int b,int result,ContactProbe.Contact c,float age) {
         csv.printf(Locale.US,
-                "%s,%s,%.6f,%.6f,%d,%d,%d,%.4f,%.4f,%.5f,%.5f,%.4f,%.4f,%.6f,%.3f,%.3f,%d,%.5f%n",
+                "%s,%s,%.6f,%.6f,%d,%d,%d,%.4f,%.4f,%.5f,%.5f,%.4f,%.4f,%.6f,%.3f,%.3f,%d,%.5f,%.4f%n",
                 scenario,kind,time,dt,a,b,result,
                 c==null?0f:c.x,c==null?0f:c.y,
                 c==null?0f:c.nx,c==null?0f:c.ny,
                 c==null?0f:c.approachSpeed,c==null?0f:c.slideSpeed,
                 c==null?0f:c.compression,c==null?0f:c.radiusA,
-                c==null?0f:c.radiusB,c==null?0:c.projectionSamples,age);
+                c==null?0f:c.radiusB,c==null?0:c.projectionSamples,age,
+                c==null?0f:c.bulkMotion);
     }
 
     /**
@@ -47,7 +48,7 @@ public class ContactProbeTraceTest {
     private static void writeMerge(PrintWriter csv,String scenario,BlobWorld.Merge merge) {
         // Keep schema stable and encode the TRUE resulting radius for pitch.
         csv.printf(Locale.US,
-                "%s,merge,%.6f,0,%d,%d,%d,0,0,0,0,0,0,0,%.4f,0,0,0%n",
+                "%s,merge,%.6f,0,%d,%d,%d,0,0,0,0,0,0,0,%.4f,0,0,0,0%n",
                 scenario,merge.simulationTime,merge.parentAId,merge.parentBId,
                 merge.resultId,merge.radius);
     }
@@ -136,7 +137,7 @@ public class ContactProbeTraceTest {
         File meshFile=new File(dir,"two_blob_mesh_frames.csv");
         try(PrintWriter csv=new PrintWriter(new FileWriter(file));
             PrintWriter mesh=new PrintWriter(new FileWriter(meshFile))) {
-            csv.println("scenario,type,time,dt,blob_a,blob_b,result_id,x,y,nx,ny,normal_speed,tangent_speed,compression,radius_a,radius_b,projection_samples,contact_age");
+            csv.println("scenario,type,time,dt,blob_a,blob_b,result_id,x,y,nx,ny,normal_speed,tangent_speed,compression,radius_a,radius_b,projection_samples,contact_age,bulk_motion");
             writeMeshHeader(mesh);
             run(csv,mesh,"impact",91L);
             run(csv,mesh,"slide",92L);
@@ -172,7 +173,7 @@ public class ContactProbeTraceTest {
         world.ensureBlobIds();
         try(PrintWriter csv=new PrintWriter(new FileWriter(file));
             PrintWriter mesh=new PrintWriter(new FileWriter(meshFile))) {
-            csv.println("scenario,type,time,dt,blob_a,blob_b,result_id,x,y,nx,ny,normal_speed,tangent_speed,compression,radius_a,radius_b,projection_samples,contact_age");
+            csv.println("scenario,type,time,dt,blob_a,blob_b,result_id,x,y,nx,ny,normal_speed,tangent_speed,compression,radius_a,radius_b,projection_samples,contact_age,bulk_motion");
             writeMeshHeader(mesh);
             writeMesh(mesh,"stress_real",0,world);
             ContactTracker tracker=new ContactTracker(t->{
