@@ -27,6 +27,13 @@
 - **Ordine di lavoro:** Contact Probe/Tracker con test e CSV deterministici (PR #26) → banco dei quattro Bloop e ascolti offline sul branch `experiment/lava-blobs-audio-v2-engine` → **valutazione artistica utente** → core DSP unico e deterministico riusabile offline/Android → stress/benchmark → una sola APK diagnostica → ascolto su telefono → eventuale merge, solo su richiesta. Il laboratorio Python in `tools/audio_v2/` è provvisorio, non l'engine runtime e non va duplicato come secondo DSP stabile.
 - **Fondamenta disponibili sulla PR #26:** `Blob.id` con allocatore `BlobWorld.nextBlobId`, salvati nei checkpoint mantenendo retrocompatibilità VERSION=1; `ContactProbe` opzionale misura durante il solver (nessun contatto = lista vuota), `ContactTracker` produce BEGIN/UPDATE/END e CANCELLED per merge/POP. Test deterministici e CSV generato da `ContactProbeTraceTest` sotto `app/build/audio_v2/`. Il probe è **disattivo** senza listener; la 1.0.11 non usa la nuova catena.
 
+## Stato implementazione isolata V2, 23 novembre 2026
+
+- Il **prototipo audiovisivo Python** sincronizzato alle membrane Java è stato giudicato «perfetto» dall'utente: usare quel risultato come riferimento artistico, non sostituirlo acriticamente con un nuovo timbro.
+- Sul branch `experiment/lava-blobs-audio-v2-engine` ora esiste **un solo core PCM Java** in `app/src/main/java/com/maryvellous/lavablobs/audio/`, verificato da test JVM e usato anche per render offline tramite `tools/audio_v2_java/SceneRenderCli.java`. La suite CI genera video in `build/audio_v2/java_video/` da confrontare con il riferimento `build/audio_v2/visual/`.
+- La versione Java **non è ancora approvata all'ascolto**: chiedere un confronto audiovisivo prima di modificare il runtime. Non collegare ancora l'engine al `LavaView` o a `SoundPool`; il prossimo adapter dovrà serializzare gli eventi UI/physics sulla coda DSP e usare AudioTrack a bassa latenza.
+- **Mai unire PR #26 o il branch V2 in `main` senza approvazione esplicita.**
+
 ## Materiale storico, non autoritativo
 - `tools/audio_lab/`, i workflow `procedural-audio-lab.yml` e `two-blob-acoustic-prototype.yml`, e `AcousticTwoBlobTraceTest.java` provengono dagli esperimenti A/B e C1–C4.1. Possono fornire dati/idee, **non** implementano la V2 e non vanno eseguiti o copiati come percorso di produzione.
 - Nelle prove vecchie la mappatura dimensione→pitch era promettente; molti urti/compressioni non erano convincenti, la Mix Test mostrava crepitii e le PR [#23](https://github.com/maryvellous/puzzle-game-android-/pull/23) e [#24](https://github.com/maryvellous/puzzle-game-android-/pull/24) non vanno fuse per inerzia.
