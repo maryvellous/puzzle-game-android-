@@ -77,7 +77,11 @@ public class MaterialAudioEngineTest {
         assertEquals(1,engine.contactBegins());
         engine.endContact(11,15);
         engine.renderMono(rendered,0,rendered.length);
-        assertEquals("Released texture should decay and disappear",0,engine.activePairs());
+        assertEquals("The release must fade, not cut a contact voice immediately",
+                1,engine.activePairs());
+        float[] tail=new float[44100];
+        engine.renderMono(tail,0,tail.length);
+        assertEquals("Released texture should eventually disappear",0,engine.activePairs());
     }
 
     @Test public void contactUpdatesDoNotRetriggerImpactsAndUnknownEndsAreSafe() {
