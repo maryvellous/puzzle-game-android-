@@ -100,6 +100,24 @@ public class MaterialAudioEngineTest {
         assertEquals(0,engine.activePairs());
     }
 
+    @Test public void shortDelayedPhysicalImpactStillTriggersExactlyOnce() {
+        MaterialAudioEngine engine=new MaterialAudioEngine(bank(false));
+        float[] block=new float[441]; // 10ms
+        engine.contact(4,9,4,25,.1f,32,32);
+        assertEquals(0,engine.activeOneShots());
+        engine.renderMono(block,0,block.length);
+        engine.contact(4,9,145,40,.1f,32,32);
+        assertEquals("The first real closing impulse must be captured",1,engine.activeOneShots());
+        for(int i=0;i<9;i++){
+            engine.renderMono(block,0,block.length);
+            engine.contact(4,9,175,40,.1f,32,32);
+        }
+        assertEquals("No retrigger even with repeated high speed",1,engine.contactBegins());
+        // At this point the first attack may have played out, so count the
+        // input onset via the largest possible active-voice count instead.
+        assertTrue(engine.peakVoices()<=1);
+    }
+
     @Test public void tooManyPartialVoicesAreLimitedWithoutSacrificingFusions() {
         MaterialAudioEngine engine=new MaterialAudioEngine(bank(false));
         for(int i=0;i<75;i++)engine.launch(20+i%5);
