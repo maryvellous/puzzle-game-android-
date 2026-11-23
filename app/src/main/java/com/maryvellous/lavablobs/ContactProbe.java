@@ -32,6 +32,10 @@ final class ContactProbe {
         final float x, y, nx, ny; // Weighted contact point and A -> B normal.
         final float approachSpeed, slideSpeed; // Max closing speed, mean tangential slip.
         final float compression; // Bounded geometric proxy, NOT force or impulse.
+        // Actual bulk motion from ALL 24 particle velocities AFTER the
+        // physics substep: unlike local sliding, solver chatter at the
+        // contact patch cannot alone make a resting body sound active.
+        final float bulkMotion;
         final int projectionSamples; // Includes repeat observations across solver passes.
 
         Contact(Accumulator a, float time, float dt) {
@@ -61,6 +65,13 @@ final class ContactProbe {
             compression=Math.max(a.localCompression,
                     Math.max(areaLoss(a.a),areaLoss(a.b)));
             projectionSamples=a.samples;
+            bulkMotion=Math.max(bodySpeed(a.a),bodySpeed(a.b));
+        }
+
+        private static float bodySpeed(Blob b) {
+            float vx=0f,vy=0f;
+            for(int i=0;i<Blob.NODES;i++){vx+=b.vx[i];vy+=b.vy[i];}
+            return (float)Math.hypot(vx/Blob.NODES,vy/Blob.NODES);
         }
 
         private static float areaLoss(Blob blob) {
