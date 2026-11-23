@@ -106,4 +106,50 @@ public class MaterialAudioRealSolverTest {
         assertEquals("Solver micro-impulses must not sound like real hits",
                 0,audio.impactEvents());
     }
+    @Test public void actualPlayerShakeProducesFiniteMembraneSquishes() {
+        BlobWorld world=new BlobWorld(new Random(691));
+        world.setHeight(850f);
+        world.blobs.add(new Blob(67f,192f,1,1f));
+        world.blobs.add(new Blob(115f,193f,2,1f));
+        world.blobs.add(new Blob(168f,193f,3,1f));
+        world.blobs.add(new Blob(235f,198f,4,1f));
+        world.blobs.add(new Blob(306f,194f,1,1f));
+        world.blobs.add(new Blob(352f,192f,2,1f));
+        world.blobs.add(new Blob(175f,256f,2,1f));
+        world.blobs.add(new Blob(268f,268f,3,1f));
+        world.ensureBlobIds();
+        for(int frame=0;frame<240;frame++)world.tick(1f/60f);
+        MaterialAudioEngine audio=new MaterialAudioEngine(bank());
+        final int[] samples={0},moving={0};
+        final float[] maxBulk={0};
+        world.setContactProbe(new ContactProbe.Listener(){
+            @Override public void onContactStep(float time,float dt,
+                    List<ContactProbe.Contact> contacts){
+                for(ContactProbe.Contact c:contacts){
+                    samples[0]++;
+                    maxBulk[0]=Math.max(maxBulk[0],c.bulkMotion);
+                    if(c.bulkMotion>75f)moving[0]++;
+                    audio.contact(c.blobA,c.blobB,c.approachSpeed,c.slideSpeed,
+                            c.compression,c.radiusA,c.radiusB,dt,c.bulkMotion);
+                }
+            }
+            @Override public void onMerge(BlobWorld.Merge m) {
+                audio.merge(m.parentAId,m.parentBId,m.radius);
+            }
+        });
+        float[] mixed=new float[735];
+        for(int frame=0;frame<180;frame++) {
+            if(frame%18==0)world.shake(11f,-7f,6f);
+            world.tick(1f/60f);
+            audio.renderMono(mixed,0,mixed.length);
+        }
+        System.out.printf("REAL_SHAKEN_VESSEL contacts=%d strongMovement=%d bulkPeak=%.1f squishes=%d impacts=%d fullFusions=%d%n",
+                samples[0],moving[0],maxBulk[0],
+                audio.squishEvents(),audio.impactEvents(),audio.fusionsStarted());
+        assertTrue("Shaken scene must contain real membrane contacts",samples[0]>30);
+        assertTrue("Real player shaking must generate bulk motion",moving[0]>0);
+        assertTrue("Real player shaking must generate at least one finite squish",
+                audio.squishEvents()>0);
+    }
+
 }
