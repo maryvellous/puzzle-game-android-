@@ -44,6 +44,14 @@ public class ContactProbeTraceTest {
      * circles or inventing motion for the synchronized video preview.
      * `frame=0` precedes the first tick; frame N uses world.time after tick N.
      */
+    private static void writeMerge(PrintWriter csv,String scenario,BlobWorld.Merge merge) {
+        // Keep schema stable and encode the TRUE resulting radius for pitch.
+        csv.printf(Locale.US,
+                "%s,merge,%.6f,0,%d,%d,%d,0,0,0,0,0,0,0,%.4f,0,0,0%n",
+                scenario,merge.simulationTime,merge.parentAId,merge.parentBId,
+                merge.resultId,merge.radius);
+    }
+
     private static void writeMesh(PrintWriter mesh,String scenario,int frame,BlobWorld world) {
         for(Blob blob:world.blobs) {
             for(int node=0;node<Blob.NODES;node++) {
@@ -99,8 +107,7 @@ public class ContactProbeTraceTest {
             @Override public void onMerge(BlobWorld.Merge m) {
                 merges[0]++;
                 tracker.onMerge(m);
-                write(csv,name,"merge",m.simulationTime,0f,
-                        m.parentAId,m.parentBId,m.resultId,null,0f);
+                writeMerge(csv,name,m);
             }
             @Override public void onPop(int blobId,float time) {
                 tracker.onPop(blobId,time);
@@ -188,8 +195,7 @@ public class ContactProbeTraceTest {
                 @Override public void onMerge(BlobWorld.Merge m) {
                     merges[0]++;
                     tracker.onMerge(m);
-                    write(csv,"stress_real","merge",m.simulationTime,0f,
-                            m.parentAId,m.parentBId,m.resultId,null,0f);
+                    writeMerge(csv,"stress_real",m);
                 }
                 @Override public void onPop(int blobId,float time) {
                     tracker.onPop(blobId,time);
