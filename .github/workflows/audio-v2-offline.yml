@@ -10,6 +10,12 @@ on:
       - 'app/src/main/java/com/maryvellous/lavablobs/audio/**'
       - 'app/src/test/java/com/maryvellous/lavablobs/MaterialAudioEngineTest.java'
       - 'app/src/main/java/com/maryvellous/lavablobs/Contact*.java'
+      - 'app/src/main/java/com/maryvellous/lavablobs/AndroidBloopDecoder.java'
+      - 'app/src/main/java/com/maryvellous/lavablobs/GameSound.java'
+      - 'app/src/main/java/com/maryvellous/lavablobs/V2GameSound.java'
+      - 'app/src/main/java/com/maryvellous/lavablobs/LavaView.java'
+      - 'app/src/test/java/com/maryvellous/lavablobs/AndroidBloopDecoderTest.java'
+      - 'app/build.gradle'
       - 'app/src/main/java/com/maryvellous/lavablobs/Blob*.java'
       - 'app/src/test/java/com/maryvellous/lavablobs/ContactProbeTraceTest.java'
       - '.github/workflows/audio-v2-offline.yml'
@@ -110,6 +116,20 @@ jobs:
             --output build/audio_v2/visual
           test -s build/audio_v2/visual/lava_v2_five_physical_behaviors_synced.mp4
           test -s build/audio_v2/visual/lava_v2_12_real_blobs_synced.mp4
+      - name: Compile and test standalone V2 gameplay application
+        run: |
+          gradle --no-daemon :app:testPreviewUnitTest :app:assemblePreview
+          test -s app/build/outputs/apk/preview/app-preview.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging \
+            app/build/outputs/apk/preview/app-preview.apk | \
+            grep -F "package: name='com.maryvellous.lavablobs.audiov2'"
+      - name: Upload ONLY isolated Audio V2 gameplay diagnostic APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: lava-blobs-audio-v2-gameplay-test-apk
+          path: app/build/outputs/apk/preview/app-preview.apk
+          retention-days: 14
+          if-no-files-found: error
       - name: Upload private V2 auditory research (not a distributable sound pack)
         uses: actions/upload-artifact@v4
         with:
