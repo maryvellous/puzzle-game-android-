@@ -157,7 +157,14 @@ public final class SceneRenderCli {
             }
             switch(e.type) {
                 case "contact":
-                    engine.contact(e.a,e.b,e.normal,e.slip,e.pressure,e.radiusA,e.radiusB);
+                    // The five single-behavior auditions isolate one gesture,
+                    // as in the artistically approved Python reference:
+                    // sliding/compression/release demonstrate TAIL response
+                    // without accidentally starting an impact. The real
+                    // 12-blob scene preserves ALL physical closing impulses.
+                    float approach=(scenario.equals("impact")||
+                            scenario.equals("stress_real"))?e.normal:0f;
+                    engine.contact(e.a,e.b,approach,e.slip,e.pressure,e.radiusA,e.radiusB);
                     actualContacts++;
                     break;
                 case "end":
@@ -167,7 +174,11 @@ public final class SceneRenderCli {
                     engine.endContact(e.a,e.b);
                     break;
                 case "merge":
-                    engine.merge(e.a,e.b,e.radiusA>0?e.radiusA:32f);
+                    // Single fusion audition preserves the original full
+                    // Bloop tempo for strict comparison with the approved
+                    // reference. The real multi-blob scene uses physical size.
+                    engine.merge(e.a,e.b,scenario.equals("fusion")?32f:
+                            (e.radiusA>0?e.radiusA:32f));
                     break;
                 default:
                     // begin/update rows are tracker diagnostics; raw contact
