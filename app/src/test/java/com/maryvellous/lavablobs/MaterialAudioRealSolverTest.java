@@ -28,6 +28,12 @@ public class MaterialAudioRealSolverTest {
         return new BloopMaterialBank(parts);
     }
 
+    private static float centerSpeed(Blob blob){
+        float vx=0f,vy=0f;
+        for(int i=0;i<Blob.NODES;i++){vx+=blob.vx[i];vy+=blob.vy[i];}
+        return (float)Math.hypot(vx/Blob.NODES,vy/Blob.NODES);
+    }
+
     @Test public void realRestingVesselDoesNotProduceConstantTailDrone() {
         BlobWorld world=new BlobWorld(new Random(691));
         world.setHeight(850f);
@@ -47,7 +53,8 @@ public class MaterialAudioRealSolverTest {
 
         MaterialAudioEngine audio=new MaterialAudioEngine(bank());
         final int[] observations={0},peakContactPairs={0};
-        final float[] peakSlip={0},peakApproach={0};
+        final int[] bulkAbove20={0},bulkAbove40={0},bulkAbove80={0};
+        final float[] peakSlip={0},peakApproach={0},peakBulk={0},bulkSum={0};
         world.setContactProbe(new ContactProbe.Listener(){
             @Override public void onContactStep(float time,float dt,
                     List<ContactProbe.Contact> samples){
@@ -56,6 +63,15 @@ public class MaterialAudioRealSolverTest {
                     observations[0]++;
                     peakSlip[0]=Math.max(peakSlip[0],c.slideSpeed);
                     peakApproach[0]=Math.max(peakApproach[0],c.approachSpeed);
+                    float bulk=0f;
+                    for(Blob blob:world.blobs)
+                        if(blob.id==c.blobA||blob.id==c.blobB)
+                            bulk=Math.max(bulk,centerSpeed(blob));
+                    peakBulk[0]=Math.max(peakBulk[0],bulk);
+                    bulkSum[0]+=bulk;
+                    if(bulk>20f)bulkAbove20[0]++;
+                    if(bulk>40f)bulkAbove40[0]++;
+                    if(bulk>80f)bulkAbove80[0]++;
                     audio.contact(c.blobA,c.blobB,c.approachSpeed,c.slideSpeed,
                             c.compression,c.radiusA,c.radiusB,dt);
                 }
@@ -72,8 +88,10 @@ public class MaterialAudioRealSolverTest {
             audio.renderMono(mixed,0,mixed.length);
             for(float v:mixed)maxPeak=Math.max(maxPeak,Math.abs(v));
         }
-        System.out.printf("SETTLED_SOLVER_FIXTURE observationCount=%d maxSimultaneousPairs=%d peakSlip=%.1f peakApproach=%.1f squish=%d impacts=%d%n",
+        System.out.printf("SETTLED_SOLVER_FIXTURE observations=%d maxPairs=%d slipPeak=%.1f approachPeak=%.1f bulkPeak=%.1f bulkMean=%.1f bulkAbove20=%d above40=%d above80=%d squish=%d impacts=%d%n",
                 observations[0],peakContactPairs[0],peakSlip[0],peakApproach[0],
+                peakBulk[0],bulkSum[0]/Math.max(1,observations[0]),
+                bulkAbove20[0],bulkAbove40[0],bulkAbove80[0],
                 audio.squishEvents(),audio.impactEvents());
         assertTrue("Fixture requires actual solver contact observations",observations[0]>60);
         assertTrue("Fixture requires at least one concurrent physical pair",peakContactPairs[0]>0);
