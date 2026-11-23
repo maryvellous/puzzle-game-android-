@@ -45,6 +45,14 @@ python tools/audio_v2/render_sync_video.py \
 5. Ascoltare anche `real_12_blob_scene_stress.wav`, ottenuto esclusivamente dalla simulazione multi-blob. Confrontare `metrics.json` e `scene_stress_trace.csv`.
 6. **Preferire i video sincronizzati:** `visual/lava_v2_five_physical_behaviors_synced.mp4` e `visual/lava_v2_12_real_blobs_synced.mp4`. Permettono di giudicare il suono alla vista del movimento reale senza anticipare un'APK; i primi cinque scenari sono separati da pause di 300 ms. Alla fine di ogni prova le membrane restano ferme per lasciare terminare le code audio. Il video non misura latenza né prova che il risultato funzioni in Android.
 
+## Core PCM Java riutilizzabile (in sviluppo)
+
+- `app/src/main/java/com/maryvellous/lavablobs/audio/BloopMaterialBank.java`: banca PCM dei **quattro** Bloop, che conserva gli originali integrali e le sole regioni di attacco/coda per i non-fusione.
+- `app/src/main/java/com/maryvellous/lavablobs/audio/MaterialAudioEngine.java`: **un unico motore deterministico puro Java**, usabile sia da JVM offline sia da un futuro adapter `AudioTrack` Android, senza implementazioni DSP divergenti. Risposte continue alla tangenziale/deformazione, launch e POP parziali, fusioni intere non interrompibili, budget per le sole voci corte, gestione headroom.
+- `tools/audio_v2_java/SceneRenderCli.java`: harness desktop, decodifica gli stessi PCM prodotti dal Material Bank, applica gli eventi della fisica Java reale e salva WAV. Le librerie desktop per lettura/scrittura WAV **non** sono richieste dal motore Android.
+- `MaterialAudioEngineTest`: regressioni su onsets unici, silenzio statico, progressione delle code, nessun Bloop intero fuori fusione, sovrapposizione 20 fusioni senza interruzioni, massimo di voci parziali e nessun clipping in uscita.
+- `build/audio_v2/java_video/`: due video sincronizzati con il DSP Java, **da confrontare con i video Python approvati** in `build/audio_v2/visual/`. Il 23 novembre 2026 è stata approvata **la direzione artistica delle prove Python**; la fedeltà percettiva del nuovo engine Java deve ancora essere valutata, quindi `main` rimane intatto.
+
 ## Blocchi prima dell'APK diagnostica
 
 - Ascolto/validazione *artistica* delle singole regioni e della gerarchia timbrica.
