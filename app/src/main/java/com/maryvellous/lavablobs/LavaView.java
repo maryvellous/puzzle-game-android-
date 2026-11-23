@@ -118,7 +118,7 @@ public final class LavaView extends View {
         this.session=session;
         // The standalone diagnostic app has its own package/preferences.
         // The stable product and ordinary builds keep classic SoundPool.
-        audio=context.getPackageName().endsWith(".audiov2")?
+        audio=context.getPackageName().endsWith(".audiov21")?
                 new V2GameSound(context):new ClassicGameSound(context);
         theme=new ThemeStore(context).current();
         perfLogging=(context.getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE)!=0;
