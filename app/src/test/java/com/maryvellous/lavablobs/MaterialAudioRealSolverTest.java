@@ -31,10 +31,16 @@ public class MaterialAudioRealSolverTest {
     @Test public void realRestingVesselDoesNotProduceConstantTailDrone() {
         BlobWorld world=new BlobWorld(new Random(691));
         world.setHeight(850f);
-        world.blobs.add(new Blob(87f,195f,1,1f));
-        world.blobs.add(new Blob(137f,195f,2,1f));
-        world.blobs.add(new Blob(205f,198f,3,1f));
-        world.blobs.add(new Blob(289f,202f,4,1f));
+        // A dense top row: actual overlapping soft membranes, not
+        // distant sprites that simply drift apart after settling.
+        world.blobs.add(new Blob(67f,192f,1,1f));
+        world.blobs.add(new Blob(115f,193f,2,1f));
+        world.blobs.add(new Blob(168f,193f,3,1f));
+        world.blobs.add(new Blob(235f,198f,4,1f));
+        world.blobs.add(new Blob(306f,194f,1,1f));
+        world.blobs.add(new Blob(352f,192f,2,1f));
+        world.blobs.add(new Blob(175f,256f,2,1f));
+        world.blobs.add(new Blob(268f,268f,3,1f));
         world.ensureBlobIds();
         // Let blobs drift and settle against their physical glass boundary.
         for(int frame=0;frame<240;frame++)world.tick(1f/60f);
@@ -66,6 +72,9 @@ public class MaterialAudioRealSolverTest {
             audio.renderMono(mixed,0,mixed.length);
             for(float v:mixed)maxPeak=Math.max(maxPeak,Math.abs(v));
         }
+        System.out.printf("SETTLED_SOLVER_FIXTURE observationCount=%d maxSimultaneousPairs=%d peakSlip=%.1f peakApproach=%.1f squish=%d impacts=%d%n",
+                observations[0],peakContactPairs[0],peakSlip[0],peakApproach[0],
+                audio.squishEvents(),audio.impactEvents());
         assertTrue("Fixture requires actual solver contact observations",observations[0]>60);
         assertTrue("Fixture requires at least one concurrent physical pair",peakContactPairs[0]>0);
         System.out.printf("REAL_SETTLED_VESSEL observations=%d peakPairs=%d peakSlip=%.1f peakApproach=%.1f squishes=%d impacts=%d peakPCM=%.5f%n",
