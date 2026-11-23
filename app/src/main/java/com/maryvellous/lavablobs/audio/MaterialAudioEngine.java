@@ -42,11 +42,14 @@ public final class MaterialAudioEngine {
         final long key;
         final BloopMaterialBank.Material material;
         final float rate;
+        final long firstSample;
         float phase,gain,goal,previousCompression;
-        boolean releasing;
-        Pair(long key,BloopMaterialBank.Material material,float rate,float pressure) {
+        boolean releasing,excited;
+        Pair(long key,BloopMaterialBank.Material material,float rate,float pressure,
+             long firstSample) {
             this.key=key;this.material=material;this.rate=rate;
             this.previousCompression=pressure;
+            this.firstSample=firstSample;
         }
     }
 
@@ -60,6 +63,7 @@ public final class MaterialAudioEngine {
     private float masterGain=1f,peakOutput;
     private int fusionIndex,contactBeginCount,fusionsStarted,fusionsCompleted;
     private int shortVoicesRejected,peakVoices;
+    private long sampleClock;
 
     public MaterialAudioEngine(BloopMaterialBank bank) {
         if(bank==null)throw new IllegalArgumentException("Material bank required");
@@ -107,19 +111,23 @@ public final class MaterialAudioEngine {
         Pair pair=byKey.get(k);
         float radius=(radiusA+radiusB)*.5f;
         if(pair==null) {
-            BloopMaterialBank.Material material=bank.at((int)((k^(k>>>32))&0x7fffffff));
-            pair=new Pair(k,material,pitchForRadius(radius),clamp(compression,0f,1f));
+            BloopMaterialBank.Material material=bank.at(contactBeginCount++);
+            pair=new Pair(k,material,pitchForRadius(radius),
+                    clamp(compression,0f,1f),sampleClock);
             byKey.put(k,pair);
             pairs.add(pair);
-            contactBeginCount++;
-            // One initial excitation at the first real contact only.
-            if(approach>18f) {
-                float intensity=clamp((float)(
-                        Math.log1p((approach-18f)/30f)/Math.log1p(10d)),0f,1f);
-                shortVoice(material.attack,.18f*intensity,pair.rate);
-            }
         }
         pair.releasing=false;
+        // A membrane can first touch slowly and then take its strongest
+        // closing impulse one or two solver substeps later. Allow exactly
+        // ONE physical onset inside the first 55 ms, never every pass/frame.
+        if(!pair.excited && approach>18f &&
+                sampleClock-pair.firstSample<=Math.round(.055f*SAMPLE_RATE)) {
+            float intensity=clamp((float)(
+                    Math.log1p((approach-18f)/30f)/Math.log1p(10d)),0f,1f);
+            shortVoice(pair.material.attack,.18f*intensity,pair.rate);
+            pair.excited=true;
+        }
         float press=clamp(compression,0f,1f);
         float movement=(float)Math.pow(clamp(Math.max(0f,slide)/130f,0f,1f),.65);
         float deform=clamp(Math.abs(press-pair.previousCompression)*14f,0f,1f);
@@ -220,6 +228,7 @@ public final class MaterialAudioEngine {
             output[s]=dry*masterGain;
             peakOutput=Math.max(peakOutput,Math.abs(output[s]));
             peakVoices=Math.max(peakVoices,voices.size());
+            sampleClock++;
         }
         // State cleanup is once PER BLOCK, never per sample.
         for(int i=pairs.size()-1;i>=0;i--) {
@@ -235,7 +244,7 @@ public final class MaterialAudioEngine {
         byKey.clear();pairs.clear();voices.clear();
         masterGain=1f;peakOutput=0f;fusionIndex=0;
         contactBeginCount=0;fusionsStarted=0;fusionsCompleted=0;
-        shortVoicesRejected=0;peakVoices=0;
+        shortVoicesRejected=0;peakVoices=0;sampleClock=0;
     }
 
     public int activePairs(){return pairs.size();}
