@@ -2,7 +2,7 @@
 
 **Riferimento progettuale unico:** [specifica Audio V2](../../docs/AUDIO_ENGINE_V2_MATERIAL_BLOOP.md).
 
-Questo laboratorio sul branch `experiment/lava-blobs-audio-v2-engine` non modifica la release `main` 1.0.11 e **non è ancora il motore DSP Android**. Serve esclusivamente a verificare se gli stessi quattro Bloop possano produrre una grammatica coerente di risposte al comportamento della materia.
+Il laboratorio sul branch `experiment/lava-blobs-audio-v2-engine` non modifica `main` 1.0.11. La ricerca offline Python è rimasta un riferimento d'ascolto; **ora esiste anche un core PCM Java riutilizzato da una APK diagnostica Android**. Nessuna distribuzione o approvazione hardware prima del gameplay test.
 
 ## Cosa esiste
 
@@ -53,11 +53,12 @@ python tools/audio_v2/render_sync_video.py \
 - `MaterialAudioEngineTest`: regressioni su onsets unici, silenzio statico, progressione delle code, nessun Bloop intero fuori fusione, sovrapposizione 20 fusioni senza interruzioni, massimo di voci parziali e nessun clipping in uscita.
 - `build/audio_v2/java_video/`: due video sincronizzati con il DSP Java, **da confrontare con i video Python approvati** in `build/audio_v2/visual/`. Il 23 novembre 2026 è stata approvata **la direzione artistica delle prove Python**; la fedeltà percettiva del nuovo engine Java deve ancora essere valutata, quindi `main` rimane intatto.
 
-## Blocchi prima dell'APK diagnostica
+## APK diagnostica V2 e verifiche ancora necessarie
 
 - Ascolto/validazione *artistica* delle singole regioni e della gerarchia timbrica.
 - Trasferire la risposta della materia e il mix in **un solo core DSP deterministico**, riusabile per render offline e dispositivo (non mantenere un sintetizzatore Python indipendente e un secondo motore Android divergente).
 - Misurare durata, allocazioni, CPU, latenza e comportamento di più contatti; confrontare stress tecnico con casi prodotti dalla vera fisica.
-- Solo dopo, preparare una APK diagnostica **separata** dal gioco normale e provare l'audio dal telefono.
+- **APK diagnostica creata in CI:** variante `preview`, package `com.maryvellous.lavablobs.audiov2`, nome «Lava Blob - Audio V2». `AndroidBloopDecoder` carica e segmenta i quattro MP3 originali fuori dal thread UI; `V2GameSound` collega ContactProbe/Tracker al core Java via coda limitata e `AudioTrack`. Banner in partita per `CARICAMENTO`, `PRONTO`, `ERRORE` e `MUTO`. La build non sostituisce né condivide i dati dell'app principale.
+- **Playtest obbligatorio sul telefono:** aspettare `AUDIO V2 · PRONTO`, verificare urti e sfregamenti, fusioni ripetute/cascate, lanci a raffica, POP in modalità infinita, pause/ripresa, mute, prestazioni e latenza percepita. Se il banner mostra `ERRORE`, non giudicare il timbro: raccogliere il log `LavaV2Audio`. Una release V2 richiede ulteriori verifiche di fluidità e compatibilità hardware.
 
 **Nessun merge su `main` o nuova release** prima dei gate decisionali della specifica.
