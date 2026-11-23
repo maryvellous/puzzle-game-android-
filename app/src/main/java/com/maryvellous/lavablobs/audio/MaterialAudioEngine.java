@@ -164,7 +164,7 @@ public final class MaterialAudioEngine {
         if(parentA>0)cancelBlob(parentA);
         if(parentB>0)cancelBlob(parentB);
         BloopMaterialBank.Material material=bank.at(fusionIndex++);
-        voices.add(new Voice(material.complete,.46f,pitchForRadius(radius),true));
+        voices.add(new Voice(material.complete,.48f,pitchForRadius(radius),true));
         fusionsStarted++;
     }
 
