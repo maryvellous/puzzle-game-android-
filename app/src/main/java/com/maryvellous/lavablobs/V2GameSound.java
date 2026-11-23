@@ -35,16 +35,17 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
     private static final int CONTACT=1,END=2,CANCEL=3,MERGE=4,LAUNCH=5,POP=6,RESET=7;
     private static final class Command {
         final int type,a,b;
-        final float normal,slip,compression,radiusA,radiusB,dt;
+        final float normal,slip,compression,radiusA,radiusB,dt,bulkMotion;
         Command(int type,int a,int b,float normal,float slip,
                 float compression,float radiusA,float radiusB){
-            this(type,a,b,normal,slip,compression,radiusA,radiusB,1f/120f);
+            this(type,a,b,normal,slip,compression,radiusA,radiusB,1f/120f,0f);
         }
         Command(int type,int a,int b,float normal,float slip,
-                float compression,float radiusA,float radiusB,float dt){
+                float compression,float radiusA,float radiusB,float dt,
+                float bulkMotion){
             this.type=type;this.a=a;this.b=b;this.normal=normal;this.slip=slip;
             this.compression=compression;this.radiusA=radiusA;
-            this.radiusB=radiusB;this.dt=dt;
+            this.radiusB=radiusB;this.dt=dt;this.bulkMotion=bulkMotion;
         }
     }
 
@@ -106,7 +107,8 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
     @Override public void onContactStep(float time,float dt,List<ContactProbe.Contact> contacts) {
         for(ContactProbe.Contact c:contacts){
             send(new Command(CONTACT,c.blobA,c.blobB,c.approachSpeed,
-                    c.slideSpeed,c.compression,c.radiusA,c.radiusB,dt));
+                    c.slideSpeed,c.compression,c.radiusA,c.radiusB,
+                    dt,c.bulkMotion));
         }
         tracker.onContactStep(time,dt,contacts);
     }
@@ -204,7 +206,7 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
         switch(c.type){
             case CONTACT:
                 engine.contact(c.a,c.b,c.normal,c.slip,c.compression,
-                        c.radiusA,c.radiusB,c.dt);
+                        c.radiusA,c.radiusB,c.dt,c.bulkMotion);
                 break;
             case END:
                 engine.endContact(c.a,c.b);
