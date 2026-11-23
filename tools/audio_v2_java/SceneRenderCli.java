@@ -33,7 +33,7 @@ public final class SceneRenderCli {
 
     private static final class Row {
         String scenario,type;
-        float time,normal,slip,pressure,radiusA,radiusB;
+        float time,dt,normal,slip,pressure,radiusA,radiusB;
         int a,b,result;
         int ordinal;
     }
@@ -121,6 +121,7 @@ public final class SceneRenderCli {
                 row.scenario=parts[0];
                 row.type=parts[1];
                 row.time=Float.parseFloat(parts[2]);
+                row.dt=Float.parseFloat(parts[3]);
                 row.a=Integer.parseInt(parts[4]);
                 row.b=Integer.parseInt(parts[5]);
                 row.result=Integer.parseInt(parts[6]);
@@ -164,7 +165,8 @@ public final class SceneRenderCli {
                     // 12-blob scene preserves ALL physical closing impulses.
                     float approach=(scenario.equals("impact")||
                             scenario.equals("stress_real"))?e.normal:0f;
-                    engine.contact(e.a,e.b,approach,e.slip,e.pressure,e.radiusA,e.radiusB);
+                    engine.contact(e.a,e.b,approach,e.slip,e.pressure,e.radiusA,e.radiusB,
+                            e.dt>0f?e.dt:1f/120f);
                     actualContacts++;
                     break;
                 case "end":
@@ -190,9 +192,10 @@ public final class SceneRenderCli {
                 "Whole fusion tail would be truncated in "+scenario+
                 ": "+engine.fusionsStarted()+" vs "+engine.fusionsCompleted());
         check(engine.peakOutput()<=.871f,"Clipped final output");
-        System.out.printf("%s | contacts=%d pairBegins=%d fullFusions=%d peak=%.4f shortRejected=%d%n",
+        System.out.printf("%s | contacts=%d pairBegins=%d fullFusions=%d squishes=%d impacts=%d peak=%.4f shortRejected=%d%n",
                 scenario,actualContacts,engine.contactBegins(),
-                engine.fusionsCompleted(),engine.peakOutput(),engine.rejectedShortVoices());
+                engine.fusionsCompleted(),engine.squishEvents(),engine.impactEvents(),
+                engine.peakOutput(),engine.rejectedShortVoices());
         if(scenario.equals("fusion"))
             check(engine.fusionsCompleted()==1,"Expected exactly one whole Bloop");
         return output;
