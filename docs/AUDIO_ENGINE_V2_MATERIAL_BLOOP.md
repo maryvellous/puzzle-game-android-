@@ -1,6 +1,6 @@
 # Lava Blobs — Motore acustico V2: la materia diventa suono
 
-**Decisione progettuale del 22 novembre 2026 · Specifica artistica e architetturale vigente · Fondamenta fisiche e banco d'ascolto offline sperimentali; DSP Android non ancora implementato.**
+**Decisione progettuale del 22 novembre 2026 · Specifica artistica e architetturale vigente · Prima integrazione gameplay Audio V2 pronta per il playtest Android, isolata da `main` e non ancora verificata sul dispositivo.**
 
 > **«Un sistema in cui il comportamento della materia diventa suono.»**
 
@@ -10,7 +10,7 @@ Questa frase è il **faro del progetto**. Ogni comportamento sonoro deve avere u
 
 L'utente ha giudicato **«perfetto»** il primo ascolto *insieme alle vere membrane simulate* (cinque gesti e scena reale a 12 blob). Questa è una validazione della **direzione artistica del prototipo Python sincronizzato**, non ancora una validazione della latenza su Android e neppure un'autorizzazione a integrare o pubblicare l'app.
 
-Sul branch `experiment/lava-blobs-audio-v2-engine` è stato creato un core PCM deterministico **puro Java** sotto `app/src/main/java/com/maryvellous/lavablobs/audio/`, riutilizzato da `tools/audio_v2_java/SceneRenderCli.java` per nuove anteprime audiovisive A/B. I file di riferimento approvati restano disponibili nel laboratorio offline. **Prima di collegare AudioTrack al gameplay occorre ascoltare il confronto Java vs Python**, senza scegliere arbitrariamente un nuovo timbro soltanto perché i test passano.
+Sul branch `experiment/lava-blobs-audio-v2-engine` è stato creato un core PCM deterministico **puro Java** sotto `app/src/main/java/com/maryvellous/lavablobs/audio/`, riutilizzato da `tools/audio_v2_java/SceneRenderCli.java` per anteprime audiovisive A/B. La versione Java appare convincente all'ascolto; l'utente richiede **test durante il gameplay reale**. Il core ora viene usato anche da una **APK Android diagnostica** con `AudioTrack`, senza duplicarne il DSP. `AndroidBloopDecoder` ricava il materiale PCM dai quattro MP3 originali del pacchetto e `V2GameSound` trasferisce le osservazioni del solver su coda dedicata. Questa implementazione è soltanto in `experiment/lava-blobs-audio-v2-engine` con package `com.maryvellous.lavablobs.audiov2`; non è stata integrata in `main`. La reattività e la qualità sull'hardware restano da verificare.
 
 ## 1. Decisione sonora fondamentale: la fusione è l'evento principe
 
@@ -126,4 +126,4 @@ Queste misure **non** indicano automaticamente i confini attacco/corpo/coda e il
 
 ---
 
-**Stato:** decisione architetturale e artistica approvata. **Fondamenta tecniche in PR #26:** identità stabili dei blob, `ContactProbe` passivo nella risoluzione delle membrane, `ContactTracker` con durata/isteresi e cancellazione alla fusione o POP, test JVM e trace CSV verificabili. Il DSP e il Material Bank V2 **non sono ancora implementati**. Questo è l'**unico documento di specifica vigente**. La precedente V1 e i diari A/B–C4.1 sono stati rimossi dal branch attivo e restano consultabili tramite la cronologia Git; le loro proposte di ricostruire proceduralmente il Bloop completo della fusione sono **superate**.
+**Stato:** la specifica artistica V2 è approvata. **Fondamenta tecniche in PR #26:** identità stabili, Contact Probe/Tracker e test. **Sul branch sperimentale:** Material Bank, core PCM Java riutilizzabile, test fisici/sonori offline, `AudioTrack` e una APK diagnostica separata già compilata in CI. **In attesa del playtest su telefono**, senza merge o pubblicazione. La precedente V1 e gli esperimenti A/B–C4.1 restano esclusivamente nella cronologia Git; le loro proposte di ricostruire un Bloop completo tramite sintesi sono superate.
