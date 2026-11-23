@@ -6,6 +6,9 @@ on:
       - experiment/lava-blobs-audio-v2-engine
     paths:
       - 'tools/audio_v2/**'
+      - 'tools/audio_v2_java/**'
+      - 'app/src/main/java/com/maryvellous/lavablobs/audio/**'
+      - 'app/src/test/java/com/maryvellous/lavablobs/MaterialAudioEngineTest.java'
       - 'app/src/main/java/com/maryvellous/lavablobs/Contact*.java'
       - 'app/src/main/java/com/maryvellous/lavablobs/Blob*.java'
       - 'app/src/test/java/com/maryvellous/lavablobs/ContactProbeTraceTest.java'
