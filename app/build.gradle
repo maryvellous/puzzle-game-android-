@@ -40,9 +40,9 @@ android {
         // Distinct applicationId also means separate local progress and saves.
         preview {
             initWith debug
-            applicationIdSuffix '.audiov2'
-            versionNameSuffix '-audio-v2'
-            manifestPlaceholders = [appLabel: 'Lava Blob - Audio V2']
+            applicationIdSuffix '.audiov21'
+            versionNameSuffix '-audio-v2.1'
+            manifestPlaceholders = [appLabel: 'Lava Blob - Audio V2.1']
         }
     }
 
