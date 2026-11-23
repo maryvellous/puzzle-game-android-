@@ -123,7 +123,7 @@ jobs:
           test -s app/build/outputs/apk/preview/app-preview.apk
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging \
             app/build/outputs/apk/preview/app-preview.apk | \
-            grep -F "package: name='com.maryvellous.lavablobs.audiov2'"
+            grep -F "package: name='com.maryvellous.lavablobs.audiov21'"
       - name: Upload ONLY isolated Audio V2 gameplay diagnostic APK
         uses: actions/upload-artifact@v4
         with:
