@@ -45,7 +45,7 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"
       - name: Test real membrane physics and export deterministic contact trace
         run: |
-          gradle --no-daemon :app:testDebugUnitTest
+          gradle --no-daemon --info :app:testDebugUnitTest
           test -s app/build/audio_v2/contact_probe_trace.csv
           test -s app/build/audio_v2/scene_stress_trace.csv
           test -s app/build/audio_v2/two_blob_mesh_frames.csv
