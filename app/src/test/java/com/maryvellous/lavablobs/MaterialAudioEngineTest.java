@@ -61,27 +61,84 @@ public class MaterialAudioEngineTest {
         assertEquals(1,engine.fusionsCompleted());
     }
 
-    @Test public void movementExcitesTailWhileStaticPressureCanRemainSilent() {
+    @Test public void stationaryTouchWithPhysicsJitterIsExactlySilentForTenSeconds() {
         MaterialAudioEngine engine=new MaterialAudioEngine(bank(false));
-        float[] rendered=new float[44100/4];
-        engine.contact(11,15,0,0,.5f,26f,40f);
-        engine.renderMono(rendered,0,rendered.length);
-        float quiet=0;
-        for(float v:rendered)quiet=Math.max(quiet,Math.abs(v));
-        assertEquals(0f,quiet,0f);
-        engine.contact(11,15,0,160f,.52f,26f,40f);
-        engine.renderMono(rendered,0,rendered.length);
-        float moving=0;
-        for(float v:rendered)moving=Math.max(moving,Math.abs(v));
-        assertTrue("Tangential motion should audibly excite Bloop tail",moving>.002f);
+        float[] frame=new float[368];
+        float highest=0f;
+        // Mimics a crowded top-of-vessel scene with contact but tiny
+        // oscillations; pressure is NONZERO, not a fake "no contact" case.
+        for(int tick=0;tick<1200;tick++) {
+            for(int pair=1;pair<=8;pair++) {
+                float slide=3f+(tick%7)*3f;       // 3–21 units/s
+                float pressure=.16f+(tick%5-2)*.002f;
+                engine.contact(pair,pair+30,12f,slide,pressure,
+                        25f+pair,31f+pair,1f/120f);
+            }
+            engine.renderMono(frame,0,frame.length);
+            for(float sample:frame)highest=Math.max(highest,Math.abs(sample));
+        }
+        assertEquals("Ten seconds of nearly stationary touching must be SILENT",
+                0f,highest,0f);
+        assertEquals("Not one squish may be triggered by solver micro-noise",
+                0,engine.squishEvents());
+        assertEquals(0,engine.impactEvents());
+        assertEquals(8,engine.activePairs());
+    }
+
+    @Test public void genuineShakeMakesFiniteSquishesThenReturnsToExactSilence() {
+        MaterialAudioEngine engine=new MaterialAudioEngine(bank(false));
+        float[] frame=new float[368];
+        engine.contact(11,15,0,0,.5f,26f,40f,1f/120f);
+        engine.renderMono(frame,0,frame.length);
+        // Substantial relative motion / shape deformation, for ~400ms.
+        float movingPeak=0f;
+        for(int tick=0;tick<48;tick++){
+            float pressure=.5f+(tick%4)*.028f;
+            engine.contact(11,15,0,190f,pressure,26f,40f,1f/120f);
+            engine.renderMono(frame,0,frame.length);
+            for(float sample:frame)movingPeak=Math.max(movingPeak,Math.abs(sample));
+        }
+        assertTrue("Actual movement must excite a physical tail gesture",movingPeak>.003f);
+        assertTrue("At least one finite squish must be emitted",engine.squishEvents()>0);
+        assertTrue("A 400ms motion must not generate an uncontrolled storm",
+                engine.squishEvents()<=5);
         assertEquals(1,engine.contactBegins());
+
+        // The blobs REMAIN touching, but stop sliding/deforming.
+        for(int tick=0;tick<90;tick++){
+            engine.contact(11,15,0,3f,.5f,26f,40f,1f/120f);
+            engine.renderMono(frame,0,frame.length);
+        }
+        assertEquals("Touching is still tracked",1,engine.activePairs());
+        assertEquals("Finite sounds have natural ends even while still touching",
+                0,engine.activeOneShots());
+        float restPeak=0f;
+        for(int tick=0;tick<100;tick++){
+            engine.contact(11,15,0,2f,.5f,26f,40f,1f/120f);
+            engine.renderMono(frame,0,frame.length);
+            for(float sample:frame)restPeak=Math.max(restPeak,Math.abs(sample));
+        }
+        assertEquals("No continuous tail noise after movement stops",0f,restPeak,0f);
         engine.endContact(11,15);
-        engine.renderMono(rendered,0,rendered.length);
-        assertEquals("The release must fade, not cut a contact voice immediately",
-                1,engine.activePairs());
-        float[] tail=new float[44100];
-        engine.renderMono(tail,0,tail.length);
-        assertEquals("Released texture should eventually disappear",0,engine.activePairs());
+        assertEquals(0,engine.activePairs());
+    }
+
+    @Test public void transientSquishIntensityAndPitchFollowMotionAndSize() {
+        MaterialAudioEngine slow=new MaterialAudioEngine(bank(false));
+        MaterialAudioEngine fast=new MaterialAudioEngine(bank(false));
+        float[] s=new float[368],f=new float[368];
+        for(int tick=0;tick<120;tick++){
+            slow.contact(1,2,0,54f,.10f,32,32,1f/120f);
+            fast.contact(1,2,0,220f,.10f,64,64,1f/120f);
+            slow.renderMono(s,0,s.length);
+            fast.renderMono(f,0,f.length);
+        }
+        assertTrue("High-energy motion emits more squish events",
+                fast.squishEvents()>slow.squishEvents());
+        assertTrue(MaterialAudioEngine.pitchForRadius(22f)>
+                MaterialAudioEngine.pitchForRadius(65f));
+        assertEquals(0,slow.impactEvents());
+        assertEquals(0,fast.impactEvents());
     }
 
     @Test public void contactUpdatesDoNotRetriggerImpactsAndUnknownEndsAreSafe() {
