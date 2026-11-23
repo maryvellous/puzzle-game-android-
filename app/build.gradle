@@ -36,11 +36,13 @@ android {
             if (signingConfigs.findByName('stable') != null)
                 signingConfig signingConfigs.stable
         }
+        // ISOLATED Audio V2 gameplay test build. Not a production upgrade.
+        // Distinct applicationId also means separate local progress and saves.
         preview {
             initWith debug
-            applicationIdSuffix '.preview'
-            versionNameSuffix '-prova'
-            manifestPlaceholders = [appLabel: 'Lava Blob - Prova']
+            applicationIdSuffix '.audiov2'
+            versionNameSuffix '-audio-v2'
+            manifestPlaceholders = [appLabel: 'Lava Blob - Audio V2']
         }
     }
 
