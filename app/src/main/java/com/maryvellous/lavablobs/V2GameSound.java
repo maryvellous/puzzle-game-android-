@@ -143,7 +143,7 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
             case OVERFLOW:label="ERRORE CODA";break;
             default:label=state.name();
         }
-        return (BuildConfig.AUDIO_AGGREGATION?"AUDIO V2 · CLUSTER · ":"AUDIO V2 · BYPASS · ")+label+
+        return (BuildConfig.AUDIO_AGGREGATION? "AUDIO V2 · REFINED CLUSTER · ":"AUDIO V2 · REFINED BYPASS · ")+label+
                 (queue.rejectedObservations()>0?" · Q:"+queue.rejectedObservations():"");
     }
     @Override public void release() {
@@ -192,7 +192,7 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
             try{releaseSwoosh=AndroidBloopDecoder.loadLaunch(app);}
             catch(InterruptedException interrupted){throw interrupted;}
             catch(Exception failure){Log.w(TAG,"Classic release unavailable; using material attack",failure);}
-            MaterialAudioEngine engine=new MaterialAudioEngine(materials,releaseSwoosh,BuildConfig.AUDIO_AGGREGATION);
+            MaterialAudioEngine engine=new MaterialAudioEngine(materials,releaseSwoosh,BuildConfig.AUDIO_AGGREGATION,MaterialAudioEngine.MixProfile.REFINED);
             engine.setOutputVolumePercent(volumePercent());
             engine.reset();
             device=createTrack();
@@ -266,6 +266,8 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
                             " dispatchBudgetHits="+scheduler.budgetHits()+" startupDiscarded="+startupDiscarded+
                             " peakDry="+engine.peakDry()+" minLimiterGain="+engine.minimumLimiterGain()+
                             " limitedFrames="+engine.limitedFrames()+" renderedFrames="+engine.renderedFrames()+
+                            " peakGainStep="+engine.peakGainStep()+" peakSampleStep="+engine.peakSampleStep()+
+                            " mixLatencyFrames="+engine.mixLatencyFrames()+
                             " peakVoices="+engine.peakVoices()+" peakSecondary="+engine.peakShortVoices()+
                             " clusterCandidates="+engine.aggregateCandidates()+" groups="+engine.aggregateGroups()+
                             " collapsed="+engine.aggregateCollapsed()+" rejectedClusters="+engine.aggregateRejected()+
