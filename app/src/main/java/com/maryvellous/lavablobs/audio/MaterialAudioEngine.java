@@ -37,25 +37,6 @@ public final class MaterialAudioEngine {
     private static final float SQUISH_MIN_INTERVAL=.100f;
     private static final float MAX_PHYSICS_DT=.042f;
 
-    private static final class Voice {
-        final float[] sound;
-        final boolean fusion;
-        final float volume,rate;
-        double position;
-        Voice(float[] sound,float volume,float rate,boolean fusion) {
-            this.sound=sound;this.volume=volume;this.rate=rate;this.fusion=fusion;
-        }
-        float sample() {
-            if(position>=sound.length)return 0f;
-            int at=(int)position;
-            int next=Math.min(at+1,sound.length-1);
-            float t=(float)(position-at);
-            float value=sound[at]*(1-t)+sound[next]*t;
-            position+=rate;
-            return volume*value;
-        }
-    }
-
     private static final class Pair {
         final long key;
         final BloopMaterialBank.Material material;
@@ -79,11 +60,13 @@ public final class MaterialAudioEngine {
     private final float[][] gelImpacts=new float[BloopMaterialBank.SOURCE_COUNT][];
     private int wallIndex;
     private final Map<Long,Pair> pairs=new HashMap<>();
-    private final ArrayList<Voice> voices=new ArrayList<>();
+    private final ArrayList<PcmVoice> voices=new ArrayList<>();
+    public enum MixProfile { APPROVED, REFINED }
+    private final MixProfile mixProfile;
+    private final PeakLimiter limiter;
     private final AcousticAggregator aggregator;
     private int activeShortVoices,peakShortVoices;
-    private final float limiterRelease=(float)(1-Math.exp(-1d/(SAMPLE_RATE*.150)));
-    private float masterGain=1f,peakOutput;
+    private float peakOutput,previousOutput,peakSampleStep;
     private float peakDry,minimumLimiterGain=1f;
     private long limitedFrames,renderedFrames;
     private float outputGain=1f,targetOutputGain=1f;
@@ -105,8 +88,12 @@ public final class MaterialAudioEngine {
 
     /** Aggregation is experimental; default construction preserves V2.3. */
     public MaterialAudioEngine(BloopMaterialBank bank,float[] releaseSwoosh,boolean aggregation) {
-        if(bank==null)throw new IllegalArgumentException("Material bank required");
-        this.bank=bank;
+        this(bank,releaseSwoosh,aggregation,MixProfile.APPROVED);
+    }
+    public MaterialAudioEngine(BloopMaterialBank bank,float[] releaseSwoosh,boolean aggregation,MixProfile profile) {
+        if(bank==null||profile==null)throw new IllegalArgumentException("Material bank and mix profile required");
+        this.bank=bank;mixProfile=profile;
+        limiter=new PeakLimiter(SAMPLE_RATE,profile==MixProfile.REFINED?Math.round(SAMPLE_RATE*.003f):0);
         aggregator=aggregation?new AcousticAggregator(this::shortVoice):null;
         if(releaseSwoosh!=null){
             if(releaseSwoosh.length<96)throw new IllegalArgumentException("Release clip too short");
@@ -175,7 +162,7 @@ public final class MaterialAudioEngine {
             return false;
         }
         if(volume>.0001f) {
-            voices.add(new Voice(audio,volume*SECONDARY_GAIN,rate,false));
+            voices.add(new PcmVoice(audio,volume*SECONDARY_GAIN,rate,false,mixProfile==MixProfile.REFINED));
             activeShortVoices++;
             peakShortVoices=Math.max(peakShortVoices,activeShortVoices);
             return true;
@@ -308,7 +295,7 @@ public final class MaterialAudioEngine {
         if(parentA>0)cancelBlob(parentA);
         if(parentB>0)cancelBlob(parentB);
         BloopMaterialBank.Material material=bank.at(fusionIndex++);
-        voices.add(new Voice(material.complete,.48f,pitchForRadius(radius),true));
+        voices.add(new PcmVoice(material.complete,.48f,pitchForRadius(radius),true,mixProfile==MixProfile.REFINED));
         fusionsStarted++;
     }
 
@@ -351,9 +338,9 @@ public final class MaterialAudioEngine {
             if(aggregator!=null)aggregator.flushDue(renderedFrames);
             float dry=0f;
             for(int i=voices.size()-1;i>=0;i--) {
-                Voice v=voices.get(i);
+                PcmVoice v=voices.get(i);
                 dry+=v.sample();
-                if(v.position>=v.sound.length){
+                if(v.finished()){
                     if(v.fusion)fusionsCompleted++;else activeShortVoices--;
                     voices.remove(i);
                 }
@@ -361,14 +348,13 @@ public final class MaterialAudioEngine {
             // Global gain protects summed complete Bloop voices without
             // clipping or deleting either full source.
             peakDry=Math.max(peakDry,Math.abs(dry));
-            float need=Math.abs(dry)>.87f?.87f/Math.abs(dry):1f;
-            if(need<masterGain)masterGain=need;
-            else masterGain+=(need-masterGain)*limiterRelease;
-            minimumLimiterGain=Math.min(minimumLimiterGain,masterGain);
-            if(masterGain<.999f)limitedFrames++;
+            float limited=limiter.process(dry);
+            minimumLimiterGain=Math.min(minimumLimiterGain,limiter.gain());
+            if(limiter.gain()<.999f)limitedFrames++;
             renderedFrames++;
             outputGain+=(targetOutputGain-outputGain)*volumeSmoothing;
-            output[s]=dry*masterGain*outputGain;
+            output[s]=limited*outputGain;
+            peakSampleStep=Math.max(peakSampleStep,Math.abs(output[s]-previousOutput));previousOutput=output[s];
             peakOutput=Math.max(peakOutput,Math.abs(output[s]));
             peakVoices=Math.max(peakVoices,voices.size());
         }
@@ -377,7 +363,7 @@ public final class MaterialAudioEngine {
     public void reset() {
         pairs.clear();voices.clear();activeShortVoices=peakShortVoices=0;
         if(aggregator!=null)aggregator.reset();
-        masterGain=1f;peakOutput=0f;outputGain=targetOutputGain;
+        limiter.reset();peakOutput=previousOutput=peakSampleStep=0f;outputGain=targetOutputGain;
         peakDry=0f;minimumLimiterGain=1f;limitedFrames=0;renderedFrames=0;
         fusionIndex=0;wallIndex=0;contactBeginCount=0;fusionsStarted=0;fusionsCompleted=0;
         shortVoicesRejected=0;peakVoices=0;squishEvents=0;impactEvents=0;
@@ -396,6 +382,9 @@ public final class MaterialAudioEngine {
     public long aggregateRejected(){return aggregator==null?0:aggregator.rejected();}
     public long aggregateCancelled(){return aggregator==null?0:aggregator.cancelled();}
     public float peakOutput(){return peakOutput;}
+    public float peakGainStep(){return limiter.peakGainStep();}
+    public float peakSampleStep(){return peakSampleStep;}
+    public int mixLatencyFrames(){return limiter.latency();}
     public float peakDry(){return peakDry;}
     public float minimumLimiterGain(){return minimumLimiterGain;}
     public long limitedFrames(){return limitedFrames;}
