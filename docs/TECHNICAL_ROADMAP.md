@@ -45,3 +45,21 @@ Coda finita: overflow autorevole segnala errore e sospende audio fino a reset in
 - **A07:** `SimulationClock` separa timestep e catch-up da Canvas, azzera il residuo al riavvio. `GameSessionController` separa checkpoint, tempo attivo, finalizzazione e restart, con port di persistenza testabile; nessuna modifica a GameSave, ProgressStore o formato dati. `LavaView` resta responsabile di presentazione, input, aptica e coordinamento dei componenti. Test di pacing, checkpoint fallito/riprova, finalizzazione unica e restart.
 - **A07/A08:** rimossi ClassicGameSound, GameAudio (SoundPool), EffectCompiler e metodi legacy no-op dal runtime. Rimossi tre workflow sperimentali superati (procedural-audio-lab, two-blob-acoustic-prototype, audio-v2-offline); storia preservata in Git. Mantenuti risorse originali, licenze, workflow di release manuale, policy/fixture legacy ancora usati dai test; inventario finale di script/risorse rinviato a CI verde, nessuna cancellazione alla cieca.
 - **Gate residuo:** CI complessiva delle modifiche di tranche 2, metriche A/B su trace solver, build di preview separate; collaudo hardware e profilazione. Non integrare main prima dell'approvazione. Non confondere unit test o replay con ascolto reale.
+
+### 27 novembre — gate di collaudo raggiunto
+CI [189](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46065219493) verde su head `fa01f4afb2b2cb4a3a594bdf86c815f9f0905422`, merge di verifica `72c5b5a4fe3021a906c70de81558bc9ed7911dc6`. Test debug, preview e aggregationPreview, replay e tre APK riusciti. Artefatti verificati non scaduti al momento del controllo:
+- [A: bypass APK](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46065219493/artifacts/15230412471), package .audiov21.
+- [B: aggregazione APK](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46065219493/artifacts/15229858129), package .audioaggregation verificato da aapt.
+- [WAV e metriche A/B](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46065219493/artifacts/15230437510), trace solver identica, decoder desktop.
+| Metrica | A bypass | B cluster |
+|---|---:|---:|
+| Picco voci secondarie |20|9|
+| Picco voci totali |28|18|
+| Fusioni iniziate/completate |9/9|9/9|
+| Peak dry |1.5485017|1.6843451|
+| Peak output |0.8700001|0.8700001|
+| Minimo gain limiter |0.5618334|0.5165212|
+| Frame con limiting |44274|42083|
+| Frame renderizzati |220800|220800|
+| Voci corte respinte |0|0|
+B: 49 candidati, 33 gruppi, 16 aggregati, nessun gruppo respinto. Riduzione del picco voci secondarie 55% (target 50% superato sul fixture reale); limiting meno frequente ma più intenso nel caso peggiore, picco dry maggiore. Non implica eliminazione della frittura. Nessun collaudo hardware eseguito. Freeze del codice candidato: prossimo gate ascolto A/B e confronto con main V2.3, verifica lifecycle e profiling. Non disinstallare main; eventuale conflitto firma riguarda solo preview. Ulteriore pulizia legacy rimandata per non cambiare la candidata prima del collaudo.
