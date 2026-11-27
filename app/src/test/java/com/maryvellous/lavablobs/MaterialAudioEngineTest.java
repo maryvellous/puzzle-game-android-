@@ -234,6 +234,17 @@ public class MaterialAudioEngineTest {
         for(float sample:b)assertEquals(0f,sample,0f);
     }
 
+    @Test public void strongerGelCollisionHasGreaterPeakThanGentleCollision(){
+        MaterialAudioEngine gentle=new MaterialAudioEngine(bank(false));
+        MaterialAudioEngine strong=new MaterialAudioEngine(bank(false));
+        gentle.contact(1,2,100f,0,.1f,32,32);
+        strong.contact(1,2,300f,0,.1f,32,32);
+        float[] a=new float[44100],b=new float[44100];
+        gentle.renderMono(a,0,a.length);strong.renderMono(b,0,b.length);
+        assertTrue(gentle.peakOutput()>0f);
+        assertTrue(strong.peakOutput()>gentle.peakOutput()*2f);
+    }
+
     @Test public void invalidSourceOrEventsAreRejected() {
         try {
             new BloopMaterialBank(new BloopMaterialBank.Material[4]);

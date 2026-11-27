@@ -29,6 +29,16 @@ public class AndroidBloopDecoderTest {
         assertTrue("Tail must begin after the peak",r[2]>.09f*rate);
     }
 
+    @Test public void releaseExcerptIsReversedAndFadedLikeClassic() throws Exception {
+        float[] source=new float[10000];
+        for(int i=0;i<source.length;i++)source[i]=i/10000f;
+        float[] clip=AndroidBloopDecoder.prepareLaunch(source);
+        assertEquals(4700,clip.length);
+        assertEquals(.9099f,clip[300],.000001f);
+        assertTrue(clip[0]<.01f);
+        assertTrue(clip[clip.length-1]<.01f);
+    }
+
     @Test public void silenceIsNotAValidBloop() {
         try {
             AndroidBloopDecoder.measureRegions(new float[44100]);

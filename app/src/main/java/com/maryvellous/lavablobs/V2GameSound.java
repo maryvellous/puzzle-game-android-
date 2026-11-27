@@ -59,6 +59,7 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
     private final Thread audioThread;
     private volatile boolean paused,closed,ready;
     private volatile int volumePercent;
+    private volatile int muteEpoch;
     private int lastNonzeroVolume;
     private volatile AudioTrack track;
     private volatile String state="CARICAMENTO";
@@ -99,8 +100,9 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
                 .putBoolean(EFFECTS_KEY,next>0).apply();
         if(next==0){
             queue.clear();
-            AudioTrack playing=track;
-            if(playing!=null)try{playing.pause();playing.flush();}catch(Exception ignored){}
+            muteEpoch++;
+            // The worker owns pause/flush, even if the thumb immediately
+            // leaves zero. Avoid pausing AudioTrack behind its back.
         }
         synchronized(lifecycle){lifecycle.notifyAll();}
     }
@@ -275,7 +277,13 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
             float[] floatBlock=new float[BLOCK_FRAMES];
             short[] shortBlock=new short[BLOCK_FRAMES];
             boolean playing=false;
+            int seenMuteEpoch=muteEpoch;
             while(!closed){
+                if(seenMuteEpoch!=muteEpoch){
+                    seenMuteEpoch=muteEpoch;
+                    if(playing){device.pause();device.flush();playing=false;}
+                    engine.setOutputVolumePercent(0);engine.reset();
+                }
                 if(paused||!effectsEnabled()){
                     if(playing){
                         device.pause();
