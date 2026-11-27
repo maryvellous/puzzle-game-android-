@@ -184,7 +184,10 @@ public final class MaterialAudioEngine {
     }
 
     private boolean gesture(AcousticAggregator.Family family,float[] audio,float gain,float rate){
-        return aggregator==null?shortVoice(audio,gain,rate):aggregator.offer(family,renderedFrames,audio,gain,rate);
+        return gesture(family,0,0,audio,gain,rate);
+    }
+    private boolean gesture(AcousticAggregator.Family family,int a,int b,float[] audio,float gain,float rate){
+        return aggregator==null?shortVoice(audio,gain,rate):aggregator.offer(family,renderedFrames,a,b,audio,gain,rate);
     }
 
     /** Backward-compatible test entrypoint with the solver's normal half-step. */
@@ -276,7 +279,7 @@ public final class MaterialAudioEngine {
                 // Finite acoustic gesture from the original Bloop TAIL.
                 // There is NO looping oscillator, texture or sustained voice.
                 float dynamicGain=.045f+.24f*(float)Math.pow(activity,1.15f);
-                if(gesture(AcousticAggregator.Family.SQUISH,pair.material.tail,dynamicGain*pair.scale,pair.rate)) {
+                if(gesture(AcousticAggregator.Family.SQUISH,idA,idB,pair.material.tail,dynamicGain*pair.scale,pair.rate)) {
                     squishEvents++;
                     pair.lastSquishSeconds=pair.activeSeconds;
                 }
@@ -293,6 +296,7 @@ public final class MaterialAudioEngine {
     public void endContact(int idA,int idB) {pairs.remove(key(idA,idB));}
 
     public void cancelBlob(int blobId) {
+        if(aggregator!=null)aggregator.cancelBlob(blobId);
         for(Iterator<Pair> i=pairs.values().iterator();i.hasNext();) {
             Pair pair=i.next();
             if((int)(pair.key>>>32)==blobId || (int)pair.key==blobId)i.remove();
@@ -390,6 +394,7 @@ public final class MaterialAudioEngine {
     public long aggregateGroups(){return aggregator==null?0:aggregator.emitted();}
     public long aggregateCollapsed(){return aggregator==null?0:aggregator.collapsed();}
     public long aggregateRejected(){return aggregator==null?0:aggregator.rejected();}
+    public long aggregateCancelled(){return aggregator==null?0:aggregator.cancelled();}
     public float peakOutput(){return peakOutput;}
     public float peakDry(){return peakDry;}
     public float minimumLimiterGain(){return minimumLimiterGain;}
