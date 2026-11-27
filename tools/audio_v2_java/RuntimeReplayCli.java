@@ -58,10 +58,12 @@ public final class RuntimeReplayCli {
         int frames=(int)Math.ceil((events.get(events.size()-1).time-events.get(0).time+3)*RATE/AudioReplay.BLOCK)*AudioReplay.BLOCK;
         long expected=events.stream().filter(e->e.type==AudioEvent.Type.MERGE).count();
         StringBuilder report=new StringBuilder("mode,peak_voices,peak_secondary,peak_dry,peak_output,min_limiter_gain,limited_frames,rendered_frames,fusions_started,fusions_completed,rejected_short,candidates,groups,collapsed,rejected_clusters,peak_gain_step,peak_sample_step,rms,mix_latency_frames\n");
+        StringBuilder stemReport=new StringBuilder("mode,family,dry_peak,dry_rms,export_gain\n");
         for(MaterialAudioEngine.MixProfile profile:MaterialAudioEngine.MixProfile.values()){
           for(boolean aggregated:new boolean[]{false,true}){
             MaterialAudioEngine e=new MaterialAudioEngine(bank,launch,aggregated,profile);
             String label=profile.name().toLowerCase(Locale.ROOT)+(aggregated?"-cluster":"-bypass");
+            float[][] stems=profile==MaterialAudioEngine.MixProfile.REFINED?e.captureDryStems(frames):null;
             float[] pcm=AudioReplay.render(e,events,frames);
             if(e.fusionsStarted()!=expected||e.fusionsCompleted()!=expected)
                 throw new IOException("Lost or truncated fusion in "+label);
@@ -69,9 +71,24 @@ public final class RuntimeReplayCli {
                 if(pcm[i]!=0f)throw new IOException("Tail did not settle in "+label);
             writeWav(out.resolve(label+".wav"),pcm);
             report.append(metrics(label,e,pcm)).append('\n');
+            if(stems!=null){
+                Path stemDir=out.resolve(label+"-dry-stems");Files.createDirectories(stemDir);
+                float max=0f;
+                for(float[] stem:stems)for(float x:stem)max=Math.max(max,Math.abs(x));
+                float scale=max>.87f?.87f/max:1f;
+                for(MaterialAudioEngine.VoiceFamily family:MaterialAudioEngine.VoiceFamily.values()){
+                    float[] dry=stems[family.ordinal()],export=new float[frames];
+                    float peak=0;double sum=0;
+                    for(int i=0;i<frames;i++){peak=Math.max(peak,Math.abs(dry[i]));sum+=(double)dry[i]*dry[i];export[i]=dry[i]*scale;}
+                    String name=family.name().toLowerCase(Locale.ROOT);
+                    writeWav(stemDir.resolve(name+".wav"),export);
+                    stemReport.append(String.format(Locale.ROOT,"%s,%s,%.9f,%.9f,%.9f%n",label,name,peak,Math.sqrt(sum/frames),scale));
+                }
+            }
           }
         }
         Files.writeString(out.resolve("metrics.csv"),report.toString(),StandardCharsets.UTF_8);
-        System.out.print(report);
+        Files.writeString(out.resolve("stem_metrics.csv"),stemReport.toString(),StandardCharsets.UTF_8);
+        System.out.print(report);System.out.print(stemReport);
     }
 }
