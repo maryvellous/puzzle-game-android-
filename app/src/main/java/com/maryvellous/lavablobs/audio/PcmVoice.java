@@ -8,12 +8,14 @@ final class PcmVoice {
     final boolean fusion;
     private final float volume,rate;
     private final boolean declick;
-    private final int totalFrames;
+    private final int totalFrames,attack,release;
     private double position;
     private int frame;
     PcmVoice(float[] sound,float volume,float rate,boolean fusion,boolean declick){
         this.sound=sound;this.volume=volume;this.rate=rate;this.fusion=fusion;this.declick=declick;
         totalFrames=(int)Math.ceil(sound.length/(double)rate);
+        attack=Math.max(1,Math.min(totalFrames/2,Math.round(BloopMaterialBank.SAMPLE_RATE*.0005f)));
+        release=Math.max(1,Math.min(totalFrames/2,Math.round(BloopMaterialBank.SAMPLE_RATE*.0015f)));
     }
     boolean finished(){return position>=sound.length;}
     float sample(){
@@ -23,8 +25,6 @@ final class PcmVoice {
         float value=sound[at]*(1-t)+sound[next]*t;
         position+=rate;
         if(declick){
-            int attack=Math.max(1,Math.min(totalFrames/2,Math.round(BloopMaterialBank.SAMPLE_RATE*.0005f)));
-            int release=Math.max(1,Math.min(totalFrames/2,Math.round(BloopMaterialBank.SAMPLE_RATE*.0015f)));
             float edge=Math.max(0f,Math.min(1f,Math.min(frame/(float)attack,(totalFrames-1-frame)/(float)release)));
             // Cubic smoothstep has zero slope at both ends.
             value*=edge*edge*(3f-2f*edge);
