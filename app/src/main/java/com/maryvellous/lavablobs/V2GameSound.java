@@ -96,10 +96,6 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
     }
 
     // The authoritative source is the simulation, never the View.
-    @Override public void merge(BlobWorld.Merge merge) {}
-    @Override public void launch(int tier,float radius) {}
-    @Override public void pop(int blobId,float radius) {}
-    @Override public void discardLegacyImpacts(){}
     @Override public void onContactStep(float time,float dt,List<ContactProbe.Contact> contacts){
         physicsEvents.onContactStep(time,dt,contacts);
     }
@@ -272,7 +268,8 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
                             " limitedFrames="+engine.limitedFrames()+" renderedFrames="+engine.renderedFrames()+
                             " peakVoices="+engine.peakVoices()+" peakSecondary="+engine.peakShortVoices()+
                             " clusterCandidates="+engine.aggregateCandidates()+" groups="+engine.aggregateGroups()+
-                            " collapsed="+engine.aggregateCollapsed()+" rejectedClusters="+engine.aggregateRejected());
+                            " collapsed="+engine.aggregateCollapsed()+" rejectedClusters="+engine.aggregateRejected()+
+                            " cancelledClusters="+engine.aggregateCancelled());
                     latestReportMs=now;
                     blocksSinceReport=0;renderNsSinceReport=0;worstRenderNs=0;
                     scheduler.resetIntervalMaxima();maxWriteNs=0;renderTiming.reset();writeTiming.reset();underrunBaseline=device.getUnderrunCount();
