@@ -80,6 +80,8 @@ public final class MaterialAudioEngine {
     private int wallIndex;
     private final Map<Long,Pair> pairs=new HashMap<>();
     private final ArrayList<Voice> voices=new ArrayList<>();
+    private final AcousticAggregator aggregator;
+    private int activeShortVoices,peakShortVoices;
     private final float limiterRelease=(float)(1-Math.exp(-1d/(SAMPLE_RATE*.150)));
     private float masterGain=1f,peakOutput;
     private float peakDry,minimumLimiterGain=1f;
@@ -99,9 +101,13 @@ public final class MaterialAudioEngine {
 
     public MaterialAudioEngine(BloopMaterialBank bank) {this(bank,null);}
 
-    public MaterialAudioEngine(BloopMaterialBank bank,float[] releaseSwoosh) {
+    public MaterialAudioEngine(BloopMaterialBank bank,float[] releaseSwoosh) {this(bank,releaseSwoosh,false);}
+
+    /** Aggregation is experimental; default construction preserves V2.3. */
+    public MaterialAudioEngine(BloopMaterialBank bank,float[] releaseSwoosh,boolean aggregation) {
         if(bank==null)throw new IllegalArgumentException("Material bank required");
         this.bank=bank;
+        aggregator=aggregation?new AcousticAggregator(this::shortVoice):null;
         if(releaseSwoosh!=null){
             if(releaseSwoosh.length<96)throw new IllegalArgumentException("Release clip too short");
             for(float sample:releaseSwoosh)if(!Float.isFinite(sample)||Math.abs(sample)>1.01f)
@@ -164,17 +170,21 @@ public final class MaterialAudioEngine {
     }
 
     private boolean shortVoice(float[] audio,float volume,float rate) {
-        int shortCount=0;
-        for(Voice item:voices)if(!item.fusion)shortCount++;
-        if(shortCount>=MAX_SHORT_VOICES) {
+        if(activeShortVoices>=MAX_SHORT_VOICES) {
             shortVoicesRejected++;
             return false;
         }
         if(volume>.0001f) {
             voices.add(new Voice(audio,volume*SECONDARY_GAIN,rate,false));
+            activeShortVoices++;
+            peakShortVoices=Math.max(peakShortVoices,activeShortVoices);
             return true;
         }
         return false;
+    }
+
+    private boolean gesture(AcousticAggregator.Family family,float[] audio,float gain,float rate){
+        return aggregator==null?shortVoice(audio,gain,rate):aggregator.offer(family,renderedFrames,audio,gain,rate);
     }
 
     /** Backward-compatible test entrypoint with the solver's normal half-step. */
@@ -226,7 +236,7 @@ public final class MaterialAudioEngine {
             // Broader dynamic range on soft-body collisions. Wall impacts keep
             // the original V2.2 attack and gain curve.
             float dynamic=(float)Math.pow(clamp((approach-IMPACT_MIN_SPEED)/280f,0f,1f),.8f);
-            if(shortVoice(gelImpacts[pair.materialIndex],(.045f+.32f*dynamic)*pair.scale,
+            if(gesture(AcousticAggregator.Family.GEL,gelImpacts[pair.materialIndex],(.045f+.32f*dynamic)*pair.scale,
                     pair.rate))impactEvents++;
             pair.impactStarted=true;
         }
@@ -266,7 +276,7 @@ public final class MaterialAudioEngine {
                 // Finite acoustic gesture from the original Bloop TAIL.
                 // There is NO looping oscillator, texture or sustained voice.
                 float dynamicGain=.045f+.24f*(float)Math.pow(activity,1.15f);
-                if(shortVoice(pair.material.tail,dynamicGain*pair.scale,pair.rate)) {
+                if(gesture(AcousticAggregator.Family.SQUISH,pair.material.tail,dynamicGain*pair.scale,pair.rate)) {
                     squishEvents++;
                     pair.lastSquishSeconds=pair.activeSeconds;
                 }
@@ -302,7 +312,7 @@ public final class MaterialAudioEngine {
     public void wallImpact(float approach,float radius){
         if(!Float.isFinite(approach)||!Float.isFinite(radius)||approach<=IMPACT_MIN_SPEED)return;
         float magnitude=clamp((float)(Math.log1p((approach-IMPACT_MIN_SPEED)/40f)/Math.log1p(280d/40d)),0f,1f);
-        shortVoice(bank.at(wallIndex++).attack,.18f*magnitude*sizeGain(radius),pitchForRadius(radius));
+        gesture(AcousticAggregator.Family.WALL,bank.at(wallIndex++).attack,.18f*magnitude*sizeGain(radius),pitchForRadius(radius));
     }
 
     public void launch(float radius) {launch(0,radius);}
@@ -334,12 +344,13 @@ public final class MaterialAudioEngine {
         if(output==null||offset<0||frames<0||offset>output.length-frames)
             throw new IllegalArgumentException("Output buffer bounds");
         for(int s=offset;s<offset+frames;s++) {
+            if(aggregator!=null)aggregator.flushDue(renderedFrames);
             float dry=0f;
             for(int i=voices.size()-1;i>=0;i--) {
                 Voice v=voices.get(i);
                 dry+=v.sample();
                 if(v.position>=v.sound.length){
-                    if(v.fusion)fusionsCompleted++;
+                    if(v.fusion)fusionsCompleted++;else activeShortVoices--;
                     voices.remove(i);
                 }
             }
@@ -360,7 +371,9 @@ public final class MaterialAudioEngine {
     }
 
     public void reset() {
-        pairs.clear();voices.clear();masterGain=1f;peakOutput=0f;outputGain=targetOutputGain;
+        pairs.clear();voices.clear();activeShortVoices=peakShortVoices=0;
+        if(aggregator!=null)aggregator.reset();
+        masterGain=1f;peakOutput=0f;outputGain=targetOutputGain;
         peakDry=0f;minimumLimiterGain=1f;limitedFrames=0;renderedFrames=0;
         fusionIndex=0;wallIndex=0;contactBeginCount=0;fusionsStarted=0;fusionsCompleted=0;
         shortVoicesRejected=0;peakVoices=0;squishEvents=0;impactEvents=0;
@@ -372,6 +385,11 @@ public final class MaterialAudioEngine {
     public int fusionsCompleted(){return fusionsCompleted;}
     public int rejectedShortVoices(){return shortVoicesRejected;}
     public int peakVoices(){return peakVoices;}
+    public int peakShortVoices(){return peakShortVoices;}
+    public long aggregateCandidates(){return aggregator==null?0:aggregator.candidates();}
+    public long aggregateGroups(){return aggregator==null?0:aggregator.emitted();}
+    public long aggregateCollapsed(){return aggregator==null?0:aggregator.collapsed();}
+    public long aggregateRejected(){return aggregator==null?0:aggregator.rejected();}
     public float peakOutput(){return peakOutput;}
     public float peakDry(){return peakDry;}
     public float minimumLimiterGain(){return minimumLimiterGain;}
