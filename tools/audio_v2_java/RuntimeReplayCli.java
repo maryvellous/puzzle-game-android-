@@ -51,7 +51,7 @@ public final class RuntimeReplayCli {
         List<AudioEvent> events;
         try(Reader in=Files.newBufferedReader(trace)){events=AudioTrace.read(in);}
         if(events.isEmpty())throw new IOException("Empty trace");
-        int frames=(int)Math.ceil((events.get(events.size()-1).time+3)*RATE/AudioReplay.BLOCK)*AudioReplay.BLOCK;
+        int frames=(int)Math.ceil((events.get(events.size()-1).time-events.get(0).time+3)*RATE/AudioReplay.BLOCK)*AudioReplay.BLOCK;
         long expected=events.stream().filter(e->e.type==AudioEvent.Type.MERGE).count();
         StringBuilder report=new StringBuilder("mode,peak_voices,peak_secondary,peak_dry,peak_output,min_limiter_gain,limited_frames,rendered_frames,fusions_started,fusions_completed,rejected_short,candidates,groups,collapsed,rejected_clusters\n");
         for(boolean aggregated:new boolean[]{false,true}){
