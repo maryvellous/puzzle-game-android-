@@ -1,0 +1,15 @@
+# Roadmap tecnica canonica — 27 novembre 2026
+Baseline: main 1.1.0 / Audio V2.3 approvato. Questo documento governa il risanamento della codebase e prevale sull'ordine di lavoro del [report A01–A08](TECHNICAL_DEBT_AUDIT.md); [specifica audio](AUDIO_ENGINE_V2_MATERIAL_BLOOP.md) resta normativa per il comportamento, [aggregazione](AUDIO_AGGREGATION_PLAN.md) per il progetto acustico.
+## Obiettivo
+Un prodotto maturo, non un game engine generico. Solver, presentazione e audio autonomi ma coerenti: simulazione unica fonte degli eventi, UI/aptica/audio consumatori; probe/tracker → qualificazione → aggregazione → scheduler PCM → mixer/limiter/volume → AudioTrack. Replay offline usa lo stesso core runtime. Conservare Java, solver, AudioTrack, campioni, timbro e gameplay approvati; nessuna migrazione C++/middleware senza evidenza. Nessun intervento salvataggi o pubblicazione.
+## Sequenza e gate
+0. Diagnostica e replay (A05, baseline A01/02/03/06): età/profondità coda, scarti per tipo, tempi dispatch/render/write, underruns delta, peak dry e gain reduction, voci per famiglia, tracce ripetibili e WAV. Gate: baseline misurabile, distinguere mix/timing/buffering. Telefono resta necessario.
+1. Contratto e trasporto (A01/02/07): eventi tipizzati con identità, tick/tempo, generation; osservazioni comprimibili, eventi autorevoli mai persi silenziosamente; saturazione esplicita e riconciliazione, drain limitato; fusioni dal solver, non UI. Scheduler sample-offset, gestione ritardi e clock. Gate: ordering/reset, replay batching diversi, equivalenza bypass su eventi isolati.
+2. Runtime (A04/05): unico owner AudioTrack; lifecycle esplicito, generation, pause/mute/reset/errore; core/decoder PCM/scheduling condivisi con CLI, trace wall/input/merge completa. Gate: test lifecycle e parità runtime/offline.
+3. Aggregazione (A03): dopo gating, prima delle voci; GEL/WALL/SQUISH separati, finestre finite, energia limitata, pitch ponderato, bypass singolo identico; FUSION/LAUNCH/POP diretti, Bloop interi. A/B, target ≥50% riduzione voci secondarie nei burst rappresentativi, minore gain reduction, nessun nuovo underrun, silenzio e ascolto sul telefono. Nessun tuning definitivo senza ascolto.
+4. Fisica (A06): profilare CPU/GC, ridurre allocazioni e calcoli ridondanti conservando campioni fisici; broad-phase solo se necessario. Gate: equivalenza numerica e trace, stress sul telefono.
+5. Consolidamento (A07/08): separare orchestrazione UI, rimuovere legacy verificato (non risorse/licenze necessarie), consolidare CI e artefatti version/SHA; preservare release manuale e firma. Gate: test, build, documentazione coerente, playtest e approvazione prima di promuovere.
+## Protocollo di lavoro
+Branch dedicato, tranche piccole; CI in parallelo con attività indipendenti, nessuna attesa passiva; correggere esiti negativi prima di avanzare nei gate dipendenti. Nessuna promozione main né pubblicazione senza approvazione. Misure proposte non sono risultati già ottenuti.
+## Registro esecuzione
+- Roadmap salvata; interventi runtime ancora da verificare. Aggiornare questo registro a ogni tranche con prove, limiti e prossimi passi.
