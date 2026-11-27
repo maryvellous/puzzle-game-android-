@@ -123,12 +123,17 @@ final class ContactProbe {
     void beginStep() {contacts.clear();wallStep.clear();}
 
     void observeWall(Blob b,int side,float nx,float ny) {
+        float vx=0f,vy=0f;
+        for(int i=0;i<Blob.NODES;i++){vx+=b.vx[i];vy+=b.vy[i];}
+        observeWall(b,side,nx,ny,vx,vy);
+    }
+    // Bulk sums may be reused across vertex projections in one confine call:
+    // only positions are mutated by Vessel.confine, never velocities.
+    void observeWall(Blob b,int side,float nx,float ny,float vx,float vy) {
         long key=((long)b.id<<2)|side;
         WallContact c=wallStep.get(key);
         if(c==null){c=new WallContact(b,side);wallStep.put(key,c);}
         // Use whole-body closing velocity, not isolated vertex correction jitter.
-        float vx=0f,vy=0f;
-        for(int i=0;i<Blob.NODES;i++){vx+=b.vx[i];vy+=b.vy[i];}
         c.peak=Math.max(c.peak,Math.max(0f,-(vx*nx+vy*ny)/Blob.NODES));
     }
 
