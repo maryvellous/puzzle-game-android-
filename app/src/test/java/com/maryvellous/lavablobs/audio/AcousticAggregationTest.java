@@ -52,4 +52,22 @@ public class AcousticAggregationTest {
         for(float s:render(engine,4096))assertEquals(0f,s,0f);
         assertEquals(0,engine.aggregateGroups());
     }
+    @Test public void removedBlobCancelsOnlyItsPendingDeformation(){
+        List<Float> emitted=new ArrayList<>();
+        AcousticAggregator agg=new AcousticAggregator((clip,gain,rate)->{emitted.add(gain);return true;});
+        float[] sound={.2f};
+        agg.offer(AcousticAggregator.Family.SQUISH,0,1,2,sound,.4f,1f);
+        agg.offer(AcousticAggregator.Family.SQUISH,0,3,4,sound,.2f,1f);
+        agg.offer(AcousticAggregator.Family.GEL,0,1,2,sound,.3f,1f);
+        agg.cancelBlob(1);
+        agg.flushDue(529);assertEquals(1,emitted.size());assertEquals(.3f,emitted.get(0),0f);
+        agg.flushDue(1323);assertEquals(2,emitted.size());assertEquals(.2f,emitted.get(1),0f);
+        assertEquals(1,agg.cancelled());assertEquals(0,agg.collapsed());
+    }
+    @Test public void entirePendingDeformationCanBeCancelled(){
+        AcousticAggregator agg=new AcousticAggregator((clip,gain,rate)->{fail("Cancelled cluster played");return true;});
+        agg.offer(AcousticAggregator.Family.SQUISH,0,1,2,new float[]{.2f},.2f,1f);
+        agg.cancelBlob(2);agg.flushDue(10000);
+        assertEquals(1,agg.cancelled());assertEquals(0,agg.emitted());
+    }
 }
