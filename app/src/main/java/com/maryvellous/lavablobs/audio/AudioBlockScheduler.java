@@ -11,6 +11,7 @@ public final class AudioBlockScheduler {
     private AudioEvent pending;
     private long pendingFrame,cursor;
     private long maxQueueAgeNs,maxDispatchNs,dispatched,budgetHits;
+    private final TimingHistogram queueAge=new TimingHistogram(),dispatchTime=new TimingHistogram();
     public AudioBlockScheduler(AudioEventQueue<AudioEvent> queue,AudioTimeline timeline,int maxDispatch){
         if(maxDispatch<=0)throw new IllegalArgumentException();
         this.queue=queue;this.timeline=timeline;this.maxDispatch=maxDispatch;
@@ -29,13 +30,16 @@ public final class AudioBlockScheduler {
             int at=(int)Math.max(offset,pendingFrame-cursor);
             if(at>offset){engine.renderMono(output,offset,at-offset);offset=at;}
             long started=System.nanoTime();
-            if(pending.enqueuedNs>0)maxQueueAgeNs=Math.max(maxQueueAgeNs,started-pending.enqueuedNs);
+            if(pending.enqueuedNs>0){
+                long age=started-pending.enqueuedNs;
+                maxQueueAgeNs=Math.max(maxQueueAgeNs,age);queueAge.record(age);
+            }
             pending.apply(engine);
             dispatchNs+=System.nanoTime()-started;
             dispatched++;processed++;pending=null;
         }
         if(processed==maxDispatch)budgetHits++;
-        maxDispatchNs=Math.max(maxDispatchNs,dispatchNs);
+        maxDispatchNs=Math.max(maxDispatchNs,dispatchNs);dispatchTime.record(dispatchNs);
         if(offset<output.length)engine.renderMono(output,offset,output.length-offset);
         if(generation!=currentGeneration.getAsInt())return false;
         cursor+=output.length;
@@ -49,5 +53,7 @@ public final class AudioBlockScheduler {
     public long budgetHits(){return budgetHits;}
     public long lateEvents(){return timeline.lateEvents();}
     public long rebases(){return timeline.rebases();}
-    public void resetIntervalMaxima(){maxQueueAgeNs=maxDispatchNs=0;}
+    public long p99QueueAgeNs(){return queueAge.p99UpperNs();}
+    public long p99DispatchNs(){return dispatchTime.p99UpperNs();}
+    public void resetIntervalMaxima(){maxQueueAgeNs=maxDispatchNs=0;queueAge.reset();dispatchTime.reset();}
 }
