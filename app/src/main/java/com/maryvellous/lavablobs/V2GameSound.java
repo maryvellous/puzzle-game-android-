@@ -42,6 +42,7 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
 
     private final Context app;
     private final boolean diagnosticBuild;
+    private final DiagnosticTraceRecorder traceRecorder;
     private final SharedPreferences preferences;
     private final PhysicsAudioEvents physicsEvents;
     private final AudioEventQueue<AudioEvent> queue=new AudioEventQueue<>(CAPACITY,1024);
@@ -66,6 +67,7 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
     V2GameSound(Context context) {
         app=context.getApplicationContext();
         diagnosticBuild=app.getPackageName().endsWith(".audiov21")||BuildConfig.AUDIO_AGGREGATION;
+        traceRecorder=diagnosticBuild?new DiagnosticTraceRecorder(app):null;
         preferences=app.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
         volumePercent=Math.max(0,Math.min(100,preferences.getInt(VOLUME_KEY,
                 preferences.getBoolean(EFFECTS_KEY,true)?100:0)));
@@ -119,6 +121,7 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
     @Override public void onReset(){physicsEvents.onReset();}
 
     private void advanceGeneration() {
+        if(traceRecorder!=null)traceRecorder.flush(queue.rejectedObservations(),queue.rejectedControls());
         generation++;
         queue.clear();
         transportFault=false;
@@ -129,12 +132,14 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
     private void send(AudioEvent event) {
         if(closed||paused||!effectsEnabled()||transportFault)return;
         if(!ready){startupDiscarded++;return;}
+        if(traceRecorder!=null)traceRecorder.record(event);
         if(queue.offer(event,event.authoritative()))return;
         rejectedByType.incrementAndGet(event.type.ordinal());
         if(event.authoritative()){
             // Finite capacity cannot promise infinite delivery: fail visibly
             // and reset rather than silently evicting an accepted fusion/END.
             transportFault=true;
+            if(traceRecorder!=null)traceRecorder.flush(queue.rejectedObservations(),queue.rejectedControls());
             generation++;
             queue.clear();
             Log.e(TAG,"Authoritative audio overflow; audio suspended until lifecycle reset");
@@ -160,6 +165,7 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
         if(closed)return;
         closed=true;ready=false;
         advanceGeneration();
+        if(traceRecorder!=null)traceRecorder.close();
         synchronized(lifecycle){lifecycle.notifyAll();}
         audioThread.interrupt();
     }
