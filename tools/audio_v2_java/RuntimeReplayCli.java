@@ -34,7 +34,7 @@ public final class RuntimeReplayCli {
     }
     private static String metrics(String label,MaterialAudioEngine e){
         return String.format(Locale.ROOT,
-                "%s,%d,%d,%.7f,%.7f,%.7f,%d,%d,%d,%d,%d,%d,%d,%d",
+                "%s,%d,%d,%.7f,%.7f,%.7f,%d,%d,%d,%d,%d,%d,%d,%d,%d",
                 label,e.peakVoices(),e.peakShortVoices(),e.peakDry(),e.peakOutput(),
                 e.minimumLimiterGain(),e.limitedFrames(),e.renderedFrames(),
                 e.fusionsStarted(),e.fusionsCompleted(),e.rejectedShortVoices(),
