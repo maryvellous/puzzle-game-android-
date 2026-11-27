@@ -6,16 +6,22 @@ on:
       - main
     paths:
       - 'app/**'
+      - 'tools/audio_v2_java/**'
       - 'build.gradle'
       - 'settings.gradle'
       - '.github/workflows/lava-blobs.yml'
   pull_request:
     paths:
       - 'app/**'
+      - 'tools/audio_v2_java/**'
       - 'build.gradle'
       - 'settings.gradle'
       - '.github/workflows/lava-blobs.yml'
   workflow_dispatch:
+
+concurrency:
+  group: lava-blobs-ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -56,13 +62,40 @@ jobs:
           assert 1000 < rms < 10000, rms
           print(f"Valid 112ms mono PCM WAV; peak={peak}, RMS={rms:.0f}")
           PY
-      - name: Test game physics and collision SFX regression
+      - name: Test solver, audio transport, lifecycle and aggregation
         run: gradle --no-daemon :app:testDebugUnitTest :app:testPreviewUnitTest
       - name: Upload V2 contact-control trace (offline diagnostics only)
         uses: actions/upload-artifact@v4
         with:
           name: lava-blobs-audio-v2-contact-trace
           path: app/build/audio_v2/contact_probe_trace.csv
+          retention-days: 14
+          if-no-files-found: error
+      - name: Render runtime-equivalent A/B replay from real solver trace
+        run: |
+          set -euo pipefail
+          test -s app/build/audio_v2/runtime_events_v1.csv
+          mkdir -p build/runtime-replay/classes build/runtime-replay/decoded build/runtime-replay/results
+          command -v ffmpeg
+          shopt -s nullglob
+          for name in bloop_1 bloop_2 bloop_3 bloop_4 swoosh_source; do
+            sources=(app/src/main/res/raw/"$name".*)
+            test "${#sources[@]}" -eq 1
+            ffmpeg -nostdin -v error -y -i "${sources[0]}" -ac 1 -ar 44100 -c:a pcm_s16le "build/runtime-replay/decoded/$name.wav"
+          done
+          javac -encoding UTF-8 -d build/runtime-replay/classes \
+            app/src/main/java/com/maryvellous/lavablobs/audio/*.java \
+            tools/audio_v2_java/RuntimeReplayCli.java
+          java -cp build/runtime-replay/classes com.maryvellous.lavablobs.audio.RuntimeReplayCli \
+            build/runtime-replay/decoded app/build/audio_v2/runtime_events_v1.csv build/runtime-replay/results
+          cp app/build/audio_v2/runtime_events_v1.csv build/runtime-replay/results/
+          echo 'Runtime replay (desktop decode, shared event adapter/scheduler/DSP):' >> "$GITHUB_STEP_SUMMARY"
+          cat build/runtime-replay/results/metrics.csv >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload versioned runtime replay metrics and listening comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: lava-runtime-replay-${{ github.sha }}
+          path: build/runtime-replay/results/
           retention-days: 14
           if-no-files-found: error
       - name: Build APKs
