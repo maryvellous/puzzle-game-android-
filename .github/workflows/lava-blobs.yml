@@ -99,7 +99,7 @@ jobs:
           retention-days: 14
           if-no-files-found: error
       - name: Build APKs
-        run: gradle --no-daemon :app:assembleDebug :app:assemblePreview
+        run: gradle --no-daemon :app:assembleDebug :app:assemblePreview :app:assembleAggregationPreview
       - name: Upload installable APK
         id: main_apk
         uses: actions/upload-artifact@v4
@@ -114,7 +114,21 @@ jobs:
           path: app/build/outputs/apk/preview/app-preview.apk
           if-no-files-found: error
 
+      - name: Verify isolated aggregation APK package
+        run: |
+          apk=$(find app/build/outputs/apk/aggregationPreview -name '*.apk' -print -quit)
+          test -n "$apk"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk" | grep -F "package: name='com.maryvellous.lavablobs.audioaggregation'"
+      - name: Upload independent aggregation comparison APK
+        id: cluster_apk
+        uses: actions/upload-artifact@v4
+        with:
+          name: lava-aggregation-preview-${{ github.sha }}
+          path: app/build/outputs/apk/aggregationPreview/*.apk
+          if-no-files-found: error
+
       - name: Main APK download link
         run: |
           echo '[Download Lava Blob 1.1.0 main APK (ZIP)](${{ steps.main_apk.outputs.artifact-url }})' >> "$GITHUB_STEP_SUMMARY"
+          echo '[Download aggregation candidate APK (ZIP)](${{ steps.cluster_apk.outputs.artifact-url }})' >> "$GITHUB_STEP_SUMMARY"
           echo 'Commit: ${{ github.sha }}' >> "$GITHUB_STEP_SUMMARY"
