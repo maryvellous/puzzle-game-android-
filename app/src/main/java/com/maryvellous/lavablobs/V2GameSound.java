@@ -14,6 +14,9 @@ import com.maryvellous.lavablobs.audio.MaterialAudioEngine;
 import java.util.List;
 import com.maryvellous.lavablobs.audio.AudioEventQueue;
 import com.maryvellous.lavablobs.audio.AudioTimeline;
+import com.maryvellous.lavablobs.audio.AudioEvent;
+import com.maryvellous.lavablobs.audio.AudioBlockScheduler;
+import static com.maryvellous.lavablobs.audio.AudioEvent.Type.*;
 
 /**
  * Audio V2.3 gameplay bridge for the main app and isolated preview.
@@ -36,31 +39,11 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
     private static final int CAPACITY=8192;
     private static final int MAX_DISPATCH_PER_BLOCK=512;
 
-    private static final int CONTACT=1,END=2,CANCEL=3,MERGE=4,LAUNCH=5,POP=6,RESET=7,WALL=8;
-    private static final class Command {
-        final int type,a,b;
-        double time;
-        int generation;
-        long enqueuedNs;
-        final float normal,slip,compression,radiusA,radiusB,dt,bulkMotion;
-        Command(int type,int a,int b,float normal,float slip,
-                float compression,float radiusA,float radiusB){
-            this(type,a,b,normal,slip,compression,radiusA,radiusB,1f/120f,0f);
-        }
-        Command(int type,int a,int b,float normal,float slip,
-                float compression,float radiusA,float radiusB,float dt,
-                float bulkMotion){
-            this.type=type;this.a=a;this.b=b;this.normal=normal;this.slip=slip;
-            this.compression=compression;this.radiusA=radiusA;
-            this.radiusB=radiusB;this.dt=dt;this.bulkMotion=bulkMotion;
-        }
-    }
-
     private final Context app;
     private final boolean diagnosticBuild;
     private final SharedPreferences preferences;
     private final ContactTracker tracker;
-    private final AudioEventQueue<Command> queue=new AudioEventQueue<>(CAPACITY,1024);
+    private final AudioEventQueue<AudioEvent> queue=new AudioEventQueue<>(CAPACITY,1024);
     private volatile int generation;
     private volatile boolean transportFault;
     private double simulationTime;
@@ -70,9 +53,8 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
     private volatile int volumePercent;
     private volatile int muteEpoch;
     private int lastNonzeroVolume;
-        private volatile String state="CARICAMENTO";
-    private long maxQueueAgeNs,maxDispatchNs,maxWriteNs;
-    private long dispatched,lateBlocks;
+    private volatile String state="CARICAMENTO";
+    private long maxWriteNs;
     private volatile long startupDiscarded;
     private long latestReportMs;
     private int blocksSinceReport;
@@ -122,10 +104,10 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
         // Fusion playback is owned by the solver callback, not the View.
     }
     @Override public void launch(int tier,float radius) {
-        send(new Command(LAUNCH,tier,0,0,0,0,radius,0));
+        send(LAUNCH,tier,0,0,0,0,radius,0);
     }
     @Override public void pop(int blobId,float radius) {
-        send(new Command(POP,blobId,0,0,0,0,radius,0));
+        send(POP,blobId,0,0,0,0,radius,0);
     }
 
     /** V2 never plays the legacy strongest-impact-per-frame SoundPool event. */
@@ -134,29 +116,29 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
     @Override public void onContactStep(float time,float dt,List<ContactProbe.Contact> contacts) {
         simulationTime=time;
         for(ContactProbe.Contact c:contacts){
-            send(new Command(CONTACT,c.blobA,c.blobB,c.approachSpeed,
+            send(CONTACT,c.blobA,c.blobB,c.approachSpeed,
                     c.slideSpeed,c.compression,c.radiusA,c.radiusB,
-                    dt,c.bulkMotion));
+                    dt,c.bulkMotion);
         }
         tracker.onContactStep(time,dt,contacts);
     }
 
     @Override public void onWallImpact(int blobId,int side,float approach,float radius){
-        send(new Command(WALL,blobId,side,approach,0,0,radius,0));
+        send(WALL,blobId,side,approach,0,0,radius,0);
     }
 
     private void onTransition(ContactTracker.Transition transition) {
         if(transition.kind==ContactTracker.Kind.END)
-            send(new Command(END,transition.blobA,transition.blobB,0,0,0,0,0));
+            send(END,transition.blobA,transition.blobB,0,0,0,0,0);
         else if(transition.kind==ContactTracker.Kind.CANCELLED)
-            send(new Command(CANCEL,transition.blobA,transition.blobB,0,0,0,0,0));
+            send(CANCEL,transition.blobA,transition.blobB,0,0,0,0,0);
     }
 
     @Override public void onMerge(BlobWorld.Merge merge){
         // Cancel parent contacts, then emit the fusion from its authoritative source.
         simulationTime=merge.simulationTime;
         tracker.onMerge(merge);
-        send(new Command(MERGE,merge.parentAId,merge.parentBId,0,0,0,merge.radius,0));
+        send(MERGE,merge.parentAId,merge.parentBId,0,0,0,merge.radius,0);
     }
     @Override public void onPop(int blobId,float simulationTime){this.simulationTime=simulationTime;tracker.onPop(blobId,simulationTime);}
     @Override public void onReset(){tracker.reset();simulationTime=0;reset();}
@@ -169,14 +151,17 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
     @Override public void reset() {
         if(!closed)advanceGeneration();
     }
-    private void send(Command command) {
+    private void send(AudioEvent.Type type,int a,int b,float normal,float slip,float compression,
+                      float radiusA,float radiusB){
+        send(type,a,b,normal,slip,compression,radiusA,radiusB,1f/120f,0f);
+    }
+    private void send(AudioEvent.Type type,int a,int b,float normal,float slip,float compression,
+                      float radiusA,float radiusB,float dt,float bulkMotion) {
         if(closed||paused||!effectsEnabled()||transportFault)return;
         if(!ready){startupDiscarded++;return;}
-        command.time=simulationTime;
-        command.generation=generation;
-        command.enqueuedNs=System.nanoTime();
-        boolean authoritative=command.type!=CONTACT&&command.type!=WALL;
-        if(!queue.offer(command,authoritative)&&authoritative){
+        AudioEvent event=new AudioEvent(type,a,b,normal,slip,compression,radiusA,radiusB,dt,bulkMotion,
+                simulationTime,generation,System.nanoTime());
+        if(!queue.offer(event,event.authoritative())&&event.authoritative()){
             // Finite capacity cannot promise infinite delivery: fail visibly
             // and reset rather than silently evicting an accepted fusion/END.
             transportFault=true;
@@ -237,37 +222,6 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
         return created;
     }
 
-    private void process(MaterialAudioEngine engine,Command c) {
-        switch(c.type){
-            case CONTACT:
-                engine.contact(c.a,c.b,c.normal,c.slip,c.compression,
-                        c.radiusA,c.radiusB,c.dt,c.bulkMotion);
-                break;
-            case WALL:
-                engine.wallImpact(c.normal,c.radiusA);
-                break;
-            case END:
-                engine.endContact(c.a,c.b);
-                break;
-            case CANCEL:
-                engine.endContact(c.a,c.b);
-                break;
-            case MERGE:
-                engine.merge(c.a,c.b,c.radiusA);
-                break;
-            case LAUNCH:
-                engine.launch(c.a,c.radiusA);
-                break;
-            case POP:
-                engine.pop(c.a,c.radiusA);
-                break;
-            case RESET:
-                engine.reset();
-                break;
-            default:throw new IllegalStateException("Unknown audio command");
-        }
-    }
-
     private void runAudio(){
         AudioTrack device=null;
         try{
@@ -293,14 +247,14 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
             int seenMuteEpoch=muteEpoch;
             int seenGeneration=generation;
             AudioTimeline timeline=new AudioTimeline(RATE,BLOCK_FRAMES,Math.round(RATE*.12f));
-            Command pending=null;
-            long pendingFrame=0,cursor=0;
+            AudioBlockScheduler scheduler=new AudioBlockScheduler(queue,timeline,MAX_DISPATCH_PER_BLOCK);
+            java.util.function.IntSupplier generationSource=()->generation;
             underrunBaseline=device.getUnderrunCount();
             while(!closed){
                 if(seenGeneration!=generation){
                     seenGeneration=generation;
                     if(playing){device.pause();device.flush();playing=false;}
-                    engine.reset();timeline.reset();pending=null;cursor=0;
+                    engine.reset();scheduler.reset();
                 }
                 if(seenMuteEpoch!=muteEpoch){
                     seenMuteEpoch=muteEpoch;
@@ -322,29 +276,8 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
                 }
                 if(!playing){device.play();playing=true;}
                 long started=System.nanoTime();
-                int offset=0,processed=0;
-                long dispatchNs=0;
                 engine.setOutputVolumePercent(volumePercent);
-                while(processed<MAX_DISPATCH_PER_BLOCK&&seenGeneration==generation){
-                    if(pending==null){
-                        pending=queue.poll();
-                        if(pending==null)break;
-                        if(pending.generation!=seenGeneration){pending=null;processed++;continue;}
-                        pendingFrame=timeline.schedule(pending.time,cursor+offset);
-                    }
-                    if(pendingFrame>=cursor+BLOCK_FRAMES)break;
-                    int at=(int)Math.max(offset,pendingFrame-cursor);
-                    if(at>offset){engine.renderMono(floatBlock,offset,at-offset);offset=at;}
-                    long dispatchStart=System.nanoTime();
-                    maxQueueAgeNs=Math.max(maxQueueAgeNs,dispatchStart-pending.enqueuedNs);
-                    process(engine,pending);
-                    dispatchNs+=System.nanoTime()-dispatchStart;
-                    dispatched++;processed++;pending=null;
-                }
-                if(processed==MAX_DISPATCH_PER_BLOCK)lateBlocks++;
-                maxDispatchNs=Math.max(maxDispatchNs,dispatchNs);
-                if(offset<BLOCK_FRAMES)engine.renderMono(floatBlock,offset,BLOCK_FRAMES-offset);
-                if(seenGeneration!=generation)continue;
+                if(!scheduler.render(engine,floatBlock,seenGeneration,generationSource))continue;
                 long spent=System.nanoTime()-started;
                 worstRenderNs=Math.max(worstRenderNs,spent);
                 renderNsSinceReport+=spent;
@@ -359,11 +292,10 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
                     int n=device.write(shortBlock,written,BLOCK_FRAMES-written,
                             AudioTrack.WRITE_BLOCKING);
                     if(n<0)throw new IllegalStateException("PCM write error "+n);
-                    if(n==0)break;
+                    if(n==0)throw new IllegalStateException("Blocking PCM write made no progress");
                     written+=n;
                 }
                 maxWriteNs=Math.max(maxWriteNs,System.nanoTime()-writeStart);
-                cursor+=written;
                 long now=android.os.SystemClock.elapsedRealtime();
                 if(now-latestReportMs>=5000){
                     Log.d(TAG,"audioBlockAvg="+(blocksSinceReport==0?0:
@@ -376,16 +308,16 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
                             " impacts="+engine.impactEvents()+
                             " droppedObs="+queue.rejectedObservations()+" rejectedControl="+queue.rejectedControls()+
                             " queueDepth="+queue.size()+" queueHigh="+queue.highWater()+
-                            " maxQueueAgeMs="+maxQueueAgeNs/1e6+" maxDispatchMs="+maxDispatchNs/1e6+
-                            " maxWriteMs="+maxWriteNs/1e6+" dispatched="+dispatched+
-                            " lateEvents="+timeline.lateEvents()+" rebases="+timeline.rebases()+
-                            " dispatchBudgetHits="+lateBlocks+" startupDiscarded="+startupDiscarded+
+                            " maxQueueAgeMs="+scheduler.maxQueueAgeNs()/1e6+" maxDispatchMs="+scheduler.maxDispatchNs()/1e6+
+                            " maxWriteMs="+maxWriteNs/1e6+" dispatched="+scheduler.dispatched()+
+                            " lateEvents="+scheduler.lateEvents()+" rebases="+scheduler.rebases()+
+                            " dispatchBudgetHits="+scheduler.budgetHits()+" startupDiscarded="+startupDiscarded+
                             " peakDry="+engine.peakDry()+" minLimiterGain="+engine.minimumLimiterGain()+
                             " limitedFrames="+engine.limitedFrames()+" renderedFrames="+engine.renderedFrames()+
                             " peakVoices="+engine.peakVoices());
                     latestReportMs=now;
                     blocksSinceReport=0;renderNsSinceReport=0;worstRenderNs=0;
-                    maxQueueAgeNs=maxDispatchNs=maxWriteNs=0;underrunBaseline=device.getUnderrunCount();
+                    scheduler.resetIntervalMaxima();maxWriteNs=0;underrunBaseline=device.getUnderrunCount();
                 }
             }
         }catch(InterruptedException ignored){
