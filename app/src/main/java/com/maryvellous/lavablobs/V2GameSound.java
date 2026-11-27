@@ -17,6 +17,7 @@ import com.maryvellous.lavablobs.audio.AudioTimeline;
 import com.maryvellous.lavablobs.audio.AudioEvent;
 import com.maryvellous.lavablobs.audio.AudioBlockScheduler;
 import com.maryvellous.lavablobs.audio.TimingHistogram;
+import com.maryvellous.lavablobs.audio.AudioSession;
 
 
 /**
@@ -46,15 +47,9 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
     private final SharedPreferences preferences;
     private final PhysicsAudioEvents physicsEvents;
     private final AudioEventQueue<AudioEvent> queue=new AudioEventQueue<>(CAPACITY,1024);
-    private volatile int generation;
-    private volatile boolean transportFault;
-    private final Object lifecycle=new Object();
+    private final AudioSession session;
     private final Thread audioThread;
-    private volatile boolean paused,closed,ready;
-    private volatile int volumePercent;
-    private volatile int muteEpoch;
     private int lastNonzeroVolume;
-    private volatile String state="CARICAMENTO";
     private long maxWriteNs;
     private final TimingHistogram renderTiming=new TimingHistogram(),writeTiming=new TimingHistogram();
     private final java.util.concurrent.atomic.AtomicLongArray rejectedByType=new java.util.concurrent.atomic.AtomicLongArray(AudioEvent.Type.values().length);
@@ -69,19 +64,20 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
         diagnosticBuild=app.getPackageName().endsWith(".audiov21")||BuildConfig.AUDIO_AGGREGATION;
         traceRecorder=diagnosticBuild?new DiagnosticTraceRecorder(app):null;
         preferences=app.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
-        volumePercent=Math.max(0,Math.min(100,preferences.getInt(VOLUME_KEY,
+        int initialVolume=Math.max(0,Math.min(100,preferences.getInt(VOLUME_KEY,
                 preferences.getBoolean(EFFECTS_KEY,true)?100:0)));
+        session=new AudioSession(queue,initialVolume);
         lastNonzeroVolume=Math.max(1,Math.min(100,preferences.getInt(LAST_VOLUME_KEY,
-                volumePercent>0?volumePercent:100)));
-        physicsEvents=new PhysicsAudioEvents(this::send,()->generation,System::nanoTime,this::reset);
+                initialVolume>0?initialVolume:100)));
+        physicsEvents=new PhysicsAudioEvents(this::send,()->session.snapshot().generation,System::nanoTime,this::reset);
         audioThread=new Thread(this::runAudio,"LavaV2-PCM");
         audioThread.setDaemon(true);
         audioThread.start();
     }
 
-    @Override public boolean effectsEnabled(){return volumePercent>0;}
+    @Override public boolean effectsEnabled(){return session.snapshot().volume>0;}
     @Override public boolean supportsVolumeSlider(){return true;}
-    @Override public int volumePercent(){return volumePercent;}
+    @Override public int volumePercent(){return session.snapshot().volume;}
     @Override public void setEffectsEnabled(boolean next) {
         if(next==effectsEnabled())return;
         setVolumePercent(next?lastNonzeroVolume:0);
@@ -89,19 +85,14 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
 
     @Override public void setVolumePercent(int percent) {
         int next=Math.max(0,Math.min(100,percent));
-        if(closed||volumePercent==next)return;
-        volumePercent=next;
+        if(session.snapshot().state==AudioSession.State.STOPPED||volumePercent()==next)return;
+        int previousGeneration=session.snapshot().generation;
+        session.volume(next);
+        flushIfChanged(previousGeneration);
         if(next>0)lastNonzeroVolume=next;
         preferences.edit().putInt(VOLUME_KEY,next)
                 .putInt(LAST_VOLUME_KEY,lastNonzeroVolume)
                 .putBoolean(EFFECTS_KEY,next>0).apply();
-        if(next==0){
-            advanceGeneration();
-            muteEpoch++;
-            // The worker owns pause/flush, even if the thumb immediately
-            // leaves zero. Avoid pausing AudioTrack behind its back.
-        }
-        synchronized(lifecycle){lifecycle.notifyAll();}
     }
 
     // The authoritative source is the simulation, never the View.
@@ -120,53 +111,49 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
     @Override public void onPop(int blobId,float time,float radius){physicsEvents.onPop(blobId,time,radius);}
     @Override public void onReset(){physicsEvents.onReset();}
 
-    private void advanceGeneration() {
-        if(traceRecorder!=null)traceRecorder.flush(queue.rejectedObservations(),queue.rejectedControls());
-        generation++;
-        queue.clear();
-        transportFault=false;
+    private void flushIfChanged(int previousGeneration){
+        if(traceRecorder!=null&&previousGeneration!=session.snapshot().generation)
+            traceRecorder.flush(queue.rejectedObservations(),queue.rejectedControls());
     }
     @Override public void reset() {
-        if(!closed){advanceGeneration();synchronized(lifecycle){lifecycle.notifyAll();}}
+        int before=session.snapshot().generation;session.reset();flushIfChanged(before);
     }
     private void send(AudioEvent event) {
-        if(closed||paused||!effectsEnabled()||transportFault)return;
-        if(!ready){startupDiscarded++;return;}
-        if(traceRecorder!=null)traceRecorder.record(event);
-        if(queue.offer(event,event.authoritative()))return;
-        rejectedByType.incrementAndGet(event.type.ordinal());
-        if(event.authoritative()){
-            // Finite capacity cannot promise infinite delivery: fail visibly
-            // and reset rather than silently evicting an accepted fusion/END.
-            transportFault=true;
-            if(traceRecorder!=null)traceRecorder.flush(queue.rejectedObservations(),queue.rejectedControls());
-            generation++;
-            queue.clear();
+        // Record admitted inputs and overload candidates; generation changes
+        // split traces, including when a control overflow invalidates the queue.
+        if(traceRecorder!=null&&session.snapshot().running())traceRecorder.record(event);
+        AudioSession.Admission result=session.submit(event);
+        if(result==AudioSession.Admission.STARTUP){startupDiscarded++;return;}
+        if(result==AudioSession.Admission.OBSERVATION_REJECTED||result==AudioSession.Admission.CONTROL_OVERFLOW)
+            rejectedByType.incrementAndGet(event.type.ordinal());
+        if(result==AudioSession.Admission.CONTROL_OVERFLOW){
+            flushIfChanged(event.generation);
             Log.e(TAG,"Authoritative audio overflow; audio suspended until lifecycle reset");
         }
     }
     @Override public void pause() {
-        paused=true;
-        advanceGeneration();
-        synchronized(lifecycle){lifecycle.notifyAll();}
+        int before=session.snapshot().generation;session.pause();flushIfChanged(before);
     }
-    @Override public void resume() {
-        paused=false;
-        synchronized(lifecycle){lifecycle.notifyAll();}
-    }
+    @Override public void resume(){session.resume();}
     @Override public String diagnosticStatus() {
         if(!diagnosticBuild)return null;
-        if(transportFault)return "AUDIO V2 · ERRORE CODA";
-        if(!effectsEnabled())return "AUDIO V2 · MUTO";
-        if(paused)return "AUDIO V2 · PAUSA";
-        return (BuildConfig.AUDIO_AGGREGATION?"AUDIO V2 · CLUSTER · ":"AUDIO V2 · BYPASS · ")+state+(queue.rejectedObservations()>0?" · Q:"+queue.rejectedObservations():"");
+        AudioSession.State state=session.snapshot().state;
+        String label;
+        switch(state){
+            case READY:label="PRONTO";break;
+            case STARTING:label="CARICAMENTO";break;
+            case PAUSED:label="PAUSA";break;
+            case MUTED:label="MUTO";break;
+            case OVERFLOW:label="ERRORE CODA";break;
+            default:label=state.name();
+        }
+        return (BuildConfig.AUDIO_AGGREGATION?"AUDIO V2 · CLUSTER · ":"AUDIO V2 · BYPASS · ")+label+
+                (queue.rejectedObservations()>0?" · Q:"+queue.rejectedObservations():"");
     }
     @Override public void release() {
-        if(closed)return;
-        closed=true;ready=false;
-        advanceGeneration();
+        if(session.snapshot().state==AudioSession.State.STOPPED)return;
+        int before=session.snapshot().generation;session.close();flushIfChanged(before);
         if(traceRecorder!=null)traceRecorder.close();
-        synchronized(lifecycle){lifecycle.notifyAll();}
         audioThread.interrupt();
     }
 
@@ -204,55 +191,42 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
             Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO);
             // All expensive MP3 decoding and acoustic segmentation occur here.
             BloopMaterialBank materials=AndroidBloopDecoder.load(app);
-            if(closed)return;
+            if(session.snapshot().stopped())return;
             float[] releaseSwoosh=null;
             try{releaseSwoosh=AndroidBloopDecoder.loadLaunch(app);}
             catch(InterruptedException interrupted){throw interrupted;}
             catch(Exception failure){Log.w(TAG,"Classic release unavailable; using material attack",failure);}
             MaterialAudioEngine engine=new MaterialAudioEngine(materials,releaseSwoosh,BuildConfig.AUDIO_AGGREGATION);
-            engine.setOutputVolumePercent(volumePercent);
+            engine.setOutputVolumePercent(volumePercent());
             engine.reset();
             device=createTrack();
-            if(closed)return;
-            queue.clear();
-            ready=true;
-            state="PRONTO";
+            if(session.snapshot().stopped())return;
+            session.ready();
             float[] floatBlock=new float[BLOCK_FRAMES];
             short[] shortBlock=new short[BLOCK_FRAMES];
             boolean playing=false;
-            int seenMuteEpoch=muteEpoch;
-            int seenGeneration=generation;
+            int seenGeneration=session.snapshot().generation;
             AudioTimeline timeline=new AudioTimeline(RATE,BLOCK_FRAMES,Math.round(RATE*.12f));
             AudioBlockScheduler scheduler=new AudioBlockScheduler(queue,timeline,MAX_DISPATCH_PER_BLOCK);
-            java.util.function.IntSupplier generationSource=()->generation;
+            java.util.function.IntSupplier generationSource=()->session.snapshot().generation;
             underrunBaseline=device.getUnderrunCount();
-            while(!closed){
-                if(seenGeneration!=generation){
-                    seenGeneration=generation;
+            while(true){
+                AudioSession.Snapshot current=session.snapshot();
+                if(current.stopped())break;
+                if(seenGeneration!=current.generation){
+                    seenGeneration=current.generation;
                     if(playing){device.pause();device.flush();playing=false;}
+                    engine.setOutputVolumePercent(current.volume);
                     engine.reset();scheduler.reset();
                 }
-                if(seenMuteEpoch!=muteEpoch){
-                    seenMuteEpoch=muteEpoch;
+                if(!current.running()){
                     if(playing){device.pause();device.flush();playing=false;}
-                    engine.setOutputVolumePercent(0);engine.reset();
-                }
-                if(paused||!effectsEnabled()||transportFault){
-                    if(playing){
-                        device.pause();
-                        device.flush();
-                        playing=false;
-                    }
-                    engine.reset();
-                    synchronized(lifecycle){
-                        while((paused||!effectsEnabled()||transportFault)&&!closed)
-                            lifecycle.wait(200);
-                    }
+                    session.awaitRunnable();
                     continue;
                 }
                 if(!playing){device.play();playing=true;}
                 long started=System.nanoTime();
-                engine.setOutputVolumePercent(volumePercent);
+                engine.setOutputVolumePercent(current.volume);
                 if(!scheduler.render(engine,floatBlock,seenGeneration,generationSource))continue;
                 long spent=System.nanoTime()-started;
                 worstRenderNs=Math.max(worstRenderNs,spent);renderTiming.record(spent);
@@ -264,7 +238,7 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
                 }
                 int written=0;
                 long writeStart=System.nanoTime();
-                while(written<BLOCK_FRAMES&&!closed&&!paused&&effectsEnabled()&&seenGeneration==generation){
+                while(written<BLOCK_FRAMES&&session.snapshot().running()&&seenGeneration==session.snapshot().generation){
                     int n=device.write(shortBlock,written,BLOCK_FRAMES-written,
                             AudioTrack.WRITE_BLOCKING);
                     if(n<0)throw new IllegalStateException("PCM write error "+n);
@@ -307,10 +281,10 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
         }catch(InterruptedException ignored){
             Thread.currentThread().interrupt();
         }catch(Exception failure){
-            state="ERRORE";
+            session.fail();
             Log.e(TAG,"Audio V2 unavailable (gameplay can continue silently)",failure);
         }finally{
-            ready=false;
+            if(!session.snapshot().stopped())session.fail();
             if(device!=null){
                 try{device.pause();}catch(Exception ignored){}
                 try{device.flush();}catch(Exception ignored){}
