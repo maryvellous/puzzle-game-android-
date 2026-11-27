@@ -53,11 +53,12 @@ final class BlobWorld {
     final ArrayList<Blob> blobs = new ArrayList<>();
     final ArrayList<Merge> merges = new ArrayList<>();
     private final ArrayList<Impact> impacts = new ArrayList<>();
+    private boolean legacyImpactCollection=true;
     private final Map<Long,Float> impactTimes = new HashMap<>();
     final ArrayList<Adhesion> adhesions = new ArrayList<>();
     // IDs are monotonic for one game, including deleted/merged blobs and saves.
     int nextBlobId=1;
-    private ContactProbe contactProbe; // Null in 1.0.11: zero DSP/probe overhead.
+    private ContactProbe contactProbe; // Optional passive observer.
     Random random;
     final GameSpec spec;
     Vessel vessel;
@@ -78,11 +79,15 @@ final class BlobWorld {
     }
 
     /**
-     * Diagnostic-only subscription for physics/acoustic tests and future V2.
-     * No listener is installed by the current gameplay/audio implementation.
+     * Passive simulation observation for gameplay audio and deterministic tests.
      */
     void setContactProbe(ContactProbe.Listener listener) {
         contactProbe=listener==null?null:new ContactProbe(listener);
+    }
+
+    // Kept for historical regression fixtures only. Gameplay uses the probe.
+    void disableLegacyImpactCollection(){
+        legacyImpactCollection=false;impacts.clear();impactTimes.clear();
     }
 
     // Canonical unordered key; both IDs must be positive. No identityHashCode.
@@ -399,7 +404,7 @@ final class BlobWorld {
         }
         // Later solver passes may create the first actual contact; audio must
         // observe them too. Per-pair cooldown in recordImpact prevents repeats.
-        if(touched)recordImpact(a,b);
+        if(touched&&legacyImpactCollection)recordImpact(a,b);
     }
 
     private void recordImpact(Blob a,Blob b) {
