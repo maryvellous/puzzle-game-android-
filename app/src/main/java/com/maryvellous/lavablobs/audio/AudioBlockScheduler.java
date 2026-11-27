@@ -4,6 +4,7 @@ import java.util.function.IntSupplier;
 
 /** Worker-owned scheduler. No Android dependency. A generation change invalidates a block. */
 public final class AudioBlockScheduler {
+    private static final java.util.function.ToIntFunction<AudioEvent> EVENT_GENERATION=e->e.generation;
     private final AudioEventQueue<AudioEvent> queue;
     private final AudioTimeline timeline;
     private final int maxDispatch;
@@ -19,7 +20,7 @@ public final class AudioBlockScheduler {
         long dispatchNs=0;
         while(processed<maxDispatch&&generation==currentGeneration.getAsInt()){
             if(pending==null){
-                pending=queue.poll();
+                pending=queue.pollAtMost(EVENT_GENERATION,generation);
                 if(pending==null)break;
                 if(pending.generation!=generation){pending=null;processed++;continue;}
                 pendingFrame=timeline.schedule(pending.time,cursor+offset);
