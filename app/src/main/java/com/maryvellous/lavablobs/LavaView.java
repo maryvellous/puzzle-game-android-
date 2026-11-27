@@ -826,7 +826,6 @@ public final class LavaView extends View {
                     if(y<centerY-50f&&world.eraseAt(x,y)){
                         pops.add(new PopFx(world.lastPoppedX,world.lastPoppedY,
                                 world.lastPoppedRadius,world.lastPoppedTier));
-                        audio.pop(world.lastPoppedId,world.lastPoppedRadius);
                         performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
                         popPress=1f;
                         eraseMode=false;
@@ -886,10 +885,7 @@ public final class LavaView extends View {
                     boolean shouldLaunch=!draggingFromTray||
                             (y<centerY-50f&&y>=world.vessel.top-25f);
                     if(shouldLaunch){
-                        int tier=world.nextTier;
                         if(world.launch(aimX)){
-                            audio.launch(tier,
-                                    world.blobs.get(world.blobs.size()-1).radius());
                             performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
                             saveCheckpoint();
                         }else blockedFlash=.9f;
