@@ -9,6 +9,8 @@ on:
       - 'tools/audio_v2_java/**'
       - 'app/src/main/java/com/maryvellous/lavablobs/audio/**'
       - 'app/src/test/java/com/maryvellous/lavablobs/MaterialAudioEngineTest.java'
+      - 'app/src/test/java/com/maryvellous/lavablobs/ContactProbeTest.java'
+      - 'app/src/main/java/com/maryvellous/lavablobs/Vessel.java'
       - 'app/src/test/java/com/maryvellous/lavablobs/MaterialAudioRealSolverTest.java'
       - 'app/src/main/java/com/maryvellous/lavablobs/Contact*.java'
       - 'app/src/main/java/com/maryvellous/lavablobs/AndroidBloopDecoder.java'
@@ -127,7 +129,7 @@ jobs:
       - name: Upload ONLY isolated Audio V2 gameplay diagnostic APK
         uses: actions/upload-artifact@v4
         with:
-          name: lava-blobs-audio-v2-gameplay-test-apk
+          name: lava-blobs-audio-v2.3-gameplay-test-apk
           path: app/build/outputs/apk/preview/app-preview.apk
           retention-days: 14
           if-no-files-found: error

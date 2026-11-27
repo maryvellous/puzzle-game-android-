@@ -41,8 +41,8 @@ android {
         preview {
             initWith debug
             applicationIdSuffix '.audiov21'
-            versionNameSuffix '-audio-v2.1'
-            manifestPlaceholders = [appLabel: 'Lava Blob - Audio V2.1']
+            versionNameSuffix '-audio-v2.3'
+            manifestPlaceholders = [appLabel: 'Lava Blob - Audio V2.3']
         }
     }
 
