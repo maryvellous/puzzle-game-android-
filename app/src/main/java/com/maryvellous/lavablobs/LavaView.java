@@ -37,10 +37,8 @@ public final class LavaView extends View {
     // through lavender and violet, never red/yellow/green.
     private final Palette.Theme theme;
     private final GameSpec spec;
-    private final ProgressStore progress;
     private final Runnable onHome;
-    private final GameSave session;
-    private float lastCheckpoint;
+    private final GameSessionController gameSession;
     private final BlobWorld world;
     private final GameSound audio;
     private final Random random = new Random();
@@ -77,12 +75,9 @@ public final class LavaView extends View {
     private boolean draggingFromTray;
     private int activePointerId=MotionEvent.INVALID_POINTER_ID;
     private float dragX,dragY;
-    private float activeSeconds;
-    private long lastActionMs=SystemClock.uptimeMillis();
     private float blockedFlash;
     private long best;
     private boolean eraseMode;
-    private boolean finalized;
 
     private static final class Wave {
         float x, y, r, age;
@@ -113,20 +108,19 @@ public final class LavaView extends View {
     LavaView(Context context, GameSpec spec, ProgressStore progress,
             Runnable onHome,GameSave session,GameSave.Snapshot resume) {
         super(context);
-        this.spec=spec;this.progress=progress;this.onHome=onHome;
-        this.session=session;
+        this.spec=spec;this.onHome=onHome;
         // Approved V2.3 audio in every gameplay build.
         audio=new V2GameSound(context);
         theme=new ThemeStore(context).current();
         perfLogging=(context.getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE)!=0;
         world=new BlobWorld(new Random(),spec);
+        gameSession=new GameSessionController(world,spec,progress,session,SystemClock.uptimeMillis());
         if(resume!=null) {
             try {
                 GameSave.restore(world,resume.data);
                 aimX=(float)resume.data.optDouble("aimX",W/2);
                 eraseMode=world.eraseCount>0&&resume.data.optBoolean("eraseMode",false);
-                lastCheckpoint=world.time;
-                activeSeconds=(float)resume.data.optDouble("activeSeconds",world.time);
+                gameSession.restoreActiveTime((float)resume.data.optDouble("activeSeconds",world.time));
             }catch(Exception ignored){
                 // A corrupted save must not crash startup. Keep the old slot
                 // until the next successful checkpoint replaces it.
@@ -151,21 +145,20 @@ public final class LavaView extends View {
     void resumeAudio(){audio.resume();}
 
     void saveCheckpoint() {
-        if(world.gameOver) {session.clear();return;}
+        if(world.gameOver){gameSession.checkpoint(aimX,eraseMode);return;}
         long started=perfLogging?System.nanoTime():0L;
-        boolean saved=session.save(spec,world,aimX,eraseMode,activeSeconds);
+        gameSession.checkpoint(aimX,eraseMode);
         if(perfLogging) {
             long spent=System.nanoTime()-started;
             perfSaveNs+=spent;
             perfWorstSaveNs=Math.max(perfWorstSaveNs,spent);
             perfSaveCount++;
         }
-        if(saved)lastCheckpoint=world.time;
     }
 
     /** Called by the activity's sensor listener on the UI thread. */
     void shake(float sensorX, float sensorY, float sensorZ) {
-        lastActionMs=SystemClock.uptimeMillis();
+        gameSession.action(SystemClock.uptimeMillis());
         world.shake(sensorX, sensorY, sensorZ);
         invalidate();
     }
@@ -192,8 +185,7 @@ public final class LavaView extends View {
         long gapNs=simulationClock.gapNs();
         // Active playtime excludes long in-foreground idle periods without
         // changing the simulation timer, particles or game-over countdown.
-        if(!world.gameOver&&SystemClock.uptimeMillis()-lastActionMs<=12_000L)
-            activeSeconds+=elapsed;
+        gameSession.accountFrame(elapsed,SystemClock.uptimeMillis());
         // Fixed-size physics steps keep membrane stiffness independent of FPS.
         // Bound catch-up work: never try to simulate unlimited missed frames.
         long physicsStart=System.nanoTime();
@@ -218,13 +210,8 @@ public final class LavaView extends View {
             performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
         }
         if (world.score > best) best=world.score;
-        if(world.gameOver&&!finalized) {
-            progress.save(spec,world,true,activeSeconds);
-            session.clear();
-            finalized=true;
-        }else if(!world.gameOver&&world.time-lastCheckpoint>1.5f){
-            saveCheckpoint();
-        }
+        gameSession.finalizeIfNeeded();
+        if(gameSession.checkpointDue())saveCheckpoint();
         long canvasStart=System.nanoTime();
         Canvas canvas = raw;
         canvas.save();
@@ -765,7 +752,7 @@ public final class LavaView extends View {
 
         switch(action){
             case MotionEvent.ACTION_DOWN:
-                lastActionMs=SystemClock.uptimeMillis();
+                gameSession.action(SystemClock.uptimeMillis());
                 activePointerId=event.getPointerId(0);
                 if(audio.supportsVolumeSlider()&&Math.abs(y-VOLUME_Y)<=18f){
                     if(x>=20f&&x<57f){
@@ -847,7 +834,7 @@ public final class LavaView extends View {
                         y=event.getY(pointer)/sc;
                         aimX=BlobWorld.clamp(x,49f,371f);
                         if(draggingFromTray){dragX=x;dragY=y;}
-                        lastActionMs=SystemClock.uptimeMillis();
+                        gameSession.action(SystemClock.uptimeMillis());
                         invalidate();
                     }
                 }
@@ -896,15 +883,12 @@ public final class LavaView extends View {
     }
 
     private void restart() {
-        if(world.dropCount>0&&!world.gameOver)progress.save(spec,world,false,activeSeconds);
-        session.clear();
-        world.reset();
+        gameSession.restart(SystemClock.uptimeMillis());
         waves.clear();droplets.clear();pops.clear();
         blockedFlash=0f;eraseMode=false;aiming=false;draggingFromTray=false;draggingVolume=false;
         activePointerId=MotionEvent.INVALID_POINTER_ID;
-        activeSeconds=0f;lastActionMs=SystemClock.uptimeMillis();
         shakeAge=1f;shakePress=popPress=0f;shakeStep=0;scorePulse=0f;lastAnimatedScore=0L;
-        aimX=W*.5f;simulationClock.reset();finalized=false;lastCheckpoint=0f;
+        aimX=W*.5f;simulationClock.reset();
         saveCheckpoint();
         invalidate();
     }
