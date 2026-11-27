@@ -28,6 +28,8 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
     private static final String TAG="LavaV2Audio";
     private static final String PREFS="lava_blobs";
     private static final String EFFECTS_KEY="sound_effects_enabled_v1";
+    private static final String VOLUME_KEY="sound_effects_volume_v2";
+    private static final String LAST_VOLUME_KEY="sound_effects_last_nonzero_v2";
     private static final int RATE=BloopMaterialBank.SAMPLE_RATE;
     private static final int BLOCK_FRAMES=384; // ~8.7 ms; device buffers may be larger.
     private static final int CAPACITY=8192;
@@ -55,7 +57,9 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
     private final ArrayBlockingQueue<Command> queue=new ArrayBlockingQueue<>(CAPACITY);
     private final Object lifecycle=new Object();
     private final Thread audioThread;
-    private volatile boolean enabled,paused,closed,ready;
+    private volatile boolean paused,closed,ready;
+    private volatile int volumePercent;
+    private int lastNonzeroVolume;
     private volatile AudioTrack track;
     private volatile String state="CARICAMENTO";
     private volatile int droppedContacts;
@@ -67,22 +71,33 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
     V2GameSound(Context context) {
         app=context.getApplicationContext();
         preferences=app.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
-        enabled=preferences.getBoolean(EFFECTS_KEY,true);
+        volumePercent=Math.max(0,Math.min(100,preferences.getInt(VOLUME_KEY,
+                preferences.getBoolean(EFFECTS_KEY,true)?100:0)));
+        lastNonzeroVolume=Math.max(1,Math.min(100,preferences.getInt(LAST_VOLUME_KEY,
+                volumePercent>0?volumePercent:100)));
         tracker=new ContactTracker(this::onTransition);
         audioThread=new Thread(this::runAudio,"LavaV2-PCM");
         audioThread.setDaemon(true);
         audioThread.start();
     }
 
-    @Override public boolean effectsEnabled(){return enabled;}
-
+    @Override public boolean effectsEnabled(){return volumePercent>0;}
+    @Override public boolean supportsVolumeSlider(){return true;}
+    @Override public int volumePercent(){return volumePercent;}
     @Override public void setEffectsEnabled(boolean next) {
-        if(closed||enabled==next)return;
-        enabled=next;
-        preferences.edit().putBoolean(EFFECTS_KEY,next).apply();
-        // Muting also stops already-playing complete Bloops by user choice;
-        // that is distinct from voice stealing during ordinary gameplay.
-        if(!next){
+        if(next==effectsEnabled())return;
+        setVolumePercent(next?lastNonzeroVolume:0);
+    }
+
+    @Override public void setVolumePercent(int percent) {
+        int next=Math.max(0,Math.min(100,percent));
+        if(closed||volumePercent==next)return;
+        volumePercent=next;
+        if(next>0)lastNonzeroVolume=next;
+        preferences.edit().putInt(VOLUME_KEY,next)
+                .putInt(LAST_VOLUME_KEY,lastNonzeroVolume)
+                .putBoolean(EFFECTS_KEY,next>0).apply();
+        if(next==0){
             queue.clear();
             AudioTrack playing=track;
             if(playing!=null)try{playing.pause();playing.flush();}catch(Exception ignored){}
@@ -140,7 +155,7 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
     }
 
     private void send(Command command) {
-        if(closed||!enabled||!ready)return;
+        if(closed||!effectsEnabled()||!ready)return;
         if(queue.offer(command))return;
         if(command.type==CONTACT||command.type==WALL) {
             droppedContacts++;
@@ -164,7 +179,7 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
         synchronized(lifecycle){lifecycle.notifyAll();}
     }
     @Override public String diagnosticStatus() {
-        if(!enabled)return "AUDIO V2 · MUTO";
+        if(!effectsEnabled())return "AUDIO V2 · MUTO";
         if(paused)return "AUDIO V2 · PAUSA";
         return "AUDIO V2 · "+state+(droppedContacts>0?" · Q:"+droppedContacts:"");
     }
@@ -249,6 +264,8 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
             catch(InterruptedException interrupted){throw interrupted;}
             catch(Exception failure){Log.w(TAG,"Classic release unavailable; using material attack",failure);}
             MaterialAudioEngine engine=new MaterialAudioEngine(materials,releaseSwoosh);
+            engine.setOutputVolumePercent(volumePercent);
+            engine.reset();
             device=createTrack();
             track=device;
             if(closed)return;
@@ -259,7 +276,7 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
             short[] shortBlock=new short[BLOCK_FRAMES];
             boolean playing=false;
             while(!closed){
-                if(paused||!enabled){
+                if(paused||!effectsEnabled()){
                     if(playing){
                         device.pause();
                         device.flush();
@@ -268,7 +285,7 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
                     engine.reset();
                     queue.clear();
                     synchronized(lifecycle){
-                        while((paused||!enabled)&&!closed)
+                        while((paused||!effectsEnabled())&&!closed)
                             lifecycle.wait(200);
                     }
                     continue;
@@ -283,6 +300,7 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
                     if(++processed>=CAPACITY)break;
                 }
                 long started=System.nanoTime();
+                engine.setOutputVolumePercent(volumePercent);
                 engine.renderMono(floatBlock,0,BLOCK_FRAMES);
                 long spent=System.nanoTime()-started;
                 worstRenderNs=Math.max(worstRenderNs,spent);
@@ -293,7 +311,7 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
                     shortBlock[i]=(short)Math.round(sample*32767f);
                 }
                 int written=0;
-                while(written<BLOCK_FRAMES&&!closed&&!paused&&enabled){
+                while(written<BLOCK_FRAMES&&!closed&&!paused&&effectsEnabled()){
                     int n=device.write(shortBlock,written,BLOCK_FRAMES-written,
                             AudioTrack.WRITE_BLOCKING);
                     if(n<0)throw new IllegalStateException("PCM write error "+n);

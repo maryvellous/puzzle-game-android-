@@ -24,6 +24,10 @@ on:
       - '.github/workflows/audio-v2-offline.yml'
   workflow_dispatch:
 
+concurrency:
+  group: audio-v2-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -127,12 +131,17 @@ jobs:
             app/build/outputs/apk/preview/app-preview.apk | \
             grep -F "package: name='com.maryvellous.lavablobs.audiov21'"
       - name: Upload ONLY isolated Audio V2 gameplay diagnostic APK
+        id: preview_apk
         uses: actions/upload-artifact@v4
         with:
           name: lava-blobs-audio-v2.3-gameplay-test-apk
           path: app/build/outputs/apk/preview/app-preview.apk
           retention-days: 14
           if-no-files-found: error
+      - name: Preview APK download link
+        run: |
+          echo '[Download Audio V2.3 APK (ZIP)](${{ steps.preview_apk.outputs.artifact-url }})' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Commit: ${{ github.sha }}' >> "$GITHUB_STEP_SUMMARY"
       - name: Upload private V2 auditory research (not a distributable sound pack)
         uses: actions/upload-artifact@v4
         with:

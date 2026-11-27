@@ -82,6 +82,15 @@ public final class MaterialAudioEngine {
     private final ArrayList<Voice> voices=new ArrayList<>();
     private final float limiterRelease=(float)(1-Math.exp(-1d/(SAMPLE_RATE*.150)));
     private float masterGain=1f,peakOutput;
+    private float outputGain=1f,targetOutputGain=1f;
+    private final float volumeSmoothing=(float)(1-Math.exp(-1d/(SAMPLE_RATE*.008)));
+
+    /** Perceptual control AFTER the shared limiter: leaves the internal mix intact. */
+    public void setOutputVolumePercent(int percent){
+        float position=clamp(percent/100f,0f,1f);
+        targetOutputGain=position*position;
+        if(percent<=0)outputGain=0f;
+    }
     private int fusionIndex,contactBeginCount,fusionsStarted,fusionsCompleted;
     private int shortVoicesRejected,peakVoices;
     private int squishEvents,impactEvents;
@@ -337,14 +346,15 @@ public final class MaterialAudioEngine {
             float need=Math.abs(dry)>.87f?.87f/Math.abs(dry):1f;
             if(need<masterGain)masterGain=need;
             else masterGain+=(need-masterGain)*limiterRelease;
-            output[s]=dry*masterGain;
+            outputGain+=(targetOutputGain-outputGain)*volumeSmoothing;
+            output[s]=dry*masterGain*outputGain;
             peakOutput=Math.max(peakOutput,Math.abs(output[s]));
             peakVoices=Math.max(peakVoices,voices.size());
         }
     }
 
     public void reset() {
-        pairs.clear();voices.clear();masterGain=1f;peakOutput=0f;
+        pairs.clear();voices.clear();masterGain=1f;peakOutput=0f;outputGain=targetOutputGain;
         fusionIndex=0;wallIndex=0;contactBeginCount=0;fusionsStarted=0;fusionsCompleted=0;
         shortVoicesRejected=0;peakVoices=0;squishEvents=0;impactEvents=0;
     }

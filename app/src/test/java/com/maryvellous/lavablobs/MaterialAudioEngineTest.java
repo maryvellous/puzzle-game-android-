@@ -220,6 +220,20 @@ public class MaterialAudioEngineTest {
         assertEquals(0,engine.fusionsStarted());
     }
 
+    @Test public void volumeIsPerceptualAndAfterLimiterWithoutChangingFusion(){
+        MaterialAudioEngine loud=new MaterialAudioEngine(bank(false));
+        MaterialAudioEngine quiet=new MaterialAudioEngine(bank(false));
+        quiet.setOutputVolumePercent(50);quiet.reset();
+        loud.merge(1,2,32);quiet.merge(1,2,32);
+        float[] a=new float[44100],b=new float[44100];
+        loud.renderMono(a,0,a.length);quiet.renderMono(b,0,b.length);
+        for(int i=0;i<a.length;i++)assertEquals(a[i]*.25f,b[i],.000001f);
+        assertEquals(1,loud.fusionsCompleted());assertEquals(1,quiet.fusionsCompleted());
+        quiet.setOutputVolumePercent(0);quiet.merge(3,4,32);
+        quiet.renderMono(b,0,b.length);
+        for(float sample:b)assertEquals(0f,sample,0f);
+    }
+
     @Test public void invalidSourceOrEventsAreRejected() {
         try {
             new BloopMaterialBank(new BloopMaterialBank.Material[4]);

@@ -4,6 +4,9 @@ package com.maryvellous.lavablobs;
 interface GameSound {
     boolean effectsEnabled();
     void setEffectsEnabled(boolean enabled);
+    default boolean supportsVolumeSlider(){return false;}
+    default int volumePercent(){return effectsEnabled()?100:0;}
+    default void setVolumePercent(int percent){setEffectsEnabled(percent>0);}
     void merge(BlobWorld.Merge merge);
     void launch(int tier,float radius);
     void pop(int blobId,float radius);

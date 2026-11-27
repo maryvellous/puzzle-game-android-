@@ -75,6 +75,8 @@ public final class LavaView extends View {
     private long perfGapNs,perfWorstGapNs,perfPhysicsNs,perfCanvasNs,perfCpuNs;
     private long perfSaveNs,perfWorstSaveNs;
     private boolean aiming;
+    private boolean draggingVolume;
+    private static final float VOLUME_LEFT=65f,VOLUME_RIGHT=150f,VOLUME_Y=194f;
     private boolean draggingFromTray;
     private int activePointerId=MotionEvent.INVALID_POINTER_ID;
     private float dragX,dragY;
@@ -604,6 +606,7 @@ public final class LavaView extends View {
 
     /** Independent effects toggle; a separate music switch can be added later. */
     private void drawSoundToggle(Canvas c) {
+        if(audio.supportsVolumeSlider()){drawVolumeSlider(c);return;}
         final float x=365f,y=205f;
         boolean enabled=audio.effectsEnabled();
         int fill=enabled?theme.secondary:Palette.NEUTRAL_SURFACE;
@@ -631,6 +634,38 @@ public final class LavaView extends View {
         }
         line.setStrokeCap(Paint.Cap.BUTT);
         label(c,enabled?"SUONI":"MUTO",x,y+36,10,theme.text,true);
+    }
+
+    private void drawVolumeSlider(Canvas c){
+        int value=audio.volumePercent();
+        float x=38f,y=VOLUME_Y;
+        paint.setShader(null);
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(theme.secondary);
+        c.drawCircle(x,y,14f,paint);
+        int ink=contrastInk(theme.secondary);
+        speakerPath.reset();
+        speakerPath.moveTo(x-8,y-3);speakerPath.lineTo(x-4,y-3);
+        speakerPath.lineTo(x+1,y-7);speakerPath.lineTo(x+1,y+7);
+        speakerPath.lineTo(x-4,y+3);speakerPath.lineTo(x-8,y+3);
+        speakerPath.close();paint.setColor(ink);c.drawPath(speakerPath,paint);
+        line.setColor(ink);line.setStrokeWidth(1.6f);line.setStrokeCap(Paint.Cap.ROUND);
+        if(value==0)c.drawLine(x+4,y-5,x+9,y+5,line);
+        else c.drawArc(x-2,y-7,x+10,y+7,-60,120,false,line);
+        line.setStrokeWidth(5f);line.setColor(Palette.NEUTRAL_SURFACE);
+        c.drawLine(VOLUME_LEFT,y,VOLUME_RIGHT,y,line);
+        float thumb=VOLUME_LEFT+(VOLUME_RIGHT-VOLUME_LEFT)*value/100f;
+        line.setColor(theme.secondary);c.drawLine(VOLUME_LEFT,y,thumb,y,line);
+        paint.setColor(theme.secondary);c.drawCircle(thumb,y,8f,paint);
+        paint.setColor(ink);c.drawCircle(thumb,y,3f,paint);
+        line.setStrokeCap(Paint.Cap.BUTT);
+        label(c,value+"%",174f,y+4f,11f,theme.text,true);
+    }
+
+    private void updateVolumeFromX(float x){
+        audio.setVolumePercent(Math.round(100f*BlobWorld.clamp(
+                (x-VOLUME_LEFT)/(VOLUME_RIGHT-VOLUME_LEFT),0f,1f)));
+        invalidate();
     }
 
     private void bubbleCounter(Canvas c,float l,float t,float r,float b,int fill) {
@@ -748,7 +783,18 @@ public final class LavaView extends View {
             case MotionEvent.ACTION_DOWN:
                 lastActionMs=SystemClock.uptimeMillis();
                 activePointerId=event.getPointerId(0);
-                if(hitBubble(x,y,365f,205f,27f)){
+                if(audio.supportsVolumeSlider()&&Math.abs(y-VOLUME_Y)<=18f){
+                    if(x>=20f&&x<57f){
+                        audio.setEffectsEnabled(!audio.effectsEnabled());
+                        announceForAccessibility("Volume "+audio.volumePercent()+" per cento");
+                        invalidate();return true;
+                    }
+                    if(x>=57f&&x<=190f){
+                        draggingVolume=true;aiming=false;draggingFromTray=false;
+                        updateVolumeFromX(x);return true;
+                    }
+                }
+                if(!audio.supportsVolumeSlider()&&hitBubble(x,y,365f,205f,27f)){
                     boolean enabled=!audio.effectsEnabled();
                     audio.setEffectsEnabled(enabled);
                     performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
@@ -806,6 +852,11 @@ public final class LavaView extends View {
                 invalidate();return true;
 
             case MotionEvent.ACTION_MOVE:
+                if(draggingVolume){
+                    int pointer=event.findPointerIndex(activePointerId);
+                    if(pointer>=0)updateVolumeFromX((event.getX(pointer)-offsetX())/sc);
+                    return true;
+                }
                 if(aiming){
                     int pointer=event.findPointerIndex(activePointerId);
                     if(pointer>=0){
@@ -820,6 +871,13 @@ public final class LavaView extends View {
                 return true;
 
             case MotionEvent.ACTION_UP:
+                if(draggingVolume){
+                    int pointer=event.findPointerIndex(activePointerId);
+                    if(pointer>=0)updateVolumeFromX((event.getX(pointer)-offsetX())/sc);
+                    draggingVolume=false;activePointerId=MotionEvent.INVALID_POINTER_ID;
+                    announceForAccessibility("Volume "+audio.volumePercent()+" per cento");
+                    invalidate();return true;
+                }
                 if(aiming){
                     int pointer=event.findPointerIndex(activePointerId);
                     if(pointer>=0){
@@ -845,7 +903,7 @@ public final class LavaView extends View {
                 invalidate();return true;
 
             case MotionEvent.ACTION_CANCEL:
-                aiming=false;draggingFromTray=false;
+                draggingVolume=false;aiming=false;draggingFromTray=false;
                 activePointerId=MotionEvent.INVALID_POINTER_ID;
                 invalidate();return true;
             default:return true;
@@ -862,7 +920,7 @@ public final class LavaView extends View {
         session.clear();
         world.reset();
         waves.clear();droplets.clear();pops.clear();
-        blockedFlash=0f;eraseMode=false;aiming=false;draggingFromTray=false;
+        blockedFlash=0f;eraseMode=false;aiming=false;draggingFromTray=false;draggingVolume=false;
         activePointerId=MotionEvent.INVALID_POINTER_ID;
         activeSeconds=0f;lastActionMs=SystemClock.uptimeMillis();
         shakeAge=1f;shakePress=popPress=0f;shakeStep=0;scorePulse=0f;lastAnimatedScore=0L;
