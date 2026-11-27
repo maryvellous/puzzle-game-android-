@@ -6,12 +6,15 @@ android {
     namespace 'com.maryvellous.lavablobs'
     compileSdk 35
 
+    buildFeatures { buildConfig true }
+
     defaultConfig {
         applicationId 'com.maryvellous.lavablobs'
         minSdk 26
         targetSdk 35
         versionCode 18
         versionName '1.1.0'
+        buildConfigField 'boolean', 'AUDIO_AGGREGATION', 'false'
         manifestPlaceholders = [appLabel: 'Lava Blob']
     }
 
@@ -43,6 +46,14 @@ android {
             applicationIdSuffix '.audiov21'
             versionNameSuffix '-preview'
             manifestPlaceholders = [appLabel: 'Lava Blob - Preview']
+        }
+        // Independent candidate only; never enables aggregation in main/release.
+        aggregationPreview {
+            initWith debug
+            applicationIdSuffix '.audioaggregation'
+            versionNameSuffix '-aggregation-preview'
+            buildConfigField 'boolean', 'AUDIO_AGGREGATION', 'true'
+            manifestPlaceholders = [appLabel: 'Lava Blob - Aggregation']
         }
     }
 
