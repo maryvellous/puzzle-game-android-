@@ -75,6 +75,7 @@ public final class MaterialAudioEngine {
     }
 
     private final BloopMaterialBank bank;
+    private final float[] releaseSwoosh;
     private final float[][] gelImpacts=new float[BloopMaterialBank.SOURCE_COUNT][];
     private int wallIndex;
     private final Map<Long,Pair> pairs=new HashMap<>();
@@ -85,9 +86,17 @@ public final class MaterialAudioEngine {
     private int shortVoicesRejected,peakVoices;
     private int squishEvents,impactEvents;
 
-    public MaterialAudioEngine(BloopMaterialBank bank) {
+    public MaterialAudioEngine(BloopMaterialBank bank) {this(bank,null);}
+
+    public MaterialAudioEngine(BloopMaterialBank bank,float[] releaseSwoosh) {
         if(bank==null)throw new IllegalArgumentException("Material bank required");
         this.bank=bank;
+        if(releaseSwoosh!=null){
+            if(releaseSwoosh.length<96)throw new IllegalArgumentException("Release clip too short");
+            for(float sample:releaseSwoosh)if(!Float.isFinite(sample)||Math.abs(sample)>1.01f)
+                throw new IllegalArgumentException("Invalid release PCM");
+        }
+        this.releaseSwoosh=releaseSwoosh==null?null:releaseSwoosh.clone();
         for(int i=0;i<gelImpacts.length;i++)gelImpacts[i]=gelatinous(bank.at(i));
     }
 
@@ -285,9 +294,18 @@ public final class MaterialAudioEngine {
         shortVoice(bank.at(wallIndex++).attack,.18f*magnitude*sizeGain(radius),pitchForRadius(radius));
     }
 
-    public void launch(float radius) {
-        BloopMaterialBank.Material m=bank.at((fusionIndex+2)%4);
-        shortVoice(m.attack,.055f*sizeGain(radius),pitchForRadius(radius));
+    public void launch(float radius) {launch(0,radius);}
+
+    public void launch(int tier,float radius) {
+        if(releaseSwoosh!=null){
+            // Same reversed swoosh and tier-dependent playback rate as 1.0.11.
+            // Slightly stronger than the historical .16 to suit this diagnostic mix.
+            float rate=Math.max(1.08f,1.23f-.035f*Math.max(0,tier));
+            shortVoice(releaseSwoosh,.20f/SECONDARY_GAIN,rate);
+        }else{
+            BloopMaterialBank.Material m=bank.at((fusionIndex+2)%4);
+            shortVoice(m.attack,.055f*sizeGain(radius),pitchForRadius(radius));
+        }
     }
 
     public void pop(int blobId,float radius) {

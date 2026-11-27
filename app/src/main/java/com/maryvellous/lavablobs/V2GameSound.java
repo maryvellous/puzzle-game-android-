@@ -95,7 +95,7 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
                 0,0,0,merge.radius,0));
     }
     @Override public void launch(int tier,float radius) {
-        send(new Command(LAUNCH,0,0,0,0,0,radius,0));
+        send(new Command(LAUNCH,tier,0,0,0,0,radius,0));
     }
     @Override public void pop(int blobId,float radius) {
         send(new Command(POP,blobId,0,0,0,0,radius,0));
@@ -225,7 +225,7 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
                 engine.merge(c.a,c.b,c.radiusA);
                 break;
             case LAUNCH:
-                engine.launch(c.radiusA);
+                engine.launch(c.a,c.radiusA);
                 break;
             case POP:
                 engine.pop(c.a,c.radiusA);
@@ -244,7 +244,11 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
             // All expensive MP3 decoding and acoustic segmentation occur here.
             BloopMaterialBank materials=AndroidBloopDecoder.load(app);
             if(closed)return;
-            MaterialAudioEngine engine=new MaterialAudioEngine(materials);
+            float[] releaseSwoosh=null;
+            try{releaseSwoosh=AndroidBloopDecoder.loadLaunch(app);}
+            catch(InterruptedException interrupted){throw interrupted;}
+            catch(Exception failure){Log.w(TAG,"Classic release unavailable; using material attack",failure);}
+            MaterialAudioEngine engine=new MaterialAudioEngine(materials,releaseSwoosh);
             device=createTrack();
             track=device;
             if(closed)return;

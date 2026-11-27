@@ -207,6 +207,19 @@ public class MaterialAudioEngineTest {
         assertTrue(wall.peakOutput()<=.87001f&&gel.peakOutput()<=.87001f);
     }
 
+    @Test public void classicReleaseUsesProvidedFiniteSwooshNotBloop(){
+        float[] swoosh=new float[4400];
+        for(int i=0;i<swoosh.length;i++)swoosh[i]=.5f;
+        MaterialAudioEngine engine=new MaterialAudioEngine(bank(true),swoosh);
+        engine.launch(0,32);
+        float[] out=new float[44100];
+        engine.renderMono(out,0,out.length);
+        assertEquals(.10f,out[100],.00001f);
+        assertEquals(0f,out[10000],0f);
+        assertEquals(0,engine.activeOneShots());
+        assertEquals(0,engine.fusionsStarted());
+    }
+
     @Test public void invalidSourceOrEventsAreRejected() {
         try {
             new BloopMaterialBank(new BloopMaterialBank.Material[4]);

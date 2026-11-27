@@ -43,6 +43,27 @@ final class AndroidBloopDecoder {
         return new BloopMaterialBank(items);
     }
 
+    /** Restore the original 1.0.11 release gesture from its existing source. */
+    static float[] loadLaunch(Context context) throws Exception {
+        return prepareLaunch(decode(context,R.raw.swoosh_source));
+    }
+
+    static float[] prepareLaunch(float[] source) throws IOException {
+        int start=Math.round(source.length*.47f),end=Math.round(source.length*.94f);
+        int count=end-start;
+        if(count<96)throw new IOException("Release source too short");
+        float[] clip=new float[count];
+        int fadeIn=RATE*5/1000,fadeOut=RATE*13/1000;
+        float peak=0f;
+        for(int i=0;i<count;i++){
+            float envelope=Math.min(1f,Math.min((i+1f)/fadeIn,(count-i)/(float)fadeOut));
+            clip[i]=source[end-1-i]*envelope;
+            peak=Math.max(peak,Math.abs(clip[i]));
+        }
+        if(peak<.001f)throw new IOException("Release excerpt effectively silent");
+        return clip;
+    }
+
     private static float[] decode(Context context,int res) throws Exception {
         try(AssetFileDescriptor descriptor=context.getResources().openRawResourceFd(res)){
             if(descriptor==null)throw new IOException("Cannot open original Bloop "+res);
