@@ -82,6 +82,8 @@ public final class MaterialAudioEngine {
     private final ArrayList<Voice> voices=new ArrayList<>();
     private final float limiterRelease=(float)(1-Math.exp(-1d/(SAMPLE_RATE*.150)));
     private float masterGain=1f,peakOutput;
+    private float peakDry,minimumLimiterGain=1f;
+    private long limitedFrames,renderedFrames;
     private float outputGain=1f,targetOutputGain=1f;
     private final float volumeSmoothing=(float)(1-Math.exp(-1d/(SAMPLE_RATE*.008)));
 
@@ -343,9 +345,13 @@ public final class MaterialAudioEngine {
             }
             // Global gain protects summed complete Bloop voices without
             // clipping or deleting either full source.
+            peakDry=Math.max(peakDry,Math.abs(dry));
             float need=Math.abs(dry)>.87f?.87f/Math.abs(dry):1f;
             if(need<masterGain)masterGain=need;
             else masterGain+=(need-masterGain)*limiterRelease;
+            minimumLimiterGain=Math.min(minimumLimiterGain,masterGain);
+            if(masterGain<.999f)limitedFrames++;
+            renderedFrames++;
             outputGain+=(targetOutputGain-outputGain)*volumeSmoothing;
             output[s]=dry*masterGain*outputGain;
             peakOutput=Math.max(peakOutput,Math.abs(output[s]));
@@ -355,6 +361,7 @@ public final class MaterialAudioEngine {
 
     public void reset() {
         pairs.clear();voices.clear();masterGain=1f;peakOutput=0f;outputGain=targetOutputGain;
+        peakDry=0f;minimumLimiterGain=1f;limitedFrames=0;renderedFrames=0;
         fusionIndex=0;wallIndex=0;contactBeginCount=0;fusionsStarted=0;fusionsCompleted=0;
         shortVoicesRejected=0;peakVoices=0;squishEvents=0;impactEvents=0;
     }
@@ -366,6 +373,10 @@ public final class MaterialAudioEngine {
     public int rejectedShortVoices(){return shortVoicesRejected;}
     public int peakVoices(){return peakVoices;}
     public float peakOutput(){return peakOutput;}
+    public float peakDry(){return peakDry;}
+    public float minimumLimiterGain(){return minimumLimiterGain;}
+    public long limitedFrames(){return limitedFrames;}
+    public long renderedFrames(){return renderedFrames;}
     public int squishEvents(){return squishEvents;}
     public int impactEvents(){return impactEvents;}
 }
