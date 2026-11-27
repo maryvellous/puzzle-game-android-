@@ -6,13 +6,17 @@ package com.maryvellous.lavablobs.audio;
 final class PcmVoice {
     final float[] sound;
     final boolean fusion;
+    final MaterialAudioEngine.VoiceFamily family;
     private final float volume,rate;
     private final boolean declick;
     private final int totalFrames,attack,release;
     private double position;
     private int frame;
     PcmVoice(float[] sound,float volume,float rate,boolean fusion,boolean declick){
-        this.sound=sound;this.volume=volume;this.rate=rate;this.fusion=fusion;this.declick=declick;
+        this(sound,volume,rate,fusion,declick,fusion?MaterialAudioEngine.VoiceFamily.FUSION:MaterialAudioEngine.VoiceFamily.WALL);
+    }
+    PcmVoice(float[] sound,float volume,float rate,boolean fusion,boolean declick,MaterialAudioEngine.VoiceFamily family){
+        this.sound=sound;this.volume=volume;this.rate=rate;this.fusion=fusion;this.declick=declick;this.family=family;
         totalFrames=(int)Math.ceil(sound.length/(double)rate);
         attack=Math.max(1,Math.min(totalFrames/2,Math.round(BloopMaterialBank.SAMPLE_RATE*.0005f)));
         release=Math.max(1,Math.min(totalFrames/2,Math.round(BloopMaterialBank.SAMPLE_RATE*.0015f)));
