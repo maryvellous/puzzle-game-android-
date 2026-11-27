@@ -27,8 +27,6 @@ import java.util.Locale;
 public final class LavaView extends View {
     private static final float W = BlobWorld.WIDTH;
     private static final int BACKGROUND = Palette.BACKGROUND_TOP;
-    private static final float PHYSICS_STEP = 1f / 60f;
-    private static final int MAX_STEPS_PER_FRAME = 4;
     private static final int PERF_REPORT_FRAMES = 180;
     private static final Typeface FONT_REGULAR = Typeface.create("sans-serif",Typeface.NORMAL);
     private static final Typeface FONT_MEDIUM = Typeface.create("sans-serif-medium",Typeface.NORMAL);
@@ -69,8 +67,7 @@ public final class LavaView extends View {
     private long lastAnimatedScore;
 
     private float aimX = W / 2;
-    private long previousFrame;
-    private float physicsAccumulator;
+    private final SimulationClock simulationClock=new SimulationClock();
     private int perfFrames,perfSteps,perfSaveCount;
     private long perfGapNs,perfWorstGapNs,perfPhysicsNs,perfCanvasNs,perfCpuNs;
     private long perfSaveNs,perfWorstSaveNs;
@@ -173,7 +170,7 @@ public final class LavaView extends View {
         invalidate();
     }
 
-    void pauseClock() {previousFrame=0L;physicsAccumulator=0f;}
+    void pauseClock() {simulationClock.reset();}
 
     private float scale() {
         return Math.min(getWidth() / W, getHeight() / 780f);
@@ -191,24 +188,16 @@ public final class LavaView extends View {
         float h = getHeight() / scale;
         world.setHeight(h);
         long now = System.nanoTime();
-        long gapNs = previousFrame == 0L ? 0L : Math.max(0L,now-previousFrame);
-        float elapsed = Math.min(.10f,gapNs / 1_000_000_000f);
-        previousFrame = now;
+        float elapsed=simulationClock.beginFrame(now);
+        long gapNs=simulationClock.gapNs();
         // Active playtime excludes long in-foreground idle periods without
         // changing the simulation timer, particles or game-over countdown.
         if(!world.gameOver&&SystemClock.uptimeMillis()-lastActionMs<=12_000L)
             activeSeconds+=elapsed;
         // Fixed-size physics steps keep membrane stiffness independent of FPS.
         // Bound catch-up work: never try to simulate unlimited missed frames.
-        physicsAccumulator=Math.min(PHYSICS_STEP*MAX_STEPS_PER_FRAME,
-                physicsAccumulator+elapsed);
         long physicsStart=System.nanoTime();
-        int steps=0;
-        while(physicsAccumulator+1e-7f>=PHYSICS_STEP&&steps<MAX_STEPS_PER_FRAME) {
-            world.tick(PHYSICS_STEP);
-            physicsAccumulator=Math.max(0f,physicsAccumulator-PHYSICS_STEP);
-            steps++;
-        }
+        int steps=simulationClock.advance(world);
         long physicsNs=System.nanoTime()-physicsStart;
         advanceEffects(elapsed);
         if(world.score!=lastAnimatedScore){
@@ -287,7 +276,7 @@ public final class LavaView extends View {
         perfSteps+=steps;
         if(perfFrames<PERF_REPORT_FRAMES)return;
         double fps=perfGapNs==0?0:perfFrames*1e9/(double)perfGapNs;
-        double simRate=perfGapNs==0?0:perfSteps*PHYSICS_STEP*1e9/perfGapNs;
+        double simRate=perfGapNs==0?0:perfSteps*SimulationClock.STEP*1e9/perfGapNs;
         Log.d("LavaPerf",String.format(Locale.US,
                 "fps=%.1f worstGap=%.1fms simRate=%.2f physics=%.2fms canvas=%.2fms cpu=%.2fms saves=%d saveAvg=%.1fms saveMax=%.1fms blobs=%d",
                 fps,perfWorstGapNs/1e6,simRate,
@@ -915,7 +904,7 @@ public final class LavaView extends View {
         activePointerId=MotionEvent.INVALID_POINTER_ID;
         activeSeconds=0f;lastActionMs=SystemClock.uptimeMillis();
         shakeAge=1f;shakePress=popPress=0f;shakeStep=0;scorePulse=0f;lastAnimatedScore=0L;
-        aimX=W*.5f;previousFrame=0;finalized=false;lastCheckpoint=0f;
+        aimX=W*.5f;simulationClock.reset();finalized=false;lastCheckpoint=0f;
         saveCheckpoint();
         invalidate();
     }
