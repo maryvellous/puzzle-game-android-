@@ -87,8 +87,7 @@ jobs:
         run: |
           mkdir -p build/audio_v2/java_core_classes
           javac -encoding UTF-8 -d build/audio_v2/java_core_classes \
-            app/src/main/java/com/maryvellous/lavablobs/audio/BloopMaterialBank.java \
-            app/src/main/java/com/maryvellous/lavablobs/audio/MaterialAudioEngine.java \
+            app/src/main/java/com/maryvellous/lavablobs/audio/*.java \
             tools/audio_v2_java/SceneRenderCli.java
       - name: Render real physics and stress audio with shared Java DSP core
         run: |
