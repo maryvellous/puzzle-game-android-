@@ -166,6 +166,7 @@ final class BlobWorld {
         blobs.add(b);
         dropCount++;
         maxTierReached=Math.max(maxTierReached,nextTier);
+        if(contactProbe!=null)contactProbe.launched(b.tier,b.radius(),time);
         nextTier=rollTier();
         checkClock=.2f;
         return true;
@@ -207,7 +208,7 @@ final class BlobWorld {
             lastPoppedTier=b.tier;
             lastPoppedId=b.id;
             blobs.remove(i);
-            if(contactProbe!=null)contactProbe.popped(b.id,time);
+            if(contactProbe!=null)contactProbe.popped(b.id,time,lastPoppedRadius);
             adhesions.removeIf(link->link.a==b||link.b==b);
             eraseCount--;usedErases++;
             blockedTime=0;checkClock=.2f;
