@@ -10,7 +10,8 @@ Puzzle game *cozy* con blob morbidi che si deformano, collidono e si fondono den
 - **Specifica vigente:** [la materia diventa suono](docs/AUDIO_ENGINE_V2_MATERIAL_BLOOP.md). Probe/Tracker → Material Engine → Scene Mixer → AudioTrack. Fusioni con i Bloop completi, urti contro vetro con attacco V2.2, urti tra blob gelatinosi, squish finiti dinamici, swoosh classico al lancio, silenzio in quiete.
 - **Slider:** volume 0–100% persistente, mute e ripristino dell'ultimo valore; nessuna musica implementata.
 - **Preview:** package separato `com.maryvellous.lavablobs.audiov21`, stesso motore, banner diagnostico. La build normale non mostra il banner. Non sono richiesti interventi aggiuntivi di migrazione dei salvataggi.
-- **Verifica:** preview approvata percettivamente dall'utente; CI e verifica dell'APK con package principale sono gate distinti. [Protocollo V2.3](docs/PLAYTEST_AUDIO_V2.3.md).
+- **Verifica:** preview approvata percettivamente; [CI main verde](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46060029269); APK con package principale non ancora collaudata separatamente sul telefono.
+- **Fase 2:** primo stadio concluso; lieve frittura sotto stress da diagnosticare. [Piano di aggregazione](docs/AUDIO_AGGREGATION_PLAN.md), [audit debito tecnico](docs/TECHNICAL_DEBT_AUDIT.md), [protocollo collaudo](docs/PLAYTEST_AUDIO_V2.3.md). Nessuna aggregazione implementata ancora.
 - **Storia:** SoundPool 1.0.11, PR #23/#24 e laboratori A/B–C4.1 sono riferimenti storici, non requisiti. Non reintrodurre loop di contatto o cambiare il timbro approvato.
 
 ## Gameplay e UX attuali

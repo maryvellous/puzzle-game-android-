@@ -1,19 +1,14 @@
-# Collaudo V2.3 (telefono)
+# Protocollo di collaudo audio
+**Baseline V2.3 / app 1.1.0 · 27 novembre 2026**
 
-Installare esclusivamente l'artifact `lava-blobs-audio-v2.3-gameplay-test-apk` della run più recente del workflow Audio V2, corrispondente al commit finale di questa preparazione. Il pacchetto sperimentale resta `com.maryvellous.lavablobs.audiov21`; la 1.0.11 di produzione non viene modificata. Se Android rifiuta l'aggiornamento per firma diversa, disinstallare soltanto la preview (si perde il suo salvataggio), non la release stabile.
+Preview cfb03c9 approvata sul telefono («è molto molto buono»); main acf6d2b, [CI verde](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46060029269). La build main non è stata collaudata separatamente sul telefono. Segnalazione successiva: lieve frittura con molte collisioni simultanee. Non attribuirla a clipping senza misure.
 
-## Sequenza di ascolto
+Per ogni nuova preview:
+1. Verificare SHA/versione e package preview separato. Volume app 100%, volume telefono costante; aspettare AUDIO V2 · PRONTO.
+2. Rilasciare blob di varie taglie (swoosh), urtare vetro e gel separatamente, verificare POP e fusioni singole/cascate.
+3. Riempire vaso, scuotere piano/forte, stress ripetibile; annotare distorsione, latenza, suoni sovrapposti. Registrare se possibile video/audio e log locali.
+4. Lasciare a riposo per 15–20 s: nessun ronzio/ripetizione. Testare mute/ripristino e slider 100/50/0%, drag senza lanci, pausa/ripresa.
+5. A/B a pari condizioni per fase 2: baseline vs clustering; valutare coerenza fisica, timbro, bilanciamento, pulizia, sincronia 1–5. Verificare che gli urti singoli non cambino e fusioni restino leggibili.
+6. Misurare prima di dichiarare causa: underruns, queue age/depth, gain reduction e tempi di elaborazione, voci attive. Non pubblicare automaticamente.
 
-1. Lasciare volume app al 100%, volume telefono uguale alla prova V2.2.
-2. Rilasciare blob di dimensioni diverse: verificare il ritorno dello swoosh breve.
-3. Usare un vaso quasi vuoto: distinguere il suono contro il vetro dall'urto morbido fra due blob.
-4. Riempire il vaso e scuotere piano e forte: confrontare differenza di intensità; ascoltare squish e fusioni.
-5. Lasciare il vaso fermo per 15–20 secondi: nessun ronzio o ripetizione statica.
-6. Provare 100/50/0%, toccare l'icona per ripristinare, trascinare rapidamente fino a zero e risalire, riaprire l'app per verificare persistenza. Il gesto del volume non deve lanciare un blob.
-7. Ripetere i cinque punteggi del collaudo V2.2: coerenza fisica, timbro, bilanciamento, pulizia, sincronizzazione. Aggiungere un commento su rilascio, vetro vs gel e slider.
-
-Gate: test JVM, APK preview, verifiche offline già configurate nel workflow; nessuna promozione su main fino ad approvazione su telefono. Le vecchie audizioni CLI non includono ancora eventi parete e usano il fallback di rilascio senza sorgente opzionale: non sostituiscono il collaudo della preview reale.
-
-## Esito — 27 novembre 2026
-
-Utente: «è molto molto buono. per me possiamo considerare questa la nuova versione main e continuare da qui». Approvata la preview V2.3, commit `cfb03c96fd5e348b5e0ddd0c201255101913fa5f`, e autorizzata la promozione a main. Nessun intervento aggiuntivo sui salvataggi richiesto. Le prossime modifiche partono dalla 1.1.0 con Audio V2.3 attivo nel package normale.
+[Specifica](AUDIO_ENGINE_V2_MATERIAL_BLOOP.md) · [Piano fase 2](AUDIO_AGGREGATION_PLAN.md)
