@@ -65,7 +65,7 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
 
     V2GameSound(Context context) {
         app=context.getApplicationContext();
-        diagnosticBuild=app.getPackageName().endsWith(".audiov21");
+        diagnosticBuild=app.getPackageName().endsWith(".audiov21")||BuildConfig.AUDIO_AGGREGATION;
         preferences=app.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
         volumePercent=Math.max(0,Math.min(100,preferences.getInt(VOLUME_KEY,
                 preferences.getBoolean(EFFECTS_KEY,true)?100:0)));
@@ -154,7 +154,7 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
         if(transportFault)return "AUDIO V2 · ERRORE CODA";
         if(!effectsEnabled())return "AUDIO V2 · MUTO";
         if(paused)return "AUDIO V2 · PAUSA";
-        return "AUDIO V2 · "+state+(queue.rejectedObservations()>0?" · Q:"+queue.rejectedObservations():"");
+        return (BuildConfig.AUDIO_AGGREGATION?"AUDIO V2 · CLUSTER · ":"AUDIO V2 · BYPASS · ")+state+(queue.rejectedObservations()>0?" · Q:"+queue.rejectedObservations():"");
     }
     @Override public void release() {
         if(closed)return;
@@ -203,7 +203,7 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
             try{releaseSwoosh=AndroidBloopDecoder.loadLaunch(app);}
             catch(InterruptedException interrupted){throw interrupted;}
             catch(Exception failure){Log.w(TAG,"Classic release unavailable; using material attack",failure);}
-            MaterialAudioEngine engine=new MaterialAudioEngine(materials,releaseSwoosh);
+            MaterialAudioEngine engine=new MaterialAudioEngine(materials,releaseSwoosh,BuildConfig.AUDIO_AGGREGATION);
             engine.setOutputVolumePercent(volumePercent);
             engine.reset();
             device=createTrack();
@@ -290,7 +290,9 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
                             " dispatchBudgetHits="+scheduler.budgetHits()+" startupDiscarded="+startupDiscarded+
                             " peakDry="+engine.peakDry()+" minLimiterGain="+engine.minimumLimiterGain()+
                             " limitedFrames="+engine.limitedFrames()+" renderedFrames="+engine.renderedFrames()+
-                            " peakVoices="+engine.peakVoices()+" peakSecondary="+engine.peakShortVoices());
+                            " peakVoices="+engine.peakVoices()+" peakSecondary="+engine.peakShortVoices()+
+                            " clusterCandidates="+engine.aggregateCandidates()+" groups="+engine.aggregateGroups()+
+                            " collapsed="+engine.aggregateCollapsed()+" rejectedClusters="+engine.aggregateRejected());
                     latestReportMs=now;
                     blocksSinceReport=0;renderNsSinceReport=0;worstRenderNs=0;
                     scheduler.resetIntervalMaxima();maxWriteNs=0;renderTiming.reset();writeTiming.reset();underrunBaseline=device.getUnderrunCount();
