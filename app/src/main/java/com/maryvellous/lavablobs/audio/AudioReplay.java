@@ -3,13 +3,14 @@ package com.maryvellous.lavablobs.audio;
 import java.util.List;
 
 /** Offline replay feeds the same queue, clock mapping, dispatcher and renderer
- * as Android. A trace represents one simulation generation, starting at t=0. */
+ * as Android. A trace represents one simulation generation, aligned to its first event. */
 public final class AudioReplay {
     public static final int BLOCK=384;
     private AudioReplay(){}
     public static float[] render(MaterialAudioEngine engine,List<AudioEvent> events,int frames){
         if(frames<=0||frames%BLOCK!=0)throw new IllegalArgumentException("Use whole PCM blocks");
         final int generation=events.isEmpty()?0:events.get(0).generation;
+        final double origin=events.isEmpty()?0:events.get(0).time;
         double previous=-1;
         for(AudioEvent e:events){
             if(e.generation!=generation||e.time<previous)
@@ -23,7 +24,7 @@ public final class AudioReplay {
         float[] result=new float[frames],block=new float[BLOCK];
         int next=0;
         for(int offset=0;offset<frames;offset+=BLOCK){
-            double horizon=(offset+BLOCK)/(double)MaterialAudioEngine.SAMPLE_RATE;
+            double horizon=origin+(offset+BLOCK)/(double)MaterialAudioEngine.SAMPLE_RATE;
             while(next<events.size()&&events.get(next).time<=horizon){
                 AudioEvent e=events.get(next++);
                 if(!queue.offer(e,e.authoritative()))throw new IllegalStateException("Replay overflow");
