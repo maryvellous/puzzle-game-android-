@@ -215,7 +215,7 @@ public final class LavaView extends View {
             scorePulse=.33f;
         }
         for (BlobWorld.Merge merge : world.consumeMerges()) {
-            audio.merge(merge);
+            // Audio observes the same authoritative fusion directly from BlobWorld.
             waves.add(new Wave(merge.x, merge.y, merge.radius, merge.tier));
             for (int i = 0; i < 16; i++) {
                 float angle = (float) (random.nextFloat() * Math.PI * 2);
