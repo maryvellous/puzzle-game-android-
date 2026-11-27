@@ -16,7 +16,7 @@ import com.maryvellous.lavablobs.audio.AudioEventQueue;
 import com.maryvellous.lavablobs.audio.AudioTimeline;
 import com.maryvellous.lavablobs.audio.AudioEvent;
 import com.maryvellous.lavablobs.audio.AudioBlockScheduler;
-import static com.maryvellous.lavablobs.audio.AudioEvent.Type.*;
+
 
 /**
  * Audio V2.3 gameplay bridge for the main app and isolated preview.
@@ -42,11 +42,10 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
     private final Context app;
     private final boolean diagnosticBuild;
     private final SharedPreferences preferences;
-    private final ContactTracker tracker;
+    private final PhysicsAudioEvents physicsEvents;
     private final AudioEventQueue<AudioEvent> queue=new AudioEventQueue<>(CAPACITY,1024);
     private volatile int generation;
     private volatile boolean transportFault;
-    private double simulationTime;
     private final Object lifecycle=new Object();
     private final Thread audioThread;
     private volatile boolean paused,closed,ready;
@@ -69,7 +68,7 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
                 preferences.getBoolean(EFFECTS_KEY,true)?100:0)));
         lastNonzeroVolume=Math.max(1,Math.min(100,preferences.getInt(LAST_VOLUME_KEY,
                 volumePercent>0?volumePercent:100)));
-        tracker=new ContactTracker(this::onTransition);
+        physicsEvents=new PhysicsAudioEvents(this::send,()->generation,System::nanoTime,this::reset);
         audioThread=new Thread(this::runAudio,"LavaV2-PCM");
         audioThread.setDaemon(true);
         audioThread.start();
@@ -100,48 +99,21 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
         synchronized(lifecycle){lifecycle.notifyAll();}
     }
 
-    @Override public void merge(BlobWorld.Merge merge) {
-        // Fusion playback is owned by the solver callback, not the View.
-    }
-    @Override public void launch(int tier,float radius) {
-        send(LAUNCH,tier,0,0,0,0,radius,0);
-    }
-    @Override public void pop(int blobId,float radius) {
-        send(POP,blobId,0,0,0,0,radius,0);
-    }
-
-    /** V2 never plays the legacy strongest-impact-per-frame SoundPool event. */
+    // The authoritative source is the simulation, never the View.
+    @Override public void merge(BlobWorld.Merge merge) {}
+    @Override public void launch(int tier,float radius) {}
+    @Override public void pop(int blobId,float radius) {}
     @Override public void discardLegacyImpacts(){}
-
-    @Override public void onContactStep(float time,float dt,List<ContactProbe.Contact> contacts) {
-        simulationTime=time;
-        for(ContactProbe.Contact c:contacts){
-            send(CONTACT,c.blobA,c.blobB,c.approachSpeed,
-                    c.slideSpeed,c.compression,c.radiusA,c.radiusB,
-                    dt,c.bulkMotion);
-        }
-        tracker.onContactStep(time,dt,contacts);
+    @Override public void onContactStep(float time,float dt,List<ContactProbe.Contact> contacts){
+        physicsEvents.onContactStep(time,dt,contacts);
     }
-
-    @Override public void onWallImpact(int blobId,int side,float approach,float radius){
-        send(WALL,blobId,side,approach,0,0,radius,0);
+    @Override public void onWallImpact(int blobId,int side,float approach,float radius,float time){
+        physicsEvents.onWallImpact(blobId,side,approach,radius,time);
     }
-
-    private void onTransition(ContactTracker.Transition transition) {
-        if(transition.kind==ContactTracker.Kind.END)
-            send(END,transition.blobA,transition.blobB,0,0,0,0,0);
-        else if(transition.kind==ContactTracker.Kind.CANCELLED)
-            send(CANCEL,transition.blobA,transition.blobB,0,0,0,0,0);
-    }
-
-    @Override public void onMerge(BlobWorld.Merge merge){
-        // Cancel parent contacts, then emit the fusion from its authoritative source.
-        simulationTime=merge.simulationTime;
-        tracker.onMerge(merge);
-        send(MERGE,merge.parentAId,merge.parentBId,0,0,0,merge.radius,0);
-    }
-    @Override public void onPop(int blobId,float simulationTime){this.simulationTime=simulationTime;tracker.onPop(blobId,simulationTime);}
-    @Override public void onReset(){tracker.reset();simulationTime=0;reset();}
+    @Override public void onMerge(BlobWorld.Merge merge){physicsEvents.onMerge(merge);}
+    @Override public void onLaunch(int tier,float radius,float time){physicsEvents.onLaunch(tier,radius,time);}
+    @Override public void onPop(int blobId,float time,float radius){physicsEvents.onPop(blobId,time,radius);}
+    @Override public void onReset(){physicsEvents.onReset();}
 
     private void advanceGeneration() {
         generation++;
@@ -151,16 +123,9 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
     @Override public void reset() {
         if(!closed)advanceGeneration();
     }
-    private void send(AudioEvent.Type type,int a,int b,float normal,float slip,float compression,
-                      float radiusA,float radiusB){
-        send(type,a,b,normal,slip,compression,radiusA,radiusB,1f/120f,0f);
-    }
-    private void send(AudioEvent.Type type,int a,int b,float normal,float slip,float compression,
-                      float radiusA,float radiusB,float dt,float bulkMotion) {
+    private void send(AudioEvent event) {
         if(closed||paused||!effectsEnabled()||transportFault)return;
         if(!ready){startupDiscarded++;return;}
-        AudioEvent event=new AudioEvent(type,a,b,normal,slip,compression,radiusA,radiusB,dt,bulkMotion,
-                simulationTime,generation,System.nanoTime());
         if(!queue.offer(event,event.authoritative())&&event.authoritative()){
             // Finite capacity cannot promise infinite delivery: fail visibly
             // and reset rather than silently evicting an accepted fusion/END.
