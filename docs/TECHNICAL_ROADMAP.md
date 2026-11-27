@@ -12,4 +12,29 @@ Un prodotto maturo, non un game engine generico. Solver, presentazione e audio a
 ## Protocollo di lavoro
 Branch dedicato, tranche piccole; CI in parallelo con attività indipendenti, nessuna attesa passiva; correggere esiti negativi prima di avanzare nei gate dipendenti. Nessuna promozione main né pubblicazione senza approvazione. Misure proposte non sono risultati già ottenuti.
 ## Registro esecuzione
-- Roadmap salvata; interventi runtime ancora da verificare. Aggiornare questo registro a ogni tranche con prove, limiti e prossimi passi.
+### 27 novembre — tranche 1, PR #27
+Branch [refactor/technical-debt-roadmap](https://github.com/maryvellous/puzzle-game-android-/pull/27). Main 1.1.0 / V2.3 invariata. Lavoro svolto in parallelo alle CI; le run superate da commit successivi sono cancellate per evitare sprechi.
+| Fase | Implementazione candidata | Gate residuo |
+|---|---|---|
+| 0 | Peak dry/output, gain reduction, occupazione limiter, voci corte, queue age/depth, p99 stimati con istogrammi, underrun delta, scarti per tipo. Trace v1 JVM e registrazione locale limitata nelle preview; replay CI con WAV/CSV A/B. | Misure su telefono e A/B su materiale originale della CI finale; baseline V2.3 originale conservata in main. |
+| 1 | AudioEvent immutabile; PhysicsAudioEvents condiviso; sorgente solver per fusioni, lancio, POP e pareti; FIFO con riserva per controlli, generation, AudioTimeline e AudioBlockScheduler. | Replay stress finale e verifica latenze reali; tick intero e policy di coalescing osservazioni ancora da valutare. |
+| 2 | AudioTrack con un solo owner; invalidazione generazioni, flush e mute/reset coordinati; preparazione PCM condivisa; scheduler utilizzato anche offline. | Test lifecycle reali (avvio, home, pause/resume rapidi, mute, errore device); recovery e state machine formale non ancora completate. Decoder desktop FFmpeg e Android MediaCodec non sono bit-identici. |
+| 3 | Aggregatore sperimentale GEL/WALL/SQUISH dopo gating, finestre 12/30 ms, rate compatibile 1.12, energia limitata, singolo invariato dopo allineamento. FUSION/LAUNCH/POP diretti. Build separata aggregationPreview. | A/B reale, ascolto, latenza; tuning finestre e budget per famiglia, cancellazione eventuali cluster ancora pendenti su rimozione. Default main/release resta bypass. |
+| 4 | Bulk velocity calcolata una volta per confine di un blob, non per vertice; contatore voci corte O(1); esclusa raccolta impatti legacy in gameplay. | CI equivalenza, profilazione CPU/GC su dispositivo; nessuna riscrittura solver o broad-phase. |
+| 5 | CI standard con test, replay, WAV/CSV e APK separati, cancellazione run PR obsolete; sorgente eventi non più dalla View. | Inventario e rimozione classi/test/workflow legacy, ulteriore separazione View; firma/pubblicazione non toccate. |
+### Verifiche effettive
+- CI [136](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46062025494): strumentazione iniziale verde.
+- CI [138](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46062128334) e [140](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46062169544): primo trasporto/timeline e test riserva FIFO verdi.
+- CI [145](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46062321480): scheduler condiviso, equivalenza PCM su due batching, generazioni e limiter verdi.
+- CI [146](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46062407828): preparazione materiale condivisa verde.
+- CI [151](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46062515792) e [153](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46062576989): adapter eventi e trace reale verdi.
+- CI [156](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46062673453): aggregazione sintetica verde, 8 impatti compatibili → 1 voce, fusione completa, singleton identico dopo ritardo finestra. Non è un risultato del telefono.
+- CI dell'insieme finale: consultare [check PR #27](https://github.com/maryvellous/puzzle-game-android-/pull/27/checks); non certificata al momento della stesura. Nessun collaudo sul dispositivo, nessun merge o release.
+### Collaudo successivo
+1. Scaricare dalla CI finale i due APK dello stesso SHA (bypass .audiov21, cluster .audioaggregation). Non disinstallare main. Confrontare stessi livelli, volume, stasi, shake, urti vetro/gel, cascata, lancio/POP e pausa/mute ripetuti; confrontare anche V2.3 approvata. 
+2. Logcat tag LavaV2Audio: queue depth/age, p99 stimati, underrun delta, peak dry, gain minimo/occupazione, voci, cluster, scarti. I tempi p99 a bucket sono limiti superiori approssimati, non misure precise. Il write bloccante include pacing device, non solo CPU.
+3. Nelle preview, dopo una scena breve e pausa, export in cache audio-trace-v1.csv e audio-trace-v1.meta: adb shell run-as com.maryvellous.lavablobs.audioaggregation cat cache/audio-trace-v1.csv (o .audiov21). Prima finestra 30s/32768 eventi per generation, metadata truncated e contatori cumulativi, non telemetria; la traccia è input fisico, non include arrivi reali né output audio. Replay normalizzato al primo evento. La registrazione può influire leggermente su profilo preview; per benchmark rigoroso misurare anche debug senza recorder.
+4. Gate: nessun nuovo underrun, frittura ridotta, nessuna fusione persa, silenzio dopo code, latenza accettabile. Se A/B o CI fallisce correggere prima di promuovere. Non attendere CI passivamente: lavorare solo su passi indipendenti.
+### Rischi espliciti
+Coda finita: overflow autorevole segnala errore e sospende audio fino a reset invece di eliminare silenziosamente eventi precedenti; non è garanzia di zero perdite in carico illimitato. Avvio prima di READY ancora scarta eventi conteggiati. Budget dispatch per numero di eventi e non per nanosecondi. Nessuna diagnosi definitiva della frittura senza dati reali. Il prototipo non modifica il timbro delle sorgenti né la fisica, ma ritarda gli eventi secondari per la finestra; va ascoltato. Vecchi file conservati per test/storia fino all'inventario. Firma, salvataggi e pubblicazione non modificati.
+
