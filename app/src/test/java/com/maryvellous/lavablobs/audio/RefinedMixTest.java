@@ -54,4 +54,24 @@ public class RefinedMixTest {
             for(float sample:pcm)assertEquals(0f,sample,0f);
         }
     }
+    @Test public void diagnosticStemsDoNotChangePcmAndDistinguishFamilies(){
+        for(boolean cluster:new boolean[]{false,true}){
+            MaterialAudioEngine a=new MaterialAudioEngine(AudioSchedulerTest.bank(),null,cluster,MaterialAudioEngine.MixProfile.REFINED);
+            MaterialAudioEngine b=new MaterialAudioEngine(AudioSchedulerTest.bank(),null,cluster,MaterialAudioEngine.MixProfile.REFINED);
+            float[][] stems=b.captureDryStems(4096);
+            for(MaterialAudioEngine e:new MaterialAudioEngine[]{a,b}){
+                e.wallImpact(300,32);e.merge(1,2,32);e.launch(32);e.pop(3,32);
+            }
+            float[] x=new float[4096],y=new float[4096];
+            a.renderMono(x,0,x.length);b.renderMono(y,0,y.length);
+            assertArrayEquals(x,y,0f);
+            for(MaterialAudioEngine.VoiceFamily family:new MaterialAudioEngine.VoiceFamily[]{
+                    MaterialAudioEngine.VoiceFamily.WALL,MaterialAudioEngine.VoiceFamily.FUSION,
+                    MaterialAudioEngine.VoiceFamily.LAUNCH,MaterialAudioEngine.VoiceFamily.POP}){
+                float peak=0f;for(float sample:stems[family.ordinal()])peak=Math.max(peak,Math.abs(sample));
+                assertTrue(family.name(),peak>0f);
+            }
+            for(float sample:stems[MaterialAudioEngine.VoiceFamily.SQUISH.ordinal()])assertEquals(0f,sample,0f);
+        }
+    }
 }
