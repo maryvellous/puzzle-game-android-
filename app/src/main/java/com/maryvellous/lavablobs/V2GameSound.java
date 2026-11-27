@@ -16,6 +16,7 @@ import com.maryvellous.lavablobs.audio.AudioEventQueue;
 import com.maryvellous.lavablobs.audio.AudioTimeline;
 import com.maryvellous.lavablobs.audio.AudioEvent;
 import com.maryvellous.lavablobs.audio.AudioBlockScheduler;
+import com.maryvellous.lavablobs.audio.TimingHistogram;
 
 
 /**
@@ -54,6 +55,8 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
     private int lastNonzeroVolume;
     private volatile String state="CARICAMENTO";
     private long maxWriteNs;
+    private final TimingHistogram renderTiming=new TimingHistogram(),writeTiming=new TimingHistogram();
+    private final java.util.concurrent.atomic.AtomicLongArray rejectedByType=new java.util.concurrent.atomic.AtomicLongArray(AudioEvent.Type.values().length);
     private volatile long startupDiscarded;
     private long latestReportMs;
     private int blocksSinceReport;
@@ -121,12 +124,14 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
         transportFault=false;
     }
     @Override public void reset() {
-        if(!closed)advanceGeneration();
+        if(!closed){advanceGeneration();synchronized(lifecycle){lifecycle.notifyAll();}}
     }
     private void send(AudioEvent event) {
         if(closed||paused||!effectsEnabled()||transportFault)return;
         if(!ready){startupDiscarded++;return;}
-        if(!queue.offer(event,event.authoritative())&&event.authoritative()){
+        if(queue.offer(event,event.authoritative()))return;
+        rejectedByType.incrementAndGet(event.type.ordinal());
+        if(event.authoritative()){
             // Finite capacity cannot promise infinite delivery: fail visibly
             // and reset rather than silently evicting an accepted fusion/END.
             transportFault=true;
@@ -244,7 +249,7 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
                 engine.setOutputVolumePercent(volumePercent);
                 if(!scheduler.render(engine,floatBlock,seenGeneration,generationSource))continue;
                 long spent=System.nanoTime()-started;
-                worstRenderNs=Math.max(worstRenderNs,spent);
+                worstRenderNs=Math.max(worstRenderNs,spent);renderTiming.record(spent);
                 renderNsSinceReport+=spent;
                 blocksSinceReport++;
                 for(int i=0;i<BLOCK_FRAMES;i++){
@@ -260,7 +265,8 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
                     if(n==0)throw new IllegalStateException("Blocking PCM write made no progress");
                     written+=n;
                 }
-                maxWriteNs=Math.max(maxWriteNs,System.nanoTime()-writeStart);
+                long writeNs=System.nanoTime()-writeStart;
+                maxWriteNs=Math.max(maxWriteNs,writeNs);writeTiming.record(writeNs);
                 long now=android.os.SystemClock.elapsedRealtime();
                 if(now-latestReportMs>=5000){
                     Log.d(TAG,"audioBlockAvg="+(blocksSinceReport==0?0:
@@ -274,15 +280,20 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
                             " droppedObs="+queue.rejectedObservations()+" rejectedControl="+queue.rejectedControls()+
                             " queueDepth="+queue.size()+" queueHigh="+queue.highWater()+
                             " maxQueueAgeMs="+scheduler.maxQueueAgeNs()/1e6+" maxDispatchMs="+scheduler.maxDispatchNs()/1e6+
-                            " maxWriteMs="+maxWriteNs/1e6+" dispatched="+scheduler.dispatched()+
+                            " maxWriteMs="+maxWriteNs/1e6+
+                            " p99QueueAgeUpperMs="+scheduler.p99QueueAgeNs()/1e6+
+                            " p99DispatchUpperMs="+scheduler.p99DispatchNs()/1e6+
+                            " p99RenderUpperMs="+renderTiming.p99UpperNs()/1e6+
+                            " p99WriteUpperMs="+writeTiming.p99UpperNs()/1e6+
+                            " rejectedByType="+rejectedByType+" dispatched="+scheduler.dispatched()+
                             " lateEvents="+scheduler.lateEvents()+" rebases="+scheduler.rebases()+
                             " dispatchBudgetHits="+scheduler.budgetHits()+" startupDiscarded="+startupDiscarded+
                             " peakDry="+engine.peakDry()+" minLimiterGain="+engine.minimumLimiterGain()+
                             " limitedFrames="+engine.limitedFrames()+" renderedFrames="+engine.renderedFrames()+
-                            " peakVoices="+engine.peakVoices());
+                            " peakVoices="+engine.peakVoices()+" peakSecondary="+engine.peakShortVoices());
                     latestReportMs=now;
                     blocksSinceReport=0;renderNsSinceReport=0;worstRenderNs=0;
-                    scheduler.resetIntervalMaxima();maxWriteNs=0;underrunBaseline=device.getUnderrunCount();
+                    scheduler.resetIntervalMaxima();maxWriteNs=0;renderTiming.reset();writeTiming.reset();underrunBaseline=device.getUnderrunCount();
                 }
             }
         }catch(InterruptedException ignored){
