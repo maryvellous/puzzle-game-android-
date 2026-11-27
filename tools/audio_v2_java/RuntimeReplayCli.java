@@ -32,13 +32,17 @@ public final class RuntimeReplayCli {
             AudioSystem.write(in,AudioFileFormat.Type.WAVE,path.toFile());
         }
     }
-    private static String metrics(String label,MaterialAudioEngine e){
+    private static String metrics(String label,MaterialAudioEngine e,float[] pcm){
+        double energy=0;
+        for(float x:pcm)energy+=(double)x*x;
+        double rms=Math.sqrt(energy/pcm.length);
         return String.format(Locale.ROOT,
-                "%s,%d,%d,%.7f,%.7f,%.7f,%d,%d,%d,%d,%d,%d,%d,%d,%d",
+                "%s,%d,%d,%.7f,%.7f,%.7f,%d,%d,%d,%d,%d,%d,%d,%d,%d,%.9f,%.9f,%.9f,%d",
                 label,e.peakVoices(),e.peakShortVoices(),e.peakDry(),e.peakOutput(),
                 e.minimumLimiterGain(),e.limitedFrames(),e.renderedFrames(),
                 e.fusionsStarted(),e.fusionsCompleted(),e.rejectedShortVoices(),
-                e.aggregateCandidates(),e.aggregateGroups(),e.aggregateCollapsed(),e.aggregateRejected());
+                e.aggregateCandidates(),e.aggregateGroups(),e.aggregateCollapsed(),e.aggregateRejected(),
+                e.peakGainStep(),e.peakSampleStep(),rms,e.mixLatencyFrames());
     }
     public static void main(String[] args)throws Exception{
         if(args.length!=3)throw new IllegalArgumentException("Usage: RuntimeReplayCli decodedWavDir trace outputDir");
@@ -53,17 +57,19 @@ public final class RuntimeReplayCli {
         if(events.isEmpty())throw new IOException("Empty trace");
         int frames=(int)Math.ceil((events.get(events.size()-1).time-events.get(0).time+3)*RATE/AudioReplay.BLOCK)*AudioReplay.BLOCK;
         long expected=events.stream().filter(e->e.type==AudioEvent.Type.MERGE).count();
-        StringBuilder report=new StringBuilder("mode,peak_voices,peak_secondary,peak_dry,peak_output,min_limiter_gain,limited_frames,rendered_frames,fusions_started,fusions_completed,rejected_short,candidates,groups,collapsed,rejected_clusters\n");
-        for(boolean aggregated:new boolean[]{false,true}){
-            MaterialAudioEngine e=new MaterialAudioEngine(bank,launch,aggregated);
-            String label=aggregated?"cluster":"bypass";
+        StringBuilder report=new StringBuilder("mode,peak_voices,peak_secondary,peak_dry,peak_output,min_limiter_gain,limited_frames,rendered_frames,fusions_started,fusions_completed,rejected_short,candidates,groups,collapsed,rejected_clusters,peak_gain_step,peak_sample_step,rms,mix_latency_frames\n");
+        for(MaterialAudioEngine.MixProfile profile:MaterialAudioEngine.MixProfile.values()){
+          for(boolean aggregated:new boolean[]{false,true}){
+            MaterialAudioEngine e=new MaterialAudioEngine(bank,launch,aggregated,profile);
+            String label=profile.name().toLowerCase(Locale.ROOT)+(aggregated?"-cluster":"-bypass");
             float[] pcm=AudioReplay.render(e,events,frames);
             if(e.fusionsStarted()!=expected||e.fusionsCompleted()!=expected)
                 throw new IOException("Lost or truncated fusion in "+label);
             for(int i=pcm.length-RATE/4;i<pcm.length;i++)
                 if(pcm[i]!=0f)throw new IOException("Tail did not settle in "+label);
             writeWav(out.resolve(label+".wav"),pcm);
-            report.append(metrics(label,e)).append('\n');
+            report.append(metrics(label,e,pcm)).append('\n');
+          }
         }
         Files.writeString(out.resolve("metrics.csv"),report.toString(),StandardCharsets.UTF_8);
         System.out.print(report);
