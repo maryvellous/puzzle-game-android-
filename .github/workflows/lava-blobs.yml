@@ -63,7 +63,7 @@ jobs:
           print(f"Valid 112ms mono PCM WAV; peak={peak}, RMS={rms:.0f}")
           PY
       - name: Test solver, audio transport, lifecycle and aggregation
-        run: gradle --no-daemon :app:testDebugUnitTest :app:testPreviewUnitTest
+        run: gradle --no-daemon --no-build-cache :app:testDebugUnitTest :app:testPreviewUnitTest :app:testAggregationPreviewUnitTest
       - name: Upload V2 contact-control trace (offline diagnostics only)
         uses: actions/upload-artifact@v4
         with:
@@ -74,18 +74,32 @@ jobs:
       - name: Render runtime-equivalent A/B replay from real solver trace
         run: |
           set -euo pipefail
-          test -s app/build/audio_v2/runtime_events_v1.csv
+          if ! test -s app/build/audio_v2/runtime_events_v1.csv; then
+            echo '::error::Runtime trace missing after Gradle tests'
+            find . -name '*trace*.csv' -o -name 'TEST-*AudioRuntimeTraceTest*.xml'
+            exit 1
+          fi
           mkdir -p build/runtime-replay/classes build/runtime-replay/decoded build/runtime-replay/results
-          command -v ffmpeg
+          if ! command -v ffmpeg; then
+            sudo apt-get update
+            sudo apt-get install -y ffmpeg
+          fi
+          ffmpeg -version | head -n 1 || true
           shopt -s nullglob
           for name in bloop_1 bloop_2 bloop_3 bloop_4 swoosh_source; do
             sources=(app/src/main/res/raw/"$name".*)
-            test "${#sources[@]}" -eq 1
+            if [[ "${#sources[@]}" -ne 1 ]]; then
+              echo "::error::Expected exactly one resource for $name; found ${#sources[@]}"
+              exit 1
+            fi
+            echo "Decoding ${sources[0]}"
             ffmpeg -nostdin -v error -y -i "${sources[0]}" -ac 1 -ar 44100 -c:a pcm_s16le "build/runtime-replay/decoded/$name.wav"
           done
+          echo 'Compiling shared replay core'
           javac -encoding UTF-8 -d build/runtime-replay/classes \
             app/src/main/java/com/maryvellous/lavablobs/audio/*.java \
             tools/audio_v2_java/RuntimeReplayCli.java
+          echo 'Rendering shared runtime trace'
           java -cp build/runtime-replay/classes com.maryvellous.lavablobs.audio.RuntimeReplayCli \
             build/runtime-replay/decoded app/build/audio_v2/runtime_events_v1.csv build/runtime-replay/results
           cp app/build/audio_v2/runtime_events_v1.csv build/runtime-replay/results/
