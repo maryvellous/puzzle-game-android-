@@ -63,7 +63,7 @@ public final class RuntimeReplayCli {
           for(boolean aggregated:new boolean[]{false,true}){
             MaterialAudioEngine e=new MaterialAudioEngine(bank,launch,aggregated,profile);
             String label=profile.name().toLowerCase(Locale.ROOT)+(aggregated?"-cluster":"-bypass");
-            float[][] stems=profile==MaterialAudioEngine.MixProfile.REFINED?e.captureDryStems(frames):null;
+            float[][] stems=profile!=MaterialAudioEngine.MixProfile.APPROVED?e.captureDryStems(frames):null;
             float[] pcm=AudioReplay.render(e,events,frames);
             if(e.fusionsStarted()!=expected||e.fusionsCompleted()!=expected)
                 throw new IOException("Lost or truncated fusion in "+label);
