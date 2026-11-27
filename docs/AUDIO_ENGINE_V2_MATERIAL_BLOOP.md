@@ -22,6 +22,10 @@ Implementazione isolata: il nuovo `MaterialAudioEngine` non contiene loop di con
 
 **Verifica automatica integrata (CI 45279301704, successo):** scena vera con 1303 osservazioni fisiche e cinque coppie contemporanee, lasciata ferma dopo assestamento → 0 squish, 0 impatti, PCM di uscita 0. La stessa scena agitata produce 9 squish e 8 impatti; nelle fusioni si usano ancora le registrazioni originali. È una regressione tecnica di causalità, **non** la prova di qualità percettiva o latenza su Android. La prima APK V2 è stata scartata; la seconda APK diagnostica separata resta da valutare nell'uso reale.
 
+### Playtest V2.1 e regolazione diagnostica V2.2 (27 novembre 2026)
+
+L'utente giudica la V2.1 quasi perfetta: non percepisce il precedente rumore statico e il movimento sembra coerente, ma gli effetti secondari sono così bassi da non consentire una valutazione certa. Su richiesta, V2.2 applica un unico guadagno fisso 3× (+9,5 dB) a tutte le voci non-fusione (impatto, squish, lancio, POP) dopo il controllo di ammissione della voce; nessun cambio a campioni, soglie fisiche, pitch, inviluppi, voce fusione o limitatore globale. Il limitatore condiviso può attenuare il mix nei picchi sovrapposti. È una regolazione diagnostica, non un mix definitivo: attendere feedback strutturato sul telefono. Nessun merge su main.
+
 ## 1. Decisione sonora fondamentale: la fusione è l'evento principe
 
 **La fusione usa uno dei quattro Bloop originali COMPLETO, dall'inizio alla fine.** Non lo ricostruiamo da un sintetizzatore e non eliminiamo il suo nucleo centrale. Conserviamo la varietà dei quattro Bloop, con eventuale variazione moderata di pitch/durata secondo la dimensione. La fusione è il momento più riconoscibile, pieno e gratificante del gioco.
