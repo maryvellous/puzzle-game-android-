@@ -21,8 +21,13 @@ final class ContactProbe {
     interface Listener {
         void onContactStep(float simulationTime, float dt, List<Contact> contacts);
         default void onWallImpact(int blobId,int side,float approach,float radius) {}
+        default void onWallImpact(int blobId,int side,float approach,float radius,float time) {
+            onWallImpact(blobId,side,approach,radius);
+        }
+        default void onLaunch(int tier,float radius,float time) {}
         default void onMerge(BlobWorld.Merge event) {}
         default void onPop(int blobId,float simulationTime) {}
+        default void onPop(int blobId,float simulationTime,float radius) {onPop(blobId,simulationTime);}
         default void onReset() {}
     }
 
@@ -136,7 +141,7 @@ final class ContactProbe {
             state.last=time;
             if(!state.fired&&time-state.first<=.060f&&c.peak>70f){
                 state.fired=true;
-                listener.onWallImpact(c.blobId,c.side,c.peak,c.radius);
+                listener.onWallImpact(c.blobId,c.side,c.peak,c.radius,time);
             }
         }
         wallStep.clear();
@@ -184,6 +189,8 @@ final class ContactProbe {
     }
 
     void merged(BlobWorld.Merge event) {listener.onMerge(event);}
+    void launched(int tier,float radius,float time) {listener.onLaunch(tier,radius,time);}
+    void popped(int blobId,float time,float radius) {listener.onPop(blobId,time,radius);}
     void popped(int blobId,float time) {listener.onPop(blobId,time);}
     void reset() {
         contacts.clear();wallStep.clear();wallStates.clear();
