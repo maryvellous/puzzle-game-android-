@@ -62,6 +62,13 @@ public final class MaterialAudioEngine {
     private final Map<Long,Pair> pairs=new HashMap<>();
     private final ArrayList<PcmVoice> voices=new ArrayList<>();
     public enum MixProfile { APPROVED, REFINED }
+    public enum VoiceFamily { FUSION, GEL, WALL, SQUISH, LAUNCH, POP }
+    private float[][] diagnosticStems;
+    /** Offline-only dry stems; never alters the mix or the physical event budget. */
+    public float[][] captureDryStems(int frames){
+        if(renderedFrames!=0||frames<=0)throw new IllegalStateException("Capture requires fresh engine and positive length");
+        diagnosticStems=new float[VoiceFamily.values().length][frames];return diagnosticStems;
+    }
     private final MixProfile mixProfile;
     private final PeakLimiter limiter;
     private final AcousticAggregator aggregator;
@@ -94,7 +101,7 @@ public final class MaterialAudioEngine {
         if(bank==null||profile==null)throw new IllegalArgumentException("Material bank and mix profile required");
         this.bank=bank;mixProfile=profile;
         limiter=new PeakLimiter(SAMPLE_RATE,profile==MixProfile.REFINED?Math.round(SAMPLE_RATE*.003f):0);
-        aggregator=aggregation?new AcousticAggregator(this::shortVoice):null;
+        aggregator=aggregation?new AcousticAggregator((family,sound,gain,rate)->shortVoice(VoiceFamily.valueOf(family.name()),sound,gain,rate)):null;
         if(releaseSwoosh!=null){
             if(releaseSwoosh.length<96)throw new IllegalArgumentException("Release clip too short");
             for(float sample:releaseSwoosh)if(!Float.isFinite(sample)||Math.abs(sample)>1.01f)
@@ -156,13 +163,13 @@ public final class MaterialAudioEngine {
         return clamp((float)Math.pow(Math.max(1f,radius)/32f,.28),.70f,1.25f);
     }
 
-    private boolean shortVoice(float[] audio,float volume,float rate) {
+    private boolean shortVoice(VoiceFamily family,float[] audio,float volume,float rate) {
         if(activeShortVoices>=MAX_SHORT_VOICES) {
             shortVoicesRejected++;
             return false;
         }
         if(volume>.0001f) {
-            voices.add(new PcmVoice(audio,volume*SECONDARY_GAIN,rate,false,mixProfile==MixProfile.REFINED));
+            voices.add(new PcmVoice(audio,volume*SECONDARY_GAIN,rate,false,mixProfile==MixProfile.REFINED,family));
             activeShortVoices++;
             peakShortVoices=Math.max(peakShortVoices,activeShortVoices);
             return true;
@@ -174,7 +181,7 @@ public final class MaterialAudioEngine {
         return gesture(family,0,0,audio,gain,rate);
     }
     private boolean gesture(AcousticAggregator.Family family,int a,int b,float[] audio,float gain,float rate){
-        return aggregator==null?shortVoice(audio,gain,rate):aggregator.offer(family,renderedFrames,a,b,audio,gain,rate);
+        return aggregator==null?shortVoice(VoiceFamily.valueOf(family.name()),audio,gain,rate):aggregator.offer(family,renderedFrames,a,b,audio,gain,rate);
     }
 
     /** Backward-compatible test entrypoint with the solver's normal half-step. */
@@ -313,17 +320,17 @@ public final class MaterialAudioEngine {
             // Same reversed swoosh and tier-dependent playback rate as 1.0.11.
             // Slightly stronger than the historical .16 to suit this diagnostic mix.
             float rate=Math.max(1.08f,1.23f-.035f*Math.max(0,tier));
-            shortVoice(releaseSwoosh,.20f/SECONDARY_GAIN,rate);
+            shortVoice(VoiceFamily.LAUNCH,releaseSwoosh,.20f/SECONDARY_GAIN,rate);
         }else{
             BloopMaterialBank.Material m=bank.at((fusionIndex+2)%4);
-            shortVoice(m.attack,.055f*sizeGain(radius),pitchForRadius(radius));
+            shortVoice(VoiceFamily.LAUNCH,m.attack,.055f*sizeGain(radius),pitchForRadius(radius));
         }
     }
 
     public void pop(int blobId,float radius) {
         cancelBlob(blobId);
         BloopMaterialBank.Material m=bank.at((fusionIndex+1)%4);
-        shortVoice(m.attack,.14f*sizeGain(radius),pitchForRadius(radius));
+        shortVoice(VoiceFamily.POP,m.attack,.14f*sizeGain(radius),pitchForRadius(radius));
     }
 
     /**
@@ -339,7 +346,10 @@ public final class MaterialAudioEngine {
             float dry=0f;
             for(int i=voices.size()-1;i>=0;i--) {
                 PcmVoice v=voices.get(i);
-                dry+=v.sample();
+                float sample=v.sample();
+                dry+=sample;
+                if(diagnosticStems!=null&&renderedFrames<diagnosticStems[0].length)
+                    diagnosticStems[v.family.ordinal()][(int)renderedFrames]+=sample;
                 if(v.finished()){
                     if(v.fusion)fusionsCompleted++;else activeShortVoices--;
                     voices.remove(i);
@@ -363,6 +373,7 @@ public final class MaterialAudioEngine {
     public void reset() {
         pairs.clear();voices.clear();activeShortVoices=peakShortVoices=0;
         if(aggregator!=null)aggregator.reset();
+        diagnosticStems=null;
         limiter.reset();peakOutput=previousOutput=peakSampleStep=0f;outputGain=targetOutputGain;
         peakDry=0f;minimumLimiterGain=1f;limitedFrames=0;renderedFrames=0;
         fusionIndex=0;wallIndex=0;contactBeginCount=0;fusionsStarted=0;fusionsCompleted=0;
