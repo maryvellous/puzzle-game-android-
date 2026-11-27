@@ -22,6 +22,10 @@ public final class AudioEventQueue<T> {
         return true;
     }
     public synchronized T poll(){return items.pollFirst();}
+    public synchronized T pollAtMost(java.util.function.ToIntFunction<T> generation,int expected){
+        T first=items.peekFirst();
+        return first!=null&&generation.applyAsInt(first)<=expected?items.pollFirst():null;
+    }
     public synchronized void clear(){items.clear();}
     public synchronized int size(){return items.size();}
     public synchronized int highWater(){return highWater;}
