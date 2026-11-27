@@ -171,6 +171,8 @@ final class Vessel {
     void confine(Blob blob) {confine(blob,null);}
 
     void confine(Blob blob,ContactProbe probe) {
+        boolean bulkMeasured=false;
+        float bulkVx=0f,bulkVy=0f;
         for(int i=0;i<Blob.NODES;i++) {
             float x=blob.px[i],y=blob.py[i];
             // Exact no-op for particles provably farther than contact distance
@@ -195,7 +197,11 @@ final class Vessel {
             if(probe!=null){
                 int edge=wall.edge;
                 int side=edge<SEGMENTS?0:edge==SEGMENTS?1:edge<xs.length-1?2:3;
-                probe.observeWall(blob,side,dx/length*direction,dy/length*direction);
+                if(!bulkMeasured){
+                    for(int node=0;node<Blob.NODES;node++){bulkVx+=blob.vx[node];bulkVy+=blob.vy[node];}
+                    bulkMeasured=true;
+                }
+                probe.observeWall(blob,side,dx/length*direction,dy/length*direction,bulkVx,bulkVy);
             }
             blob.px[i]=wall.x+dx/length*direction*.85f;
             blob.py[i]=wall.y+dy/length*direction*.85f;
