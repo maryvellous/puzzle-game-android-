@@ -74,4 +74,21 @@ public class RefinedMixTest {
             for(float sample:stems[MaterialAudioEngine.VoiceFamily.SQUISH.ordinal()])assertEquals(0f,sample,0f);
         }
     }
+    @Test public void cubicPreservesIntegerSamplesAndBounds(){
+        float[] x={-.7f,.2f,.9f,-.4f,.1f};
+        for(int i=0;i<x.length;i++){
+            assertEquals(x[i],PcmVoice.interpolateCubic(x,i,0f),0f);
+            for(int j=0;j<100;j++){
+                float v=PcmVoice.interpolateCubic(x,i,j/100f);
+                assertTrue(Float.isFinite(v));assertTrue(v>=-.7f&&v<=.9f);
+            }
+        }
+        for(float rate:new float[]{.7f,1f,1.23f,1.35f}){
+            PcmVoice v=new PcmVoice(x,1f,rate,true,true,MaterialAudioEngine.VoiceFamily.FUSION,true);
+            float first=v.sample(),last=first;int n=1;
+            while(!v.finished()){last=v.sample();n++;}
+            assertEquals((int)Math.ceil(x.length/(double)rate),n);
+            assertEquals(0f,first,0f);assertEquals(0f,last,0f);
+        }
+    }
 }
