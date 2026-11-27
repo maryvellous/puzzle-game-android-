@@ -269,7 +269,7 @@ final class BlobWorld {
                 }
             }
             solveAdhesions();
-            for(Blob b:blobs)vessel.confine(b);
+            for(Blob b:blobs)vessel.confine(b,contactProbe);
         }
         for(Blob b:blobs)b.finish(dt);
         updateAdhesions(dt);

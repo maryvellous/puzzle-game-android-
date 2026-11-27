@@ -133,6 +133,7 @@ final class Vessel {
 
     private static final class Closest {
         float x,y,distance;
+        int edge;
     }
     private Closest closest(float x,float y) {
         Closest result=closestScratch;
@@ -145,7 +146,7 @@ final class Vessel {
                     ((x-xs[i])*dx+(y-ys[i])*dy)/len,0f,1f);
             float qx=xs[i]+dx*t,qy=ys[i]+dy*t;
             float ddx=x-qx,ddy=y-qy,d2=ddx*ddx+ddy*ddy;
-            if(d2<d2Min){d2Min=d2;result.x=qx;result.y=qy;}
+            if(d2<d2Min){d2Min=d2;result.x=qx;result.y=qy;result.edge=i;}
         }
         result.distance=(float)Math.sqrt(d2Min);
         return result;
@@ -167,7 +168,9 @@ final class Vessel {
         return x>left+safeClearance&&x<right-safeClearance;
     }
 
-    void confine(Blob blob) {
+    void confine(Blob blob) {confine(blob,null);}
+
+    void confine(Blob blob,ContactProbe probe) {
         for(int i=0;i<Blob.NODES;i++) {
             float x=blob.px[i],y=blob.py[i];
             // Exact no-op for particles provably farther than contact distance
@@ -189,6 +192,11 @@ final class Vessel {
             if(length<.001f){dx=210f-wall.x;dy=(top+bottom)*.5f-wall.y;length=(float)Math.hypot(dx,dy);}
             if(length<.001f)continue;
             float direction=inside?1f:-1f;
+            if(probe!=null){
+                int edge=wall.edge;
+                int side=edge<SEGMENTS?0:edge==SEGMENTS?1:edge<xs.length-1?2:3;
+                probe.observeWall(blob,side,dx/length*direction,dy/length*direction);
+            }
             blob.px[i]=wall.x+dx/length*direction*.85f;
             blob.py[i]=wall.y+dy/length*direction*.85f;
         }

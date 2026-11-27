@@ -32,7 +32,7 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
     private static final int BLOCK_FRAMES=384; // ~8.7 ms; device buffers may be larger.
     private static final int CAPACITY=8192;
 
-    private static final int CONTACT=1,END=2,CANCEL=3,MERGE=4,LAUNCH=5,POP=6,RESET=7;
+    private static final int CONTACT=1,END=2,CANCEL=3,MERGE=4,LAUNCH=5,POP=6,RESET=7,WALL=8;
     private static final class Command {
         final int type,a,b;
         final float normal,slip,compression,radiusA,radiusB,dt,bulkMotion;
@@ -113,6 +113,10 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
         tracker.onContactStep(time,dt,contacts);
     }
 
+    @Override public void onWallImpact(int blobId,int side,float approach,float radius){
+        send(new Command(WALL,blobId,side,approach,0,0,radius,0));
+    }
+
     private void onTransition(ContactTracker.Transition transition) {
         if(transition.kind==ContactTracker.Kind.END)
             send(new Command(END,transition.blobA,transition.blobB,0,0,0,0,0));
@@ -138,7 +142,7 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
     private void send(Command command) {
         if(closed||!enabled||!ready)return;
         if(queue.offer(command))return;
-        if(command.type==CONTACT) {
+        if(command.type==CONTACT||command.type==WALL) {
             droppedContacts++;
         }else{
             // Critical fusion/POP/mute reset must not be dropped behind
@@ -207,6 +211,9 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
             case CONTACT:
                 engine.contact(c.a,c.b,c.normal,c.slip,c.compression,
                         c.radiusA,c.radiusB,c.dt,c.bulkMotion);
+                break;
+            case WALL:
+                engine.wallImpact(c.normal,c.radiusA);
                 break;
             case END:
                 engine.endContact(c.a,c.b);

@@ -60,6 +60,7 @@ public final class MaterialAudioEngine {
         final long key;
         final BloopMaterialBank.Material material;
         final float rate,scale;
+        final int materialIndex;
         float lastCompression;
         float activeSeconds;
         float accumulatedMovement;
@@ -67,13 +68,15 @@ public final class MaterialAudioEngine {
         boolean impactStarted;
 
         Pair(long key,BloopMaterialBank.Material material,float rate,
-             float scale,float compression) {
-            this.key=key;this.material=material;this.rate=rate;
+             float scale,float compression,int materialIndex) {
+            this.key=key;this.material=material;this.rate=rate;this.materialIndex=materialIndex;
             this.scale=scale;this.lastCompression=compression;
         }
     }
 
     private final BloopMaterialBank bank;
+    private final float[][] gelImpacts=new float[BloopMaterialBank.SOURCE_COUNT][];
+    private int wallIndex;
     private final Map<Long,Pair> pairs=new HashMap<>();
     private final ArrayList<Voice> voices=new ArrayList<>();
     private final float limiterRelease=(float)(1-Math.exp(-1d/(SAMPLE_RATE*.150)));
@@ -85,6 +88,41 @@ public final class MaterialAudioEngine {
     public MaterialAudioEngine(BloopMaterialBank bank) {
         if(bank==null)throw new IllegalArgumentException("Material bank required");
         this.bank=bank;
+        for(int i=0;i<gelImpacts.length;i++)gelImpacts[i]=gelatinous(bank.at(i));
+    }
+
+    // Finite, smooth attack and tail only; no fusion core, loops or synthetic tone.
+    // A rising playback-rate contour gives a soft elastic 'uuuuiip' response.
+    private static float[] gelatinous(BloopMaterialBank.Material m){
+        int overlap=Math.max(1,Math.min(m.attack.length,m.tail.length)/4);
+        int length=m.attack.length+m.tail.length-overlap;
+        float[] joined=new float[length];
+        for(int i=0;i<m.attack.length;i++){
+            float fade=i>=m.attack.length-overlap?(m.attack.length-1-i)/(float)overlap:1f;
+            joined[i]+=.8f*m.attack[i]*fade;
+        }
+        for(int i=0;i<m.tail.length;i++){
+            float fade=i<overlap?i/(float)overlap:1f;
+            joined[m.attack.length-overlap+i]+=.9f*m.tail[i]*fade;
+        }
+        float[] out=new float[Math.max(96,(int)(length*1.25f))];
+        float previous=0f;
+        double position=0;
+        int fadeIn=Math.min(out.length/3,(int)(SAMPLE_RATE*.012f));
+        int fadeOut=Math.min(out.length/3,(int)(SAMPLE_RATE*.018f));
+        for(int i=0;i<out.length;i++){
+            if(position>=length-1)break;
+            int at=(int)position;float frac=(float)(position-at);
+            float raw=joined[at]*(1-frac)+joined[at+1]*frac;
+            previous+=.22f*(raw-previous);
+            float envelope=Math.min(1f,Math.min(i/(float)Math.max(1,fadeIn),(out.length-1-i)/(float)Math.max(1,fadeOut)));
+            // Smoothly rise from a stretched attack to a lighter tail.
+            float progress=(float)(position/(length-1));
+            float endFade=clamp((length-1-(float)position)/Math.max(1f,SAMPLE_RATE*.012f),0f,1f);
+            out[i]=previous*envelope*endFade;
+            position+=.63f+.56f*progress;
+        }
+        return out;
     }
 
     private static float clamp(float n,float lo,float hi) {
@@ -154,8 +192,9 @@ public final class MaterialAudioEngine {
         Pair pair=pairs.get(key);
         float radius=.5f*(radiusA+radiusB);
         if(pair==null) {
-            pair=new Pair(key,bank.at(contactBeginCount++),pitchForRadius(radius),
-                    sizeGain(radius),clamp(compression,0f,1f));
+            int materialIndex=contactBeginCount++%BloopMaterialBank.SOURCE_COUNT;
+            pair=new Pair(key,bank.at(materialIndex),pitchForRadius(radius),
+                    sizeGain(radius),clamp(compression,0f,1f),materialIndex);
             pairs.put(key,pair);
         }
         pair.activeSeconds+=dt;
@@ -164,10 +203,10 @@ public final class MaterialAudioEngine {
         // It never retriggers on a resting/pressed pair.
         if(!pair.impactStarted && approach>IMPACT_MIN_SPEED &&
                 pair.activeSeconds<=.060f) {
-            float magnitude=clamp((float)(
-                    Math.log1p((approach-IMPACT_MIN_SPEED)/40f)/
-                    Math.log1p(280d/40d)),0f,1f);
-            if(shortVoice(pair.material.attack,.18f*magnitude*pair.scale,
+            // Broader dynamic range on soft-body collisions. Wall impacts keep
+            // the original V2.2 attack and gain curve.
+            float dynamic=(float)Math.pow(clamp((approach-IMPACT_MIN_SPEED)/280f,0f,1f),.8f);
+            if(shortVoice(gelImpacts[pair.materialIndex],(.045f+.32f*dynamic)*pair.scale,
                     pair.rate))impactEvents++;
             pair.impactStarted=true;
         }
@@ -206,7 +245,7 @@ public final class MaterialAudioEngine {
                     pair.activeSeconds-pair.lastSquishSeconds>=SQUISH_MIN_INTERVAL) {
                 // Finite acoustic gesture from the original Bloop TAIL.
                 // There is NO looping oscillator, texture or sustained voice.
-                float dynamicGain=.04f+.13f*activity;
+                float dynamicGain=.045f+.24f*(float)Math.pow(activity,1.15f);
                 if(shortVoice(pair.material.tail,dynamicGain*pair.scale,pair.rate)) {
                     squishEvents++;
                     pair.lastSquishSeconds=pair.activeSeconds;
@@ -237,6 +276,13 @@ public final class MaterialAudioEngine {
         BloopMaterialBank.Material material=bank.at(fusionIndex++);
         voices.add(new Voice(material.complete,.48f,pitchForRadius(radius),true));
         fusionsStarted++;
+    }
+
+    /** Actual rigid-wall onset: original V2.2 impact timbre and gain. */
+    public void wallImpact(float approach,float radius){
+        if(!Float.isFinite(approach)||!Float.isFinite(radius)||approach<=IMPACT_MIN_SPEED)return;
+        float magnitude=clamp((float)(Math.log1p((approach-IMPACT_MIN_SPEED)/40f)/Math.log1p(280d/40d)),0f,1f);
+        shortVoice(bank.at(wallIndex++).attack,.18f*magnitude*sizeGain(radius),pitchForRadius(radius));
     }
 
     public void launch(float radius) {
@@ -281,7 +327,7 @@ public final class MaterialAudioEngine {
 
     public void reset() {
         pairs.clear();voices.clear();masterGain=1f;peakOutput=0f;
-        fusionIndex=0;contactBeginCount=0;fusionsStarted=0;fusionsCompleted=0;
+        fusionIndex=0;wallIndex=0;contactBeginCount=0;fusionsStarted=0;fusionsCompleted=0;
         shortVoicesRejected=0;peakVoices=0;squishEvents=0;impactEvents=0;
     }
     public int activePairs(){return pairs.size();}

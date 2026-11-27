@@ -187,6 +187,26 @@ public class MaterialAudioEngineTest {
         assertTrue(engine.peakOutput()<=.87001f);
     }
 
+    @Test public void wallAndGelImpactsAreDistinctFiniteAndQuietWithoutEnergy(){
+        MaterialAudioEngine wall=new MaterialAudioEngine(bank(false));
+        MaterialAudioEngine gel=new MaterialAudioEngine(bank(false));
+        float[] a=new float[44100],b=new float[44100];
+        wall.wallImpact(20,32);
+        wall.renderMono(a,0,a.length);
+        for(float x:a)assertEquals(0f,x,0f);
+        wall.wallImpact(300,32);
+        gel.contact(1,2,300,0,.1f,32,32);
+        wall.renderMono(a,0,a.length);gel.renderMono(b,0,b.length);
+        float pa=0,pb=0,difference=0;
+        for(int i=0;i<a.length;i++){
+            pa=Math.max(pa,Math.abs(a[i]));pb=Math.max(pb,Math.abs(b[i]));difference+=Math.abs(a[i]-b[i]);
+        }
+        assertTrue(pa>0&&pb>0&&difference>0);
+        assertEquals(0,wall.activeOneShots());assertEquals(0,gel.activeOneShots());
+        assertEquals(0,wall.fusionsStarted());assertEquals(0,gel.fusionsStarted());
+        assertTrue(wall.peakOutput()<=.87001f&&gel.peakOutput()<=.87001f);
+    }
+
     @Test public void invalidSourceOrEventsAreRejected() {
         try {
             new BloopMaterialBank(new BloopMaterialBank.Material[4]);

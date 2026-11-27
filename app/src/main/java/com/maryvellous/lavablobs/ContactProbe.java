@@ -20,6 +20,7 @@ import java.util.Map;
 final class ContactProbe {
     interface Listener {
         void onContactStep(float simulationTime, float dt, List<Contact> contacts);
+        default void onWallImpact(int blobId,int side,float approach,float radius) {}
         default void onMerge(BlobWorld.Merge event) {}
         default void onPop(int blobId,float simulationTime) {}
         default void onReset() {}
@@ -99,7 +100,47 @@ final class ContactProbe {
         this.listener=listener;
     }
 
-    void beginStep() {contacts.clear();}
+    // Aggregate all membrane vertices and solver passes into one observation per
+    // blob and wall side. A held contact cannot repeatedly emit an impact.
+    private static final class WallContact {
+        final int blobId,side;
+        final float radius;
+        float peak;
+        WallContact(Blob b,int side){this.blobId=b.id;this.side=side;this.radius=b.radiusTarget;}
+    }
+    private static final class WallState {
+        float first,last;
+        boolean fired;
+        WallState(float time){first=last=time;}
+    }
+    private final Map<Long,WallContact> wallStep=new LinkedHashMap<>();
+    private final Map<Long,WallState> wallStates=new LinkedHashMap<>();
+    void beginStep() {contacts.clear();wallStep.clear();}
+
+    void observeWall(Blob b,int side,float nx,float ny) {
+        long key=((long)b.id<<2)|side;
+        WallContact c=wallStep.get(key);
+        if(c==null){c=new WallContact(b,side);wallStep.put(key,c);}
+        // Use whole-body closing velocity, not isolated vertex correction jitter.
+        float vx=0f,vy=0f;
+        for(int i=0;i<Blob.NODES;i++){vx+=b.vx[i];vy+=b.vy[i];}
+        c.peak=Math.max(c.peak,Math.max(0f,-(vx*nx+vy*ny)/Blob.NODES));
+    }
+
+    private void finishWalls(float time) {
+        wallStates.entrySet().removeIf(e->time-e.getValue().last>.045f);
+        for(Map.Entry<Long,WallContact> item:wallStep.entrySet()){
+            WallContact c=item.getValue();
+            WallState state=wallStates.get(item.getKey());
+            if(state==null){state=new WallState(time);wallStates.put(item.getKey(),state);}
+            state.last=time;
+            if(!state.fired&&time-state.first<=.060f&&c.peak>70f){
+                state.fired=true;
+                listener.onWallImpact(c.blobId,c.side,c.peak,c.radius);
+            }
+        }
+        wallStep.clear();
+    }
 
     void observe(Blob source,int node,Blob target,int edgeNode,float t,
             float nx,float ny,float overlap,float x,float y) {
@@ -139,12 +180,13 @@ final class ContactProbe {
             result.add(new Contact(a,time,dt));
         contacts.clear();
         listener.onContactStep(time,dt,Collections.unmodifiableList(result));
+        finishWalls(time);
     }
 
     void merged(BlobWorld.Merge event) {listener.onMerge(event);}
     void popped(int blobId,float time) {listener.onPop(blobId,time);}
     void reset() {
-        contacts.clear();
+        contacts.clear();wallStep.clear();wallStates.clear();
         listener.onReset();
     }
 }

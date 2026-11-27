@@ -26,6 +26,10 @@ Implementazione isolata: il nuovo `MaterialAudioEngine` non contiene loop di con
 
 L'utente giudica la V2.1 quasi perfetta: non percepisce il precedente rumore statico e il movimento sembra coerente, ma gli effetti secondari sono così bassi da non consentire una valutazione certa. Su richiesta, V2.2 applica un unico guadagno fisso 3× (+9,5 dB) a tutte le voci non-fusione (impatto, squish, lancio, POP) dopo il controllo di ammissione della voce; nessun cambio a campioni, soglie fisiche, pitch, inviluppi, voce fusione o limitatore globale. Il limitatore condiviso può attenuare il mix nei picchi sovrapposti. È una regolazione diagnostica, non un mix definitivo: attendere feedback strutturato sul telefono. Nessun merge su main.
 
+### V2.3 — distinzione vetro/gel (27 novembre 2026)
+
+Playtest V2.2: coerenza fisica 3,5/5, timbro 4/5, bilanciamento 2/5, pulizia 4/5, sincronizzazione 4,5/5. Effetti secondari ancora troppo deboli e dinamica poco proporzionale al movimento. Su indicazione dell'utente, l'attacco V2.2 originale resta per gli impatti con le pareti reali; gli impatti blob-blob ricevono una risposta più gelatinosa (attacco smussato, coda originale e curva di pitch ascendente), con maggiore dinamica per gli impatti e gli squish. Fusioni e campioni originali intatti. Il probe aggrega i contatti per blob e lato del vaso, con isteresi e velocità bulk normale; nessun suono continuo da appoggio. Qualità percettiva da collaudare. Slider volume generale concordato, ancora da integrare.
+
 ## 1. Decisione sonora fondamentale: la fusione è l'evento principe
 
 **La fusione usa uno dei quattro Bloop originali COMPLETO, dall'inizio alla fine.** Non lo ricostruiamo da un sintetizzatore e non eliminiamo il suo nucleo centrale. Conserviamo la varietà dei quattro Bloop, con eventuale variazione moderata di pitch/durata secondo la dimensione. La fusione è il momento più riconoscibile, pieno e gratificante del gioco.
