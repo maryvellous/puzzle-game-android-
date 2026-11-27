@@ -53,6 +53,40 @@ public class ContactProbeTest {
         assertTrue(m.simulationTime>0f);
     }
 
+    @Test public void realWallProjectionIsPassiveAndDeduplicated() {
+        Vessel vessel=new Vessel(-1,850f);
+        Blob observed=blob(35f,400f,1),baseline=blob(35f,400f,1);
+        observed.id=1;baseline.id=1;
+        speed(observed,-250f,0);speed(baseline,-250f,0);
+        final int[] events={0};
+        ContactProbe probe=new ContactProbe(new ContactProbe.Listener(){
+            @Override public void onContactStep(float time,float dt,List<ContactProbe.Contact> c){}
+            @Override public void onWallImpact(int id,int side,float approach,float radius){
+                assertEquals(1,id);assertTrue(approach>70f);events[0]++;
+            }
+        });
+        probe.beginStep();
+        for(int pass=0;pass<5;pass++){
+            vessel.confine(observed,probe);
+            vessel.confine(baseline);
+        }
+        probe.finishStep(.008f,.008f);
+        assertEquals("One real impact, not one per vertex or solver pass",1,events[0]);
+        for(int i=0;i<Blob.NODES;i++){
+            assertEquals(baseline.px[i],observed.px[i],0f);
+            assertEquals(baseline.py[i],observed.py[i],0f);
+        }
+        speed(observed,0,0);
+        for(int step=1;step<=120;step++){
+            probe.beginStep();
+            // Simulate stationary pressure repeatedly projected by the solver.
+            observed.px[0]=28f;observed.py[0]=400f;
+            vessel.confine(observed,probe);
+            probe.finishStep(.008f+step*.008f,.008f);
+        }
+        assertEquals("No further sound during stationary pressure",1,events[0]);
+    }
+
     @Test public void pairKeyIsSymmetricAndDoesNotAliasDistinctPairs() {
         assertEquals(BlobWorld.pairKey(1,3),BlobWorld.pairKey(3,1));
         assertNotEquals(BlobWorld.pairKey(1,3),BlobWorld.pairKey(1,4));
