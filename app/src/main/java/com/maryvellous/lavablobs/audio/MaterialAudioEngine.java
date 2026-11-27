@@ -22,6 +22,8 @@ import java.util.Map;
 public final class MaterialAudioEngine {
     public static final int SAMPLE_RATE=BloopMaterialBank.SAMPLE_RATE;
     private static final int MAX_SHORT_VOICES=24;
+    // Diagnostic V2.2: raise only non-fusion voices by 3x (+9.5 dB).
+    private static final float SECONDARY_GAIN=3f;
 
     // Units: world coordinates/second for slip; normalized membrane deformation.
     // These are a deliberately conservative initial "dead zone" for solver
@@ -111,7 +113,7 @@ public final class MaterialAudioEngine {
             return false;
         }
         if(volume>.0001f) {
-            voices.add(new Voice(audio,volume,rate,false));
+            voices.add(new Voice(audio,volume*SECONDARY_GAIN,rate,false));
             return true;
         }
         return false;
