@@ -1,6 +1,6 @@
 package com.maryvellous.lavablobs;
 
-/** Audio facade. Main builds retain the classic SoundPool implementation. */
+/** Audio facade. All gameplay builds now select Audio V2.3. */
 interface GameSound {
     boolean effectsEnabled();
     void setEffectsEnabled(boolean enabled);
@@ -19,7 +19,7 @@ interface GameSound {
     String diagnosticStatus();
 }
 
-/** Never changes existing GameAudio behavior in the stable build. */
+/** Historical SoundPool adapter retained for reference; not selected by LavaView. */
 final class ClassicGameSound implements GameSound {
     private final GameAudio audio;
     ClassicGameSound(android.content.Context context) {

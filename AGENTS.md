@@ -8,24 +8,21 @@
 - La cronologia Git conserva gli esperimenti passati; **non usare documenti o branch storici come requisiti correnti**.
 
 ## Stato del prodotto
-- **Repository:** `maryvellous/puzzle-game-android-` (l'utente rinominerà eventualmente il repo; non farlo autonomamente). **Progetto attivo:** `app/`, solo Lava Blobs Android. Nessun Rovina Puzzle nel codice principale; `junior-games-scintilla` è un progetto diverso.
-- **Release attuale:** **1.0.11**, versionCode 17, package `com.maryvellous.lavablobs`. SFX attuali con `SoundPool` e pulsante `SUONI/MUTO`; musica non implementata. La versione classica resta invariata finché non c'è approvazione esplicita di una sostituzione.
-- **Da preservare:** soft-body da 24 nodi e solver, adesioni, 12 recipienti, progressi e salvataggi, colori/UI, quattro Bloop originali, preferenza `sound_effects_enabled_v1`. Musica futura con mute distinto.
-- **Build:** JDK 17, SDK 35, Gradle 8.9; `gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug :app:assemblePreview`. Pubblicazione via workflow manuale `.github/workflows/lava-blobs-production.yml`; non avviarlo per manutenzione. Conservare le avvertenze sulla firma APK non persistente.
+- Repo `maryvellous/puzzle-game-android-`; progetto attivo `app/`.
+- Main 1.1.0 (versionCode 18), package `com.maryvellous.lavablobs`. Audio V2.3 approvato sul telefono e promosso su richiesta dell'utente il 27 novembre 2026. Ultima release pubblicata 1.0.11; distribuzione separata, solo su richiesta.
+- Base di sviluppo: preview approvata `cfb03c96fd5e348b5e0ddd0c201255101913fa5f`. Nuovi interventi partono dal main, non dai vecchi branch audio. Stesso motore in main e preview; SoundPool classico non selezionato.
+- Preservare gameplay e solver a 24 nodi, palette e interfaccia, slider, quattro Bloop e swoosh. Nessuna attività aggiuntiva di migrazione salvataggi richiesta.
+- Build: JDK 17, SDK 35, Gradle 8.9. CI `lava-blobs.yml`; pubblicazione manuale `lava-blobs-production.yml`.
 
-## UNA SOLA fonte progettuale per l'audio nuovo
+## Specifica audio vigente
 
-**[Motore Audio V2 — la materia diventa suono](docs/AUDIO_ENGINE_V2_MATERIAL_BLOOP.md)** è la **specifica vigente**. Non sostituirla con appunti, vecchi esperimenti, PR o un'altra proposta V1.
+[Motore Audio V2 — la materia diventa suono](docs/AUDIO_ENGINE_V2_MATERIAL_BLOOP.md) è l'unica specifica vigente.
 
-> «Un sistema in cui il comportamento della materia diventa suono.»
-
-- **Fusione = evento principe:** deve riprodurre uno dei **quattro Bloop originali COMPLETO**. Non sintetizzarne un sostituto né troncare il suono per liberare voci.
-- **Altri gesti:** solo **materiale parziale/trasformato dagli stessi Bloop** (attacchi, code, microtrame senza corpo della fusione), con inviluppi morbidi e risposta a movimento, pressione, sfregamento, dimensione e durata. La quiete è spesso corretta.
-- **Catena:** Contact Probe passivo su membrane reali → Contact Tracker con identità e durata delle coppie → Material Engine/Bloop Bank → Scene Mixer unico → output Android.
-- Distinguere contatto fisico da adesione; i **5 passaggi del solver** non generano 5 urti. Nessuna modifica alla fisica per inventare suoni. I blob piccoli tendono a essere più acuti/rapidi, quelli grandi più gravi/lenti; non confondere massa e volume.
-- Fusione prioritaria ma non necessariamente più forte per ogni istante; impedire glitch, clipping, click, ripetizioni di urti e accumulo del lancio senza troncare i Bloop completi.
-- **Ordine di lavoro:** Contact Probe/Tracker con test e CSV deterministici (PR #26) → banco dei quattro Bloop e ascolti offline sul branch `experiment/lava-blobs-audio-v2-engine` → **valutazione artistica utente** → core DSP unico e deterministico riusabile offline/Android → stress/benchmark → una sola APK diagnostica → ascolto su telefono → eventuale merge, solo su richiesta. Il laboratorio Python in `tools/audio_v2/` è provvisorio, non l'engine runtime e non va duplicato come secondo DSP stabile.
-- **Fondamenta disponibili sulla PR #26:** `Blob.id` con allocatore `BlobWorld.nextBlobId`, salvati nei checkpoint mantenendo retrocompatibilità VERSION=1; `ContactProbe` opzionale misura durante il solver (nessun contatto = lista vuota), `ContactTracker` produce BEGIN/UPDATE/END e CANCELLED per merge/POP. Test deterministici e CSV generato da `ContactProbeTraceTest` sotto `app/build/audio_v2/`. Il probe è **disattivo** senza listener; la 1.0.11 non usa la nuova catena.
+- Fusione = uno dei quattro Bloop completi, senza voice stealing.
+- Parete = attacco V2.2; blob-blob = risposta gelatinosa; squish finiti guidati da movimento e deformazione. Lancio = swoosh classico approvato.
+- Contatto non equivale a suono: quiete silenziosa, niente loop, deduplicazione dei cinque solver pass e degli urti sulle pareti.
+- Probe passivo → Tracker → MaterialAudioEngine → AudioTrack. Conservare il DSP approvato; test fisici e sonori più verifica percettiva per future modifiche.
+- Volume 0–100% dopo limiter, mute/ripristino persistenti. Musica futura distinta.
 
 ## Riscontro fisico e audio V2.1, 23 novembre 2026
 
@@ -33,15 +30,8 @@
 - **Difetto concreto:** `MaterialAudioEngine` ripeteva periodicamente una tail texture e la teneva attiva con scorrimenti >4 unità/s o piccole differenze di compressione, amplificando oscillazioni del solver. Non era un modello fedele di energia/movimento percepibile.
 - **Fix sperimentale V2.1:** rimosso *ogni* loop da `BloopMaterialBank` e mixer. I contatti sono **silenti per default**: squish è un solo frammento breve di Bloop tail, innescato da movimento bulk rilevante **calcolato dalle velocità medie delle 24 particelle del blob** o da brusca deformazione; soglie di quiete e credito di moto con reset sui micro-movimenti. Impatti reali one-shot; fusioni sempre Bloops completi. `ContactProbe.Contact.bulkMotion` passa identico a tracce CSV, renderer JVM e adapter `AudioTrack`; il motore usa `dt` fisico anche se la coda Android accorpa comandi.
 - **Regressioni con solver Java vero, CI 45279301704 completata con successo:** recipiente affollato dopo assestamento, 4 s, 1303 osservazioni da 5 coppie simultanee, slip locale fino a 126.9 ma bulk max 67.3 → **0 squish, 0 impatti, output esattamente 0**. Stesso setup con shake ripetuti → 1476 osservazioni, bulk max 509.1 → **9 squish**, 8 impatti, 3 fusioni. Test di contatti statici sintetici 10 s, assenza di loop, polifonia fusioni, Android `:app:assemblePreview` superati.
-- **Stato reale:** la nuova APK V2.1 diagnostica è compilata con package `com.maryvellous.lavablobs.audiov21` e mantiene la 1.0.11 separata. **Non è stata ascoltata/validata sul dispositivo.** Prossimo gate: la user prova prima stasi (nessun ronzio), poi shake/squish e fusioni; eventuale nuovo video va verificato anche nelle sezioni non-evento. **Mai merge su main senza esplicita approvazione.**
+- **Stato storico:** V2.1 era una preview; la V2.3 successiva è stata approvata il 27 novembre.
 
-## Stato implementazione isolata V2, 23 novembre 2026
-
-- Il **prototipo audiovisivo Python** sincronizzato alle membrane Java è stato giudicato «perfetto» dall'utente: usare quel risultato come riferimento artistico, non sostituirlo acriticamente con un nuovo timbro.
-- Sul branch `experiment/lava-blobs-audio-v2-engine` ora esiste **un solo core PCM Java** in `app/src/main/java/com/maryvellous/lavablobs/audio/`, verificato da test JVM e usato anche per render offline tramite `tools/audio_v2_java/SceneRenderCli.java`. La suite CI genera video in `build/audio_v2/java_video/` da confrontare con il riferimento `build/audio_v2/visual/`.
-- La versione Java è stata giudicata promettente nei video A/B; l'utente ha chiesto **un vero playtest**. Sul solo branch sperimentale, `V2GameSound` ora collega ContactProbe/Tracker e `MaterialAudioEngine` mediante una coda limitata e `AudioTrack` PCM16 in thread dedicato; `AndroidBloopDecoder` decodifica i quattro MP3 originali fuori dalla UI e misura attacchi/code. Nessun cambio alla fisica o ai salvataggi della release principale. **Qualità e latenza sul telefono non ancora verificate:** interrompere qui e attendere feedback di gameplay, non fare merge.
-- **APK diagnostica V2:** `:app:assemblePreview` → `app-preview.apk`, package esclusivo `com.maryvellous.lavablobs.audiov21` e preferenze/progressi isolati dalla 1.0.11. Workflow `.github/workflows/audio-v2-offline.yml` pubblica *una sola* APK di test come artefatto `lava-blobs-audio-v2-gameplay-test-apk`. La versione normale usa ancora `ClassicGameSound`/SoundPool. La build tecnica riuscita non prova l'audio hardware: controllare banner `AUDIO V2 · PRONTO` prima di giudicare, e registrare errori, ritardo, click, fusioni, POP, mute, rientro da background e performance.
-- **Mai unire PR #26 o il branch V2 in `main` senza approvazione esplicita.**
 
 ## Materiale storico, non autoritativo
 - `tools/audio_lab/`, i workflow `procedural-audio-lab.yml` e `two-blob-acoustic-prototype.yml`, e `AcousticTwoBlobTraceTest.java` provengono dagli esperimenti A/B e C1–C4.1. Possono fornire dati/idee, **non** implementano la V2 e non vanno eseguiti o copiati come percorso di produzione.

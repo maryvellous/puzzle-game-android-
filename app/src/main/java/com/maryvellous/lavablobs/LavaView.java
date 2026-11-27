@@ -118,10 +118,8 @@ public final class LavaView extends View {
         super(context);
         this.spec=spec;this.progress=progress;this.onHome=onHome;
         this.session=session;
-        // The standalone diagnostic app has its own package/preferences.
-        // The stable product and ordinary builds keep classic SoundPool.
-        audio=context.getPackageName().endsWith(".audiov21")?
-                new V2GameSound(context):new ClassicGameSound(context);
+        // Approved V2.3 audio in every gameplay build.
+        audio=new V2GameSound(context);
         theme=new ThemeStore(context).current();
         perfLogging=(context.getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE)!=0;
         world=new BlobWorld(new Random(),spec);
@@ -138,9 +136,8 @@ public final class LavaView extends View {
                 world.reset();
             }
         }
-        // Install the passive solver observation ONLY in the diagnostic app.
-        if(audio instanceof V2GameSound)
-            world.setContactProbe((V2GameSound)audio);
+        // Passive observation drives the approved material audio engine.
+        world.setContactProbe((V2GameSound)audio);
         setLayerType(View.LAYER_TYPE_HARDWARE,null);
         setHapticFeedbackEnabled(true);
         best=progress.record(spec.id);

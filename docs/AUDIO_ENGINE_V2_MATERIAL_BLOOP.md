@@ -1,6 +1,6 @@
 # Lava Blobs — Motore acustico V2: la materia diventa suono
 
-**Decisione progettuale del 22 novembre 2026 · Specifica artistica e architetturale vigente · Prima integrazione gameplay Audio V2 pronta per il playtest Android, isolata da `main` e non ancora verificata sul dispositivo.**
+**Decisione progettuale del 22 novembre 2026 · Audio V2.3 approvato sul telefono il 27 novembre 2026 · nuova base main (app 1.1.0).**
 
 > **«Un sistema in cui il comportamento della materia diventa suono.»**
 
@@ -10,7 +10,7 @@ Questa frase è il **faro del progetto**. Ogni comportamento sonoro deve avere u
 
 L'utente ha giudicato **«perfetto»** il primo ascolto *insieme alle vere membrane simulate* (cinque gesti e scena reale a 12 blob). Questa è una validazione della **direzione artistica del prototipo Python sincronizzato**, non ancora una validazione della latenza su Android e neppure un'autorizzazione a integrare o pubblicare l'app.
 
-Sul branch `experiment/lava-blobs-audio-v2-engine` è stato creato un core PCM deterministico **puro Java** sotto `app/src/main/java/com/maryvellous/lavablobs/audio/`, riutilizzato da `tools/audio_v2_java/SceneRenderCli.java` per anteprime audiovisive A/B. La versione Java appare convincente all'ascolto; l'utente richiede **test durante il gameplay reale**. Il core ora viene usato anche da una **APK Android diagnostica** con `AudioTrack`, senza duplicarne il DSP. `AndroidBloopDecoder` ricava il materiale PCM dai quattro MP3 originali del pacchetto e `V2GameSound` trasferisce le osservazioni del solver su coda dedicata. Questa implementazione è soltanto in `experiment/lava-blobs-audio-v2-engine` con package `com.maryvellous.lavablobs.audiov21`; non è stata integrata in `main`. La reattività e la qualità sull'hardware restano da verificare.
+Sul branch `experiment/lava-blobs-audio-v2-engine` è stato creato un core PCM deterministico **puro Java** sotto `app/src/main/java/com/maryvellous/lavablobs/audio/`, riutilizzato da `tools/audio_v2_java/SceneRenderCli.java` per anteprime audiovisive A/B. La versione Java appare convincente all'ascolto; l'utente richiede **test durante il gameplay reale**. Il core ora viene usato anche da una **APK Android diagnostica** con `AudioTrack`, senza duplicarne il DSP. `AndroidBloopDecoder` ricava il materiale PCM dai quattro MP3 originali del pacchetto e `V2GameSound` trasferisce le osservazioni del solver su coda dedicata. In quella fase l'implementazione era isolata sul branch sperimentale e da verificare sul telefono.
 
 ### Correzione obbligatoria dopo primo playtest Android (23 novembre 2026)
 
@@ -28,7 +28,7 @@ L'utente giudica la V2.1 quasi perfetta: non percepisce il precedente rumore sta
 
 ### V2.3 — distinzione vetro/gel (27 novembre 2026)
 
-Playtest V2.2: coerenza fisica 3,5/5, timbro 4/5, bilanciamento 2/5, pulizia 4/5, sincronizzazione 4,5/5. Effetti secondari ancora troppo deboli e dinamica poco proporzionale al movimento. Su indicazione dell'utente, l'attacco V2.2 originale resta per gli impatti con le pareti reali; gli impatti blob-blob ricevono una risposta più gelatinosa (attacco smussato, coda originale e curva di pitch ascendente), con maggiore dinamica per gli impatti e gli squish. Fusioni e campioni originali intatti. Il probe aggrega i contatti per blob e lato del vaso, con isteresi e velocità bulk normale; nessun suono continuo da appoggio. Qualità percettiva da collaudare. Slider generale integrato nella preview: 0–100%, curva quadratica dopo il limiter, rampa 8 ms per i cambi non nulli, mute con ripristino dell'ultimo valore, preferenza persistente e gesture del cursore separate dal lancio. Impostazione iniziale 100% per conservare il volume della V2.2. Il controllo classico resta invariato fuori dalla preview.
+Playtest V2.2: coerenza fisica 3,5/5, timbro 4/5, bilanciamento 2/5, pulizia 4/5, sincronizzazione 4,5/5. Effetti secondari ancora troppo deboli e dinamica poco proporzionale al movimento. Su indicazione dell'utente, l'attacco V2.2 originale resta per gli impatti con le pareti reali; gli impatti blob-blob ricevono una risposta più gelatinosa (attacco smussato, coda originale e curva di pitch ascendente), con maggiore dinamica per gli impatti e gli squish. Fusioni e campioni originali intatti. Il probe aggrega i contatti per blob e lato del vaso, con isteresi e velocità bulk normale; nessun suono continuo da appoggio. Qualità percettiva approvata dall'utente nel successivo playtest. Slider generale integrato nella preview: 0–100%, curva quadratica dopo il limiter, rampa 8 ms per i cambi non nulli, mute con ripristino dell'ultimo valore, preferenza persistente e gesture del cursore separate dal lancio. Impostazione iniziale 100% per conservare il volume della V2.2. Il controllo è ora attivo anche nell'app principale.
 
 **Eccezione esplicita per il gesto di rilascio (27 novembre):** l'utente richiede un lancio più simile alla versione precedente, interpretata come 1.0.11. Riutilizzare lo `swoosh_source` già incluso: segmento 47–94% invertito, fade 5/13 ms, velocità per tier come nel classico, gain .20 invece di .16 per la prova. Il gesto passa nel mixer PCM condiviso e non usa SoundPool. In caso di decodifica non riuscita resta il fallback parziale Bloop; il laboratorio offline senza sorgente opzionale mantiene tale fallback. È l'unica eccezione timbrica al materiale Bloop (feedback di input, non contatto fisico). Fusioni, pareti e collisioni fra blob invariati.
 
@@ -36,7 +36,7 @@ Playtest V2.2: coerenza fisica 3,5/5, timbro 4/5, bilanciamento 2/5, pulizia 4/5
 
 **La fusione usa uno dei quattro Bloop originali COMPLETO, dall'inizio alla fine.** Non lo ricostruiamo da un sintetizzatore e non eliminiamo il suo nucleo centrale. Conserviamo la varietà dei quattro Bloop, con eventuale variazione moderata di pitch/durata secondo la dimensione. La fusione è il momento più riconoscibile, pieno e gratificante del gioco.
 
-**Tutti gli altri suoni sono espressioni parziali o trasformazioni della stessa sorgente timbrica.** I Bloop non sono soltanto riferimenti estetici: costituiscono il **materiale sorgente comune**. L'idea dell'utente è di poter usare, per esempio, l'attacco e la coda di un Bloop *senza la sua parte centrale*. Non imporre il taglio rigido come ricetta universale: identificare le regioni acustiche in ciascuno dei quattro Bloop e sperimentare ricombinazioni che non creino salti, mini-fusioni o ripetizioni riconoscibili.
+**Gli altri suoni fisici sono espressioni parziali o trasformazioni della stessa sorgente timbrica.** Il lancio usa lo swoosh classico approvato. I Bloop non sono soltanto riferimenti estetici: costituiscono il **materiale sorgente comune**. L'idea dell'utente è di poter usare, per esempio, l'attacco e la coda di un Bloop *senza la sua parte centrale*. Non imporre il taglio rigido come ricetta universale: identificare le regioni acustiche in ciascuno dei quattro Bloop e sperimentare ricombinazioni che non creino salti, mini-fusioni o ripetizioni riconoscibili.
 
 ### Grammatica del materiale
 
@@ -59,7 +59,7 @@ L'attacco, il corpo e la coda sono **regioni acustiche**, non percentuali fisse:
 | **Compressione** | Modula risonanza, smorzamento, filtro e risposta già attiva. Se statica può non suonare | Risposta e coda della materia; **nessuna voce obbligatoria** |
 | **Assestamento** senza nuova collisione | Silenzio o dissolvenza dell'energia esistente; niente falso attacco | Nessun nuovo campione |
 | **Separazione / rilascio** | Esaurimento morbido della texture attiva, se percepibile | Decadimento delle code |
-| **Lancio** da parte del giocatore | Feedback molto discreto, autonomo dal mondo di contatto e soggetto a limite di frequenza; esplorare materiale parziale Bloop per unità timbrica | Frammento/aria/attacco tenue dal banco Bloop, da validare |
+| **Lancio** da parte del giocatore | Swoosh breve, autonomo dal contatto, pitch per tier | Swoosh classico invertito, approvato V2.3 |
 | **POP / cancellazione** | Segnale breve, distinguibile dalla fusione e non in competizione con essa | Frammento breve derivato dai Bloop, da validare |
 
 **La fusione non è semplicemente un suono più alto:** è l'unica azione che esprime la frase acustica completa. Gli altri comportamenti ne usano il vocabolario, non il messaggio intero.
@@ -131,12 +131,12 @@ Queste misure **non** indicano automaticamente i confini attacco/corpo/coda e il
 - **C1–C4.1**: archivio storico di prove e lezioni; **non è più il generatore di riferimento** del nuovo motore. Le texture C4.1 possono servire soltanto come confronto percettivo, non come vincolo o fonte timbrica definitiva.
 - **Audio Test / Audio Size Test / Audio Mix Test**: build sperimentali, destinate alla disinstallazione dal telefono dell'utente. Non richiederne la conservazione; nessun dato della release normale deve essere toccato. Le loro PR/branch non costituiscono una nuova specifica e **non vanno fuse nel ramo principale senza una nuova decisione**.
 - La **Audio Size Test** aveva un mapping dimensione→pitch promettente. La Mix Test ha ridotto troppo impatti e sfregamento senza eliminare la «frittura». Il lancio risultava troppo presente; era un effetto indipendente e sovrapponibile. Questi risultati guidano la progettazione, non obbligano a riutilizzare gli asset.
-- **La release 1.0.11 rimane intatta.** Nessuna compilazione, rimozione di codice, cambiamento dei Bloop o release richiesta da questa decisione di documentazione.
+- La release pubblicata 1.0.11 resta storica; main adotta V2.3. Pubblicazione della 1.1.0 separata.
 
 ## 6. Gate progettuali non negoziabili
 
 - Solo una **fusione reale** può richiedere un **Bloop completo**.
-- Non-fusione = **stesso materiale sorgente**, ma espressione parziale, con causa e inviluppo fisici.
+- Non-fusione fisica = **stesso materiale sorgente**, ma espressione parziale, con causa e inviluppo fisici. Eccezione: swoosh di input.
 - Le fusioni sono il **fulcro del piacere sonoro**: nessun ducking o voice-stealing che ne tronchi sistematicamente il campione.
 - Il silenzio è una risposta corretta quando non c'è eccitazione materiale significativa.
 - Il rilevamento del contatto non dipende esclusivamente dai legami adesivi.
@@ -146,4 +146,4 @@ Queste misure **non** indicano automaticamente i confini attacco/corpo/coda e il
 
 ---
 
-**Stato:** la specifica artistica V2 è approvata. **Fondamenta tecniche in PR #26:** identità stabili, Contact Probe/Tracker e test. **Sul branch sperimentale:** Material Bank, core PCM Java riutilizzabile, test fisici/sonori offline, `AudioTrack` e una APK diagnostica separata già compilata in CI. **In attesa del playtest su telefono**, senza merge o pubblicazione. La precedente V1 e gli esperimenti A/B–C4.1 restano esclusivamente nella cronologia Git; le loro proposte di ricostruire un Bloop completo tramite sintesi sono superate.
+**Stato — 27 novembre 2026:** dopo il playtest V2.3, l'utente riferisce «è molto molto buono» e autorizza main come nuova base. La versione approvata è cfb03c96fd5e348b5e0ddd0c201255101913fa5f. Il motore viene selezionato anche nel package normale; DSP, fisica e slider invariati. Il collaudo percettivo della preview è positivo; la CI della nuova build main resta da verificare. Nessuna pubblicazione automatica. Gli esperimenti precedenti sono storici.

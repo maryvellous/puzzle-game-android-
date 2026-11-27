@@ -13,3 +13,7 @@ Installare esclusivamente l'artifact `lava-blobs-audio-v2.3-gameplay-test-apk` d
 7. Ripetere i cinque punteggi del collaudo V2.2: coerenza fisica, timbro, bilanciamento, pulizia, sincronizzazione. Aggiungere un commento su rilascio, vetro vs gel e slider.
 
 Gate: test JVM, APK preview, verifiche offline già configurate nel workflow; nessuna promozione su main fino ad approvazione su telefono. Le vecchie audizioni CLI non includono ancora eventi parete e usano il fallback di rilascio senza sorgente opzionale: non sostituiscono il collaudo della preview reale.
+
+## Esito — 27 novembre 2026
+
+Utente: «è molto molto buono. per me possiamo considerare questa la nuova versione main e continuare da qui». Approvata la preview V2.3, commit `cfb03c96fd5e348b5e0ddd0c201255101913fa5f`, e autorizzata la promozione a main. Nessun intervento aggiuntivo sui salvataggi richiesto. Le prossime modifiche partono dalla 1.1.0 con Audio V2.3 attivo nel package normale.

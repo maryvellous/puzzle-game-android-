@@ -57,7 +57,7 @@ jobs:
           print(f"Valid 112ms mono PCM WAV; peak={peak}, RMS={rms:.0f}")
           PY
       - name: Test game physics and collision SFX regression
-        run: gradle --no-daemon :app:testDebugUnitTest
+        run: gradle --no-daemon :app:testDebugUnitTest :app:testPreviewUnitTest
       - name: Upload V2 contact-control trace (offline diagnostics only)
         uses: actions/upload-artifact@v4
         with:
@@ -68,6 +68,7 @@ jobs:
       - name: Build APKs
         run: gradle --no-daemon :app:assembleDebug :app:assemblePreview
       - name: Upload installable APK
+        id: main_apk
         uses: actions/upload-artifact@v4
         with:
           name: lava-blobs-android-debug
@@ -79,3 +80,8 @@ jobs:
           name: lava-blob-preview-android
           path: app/build/outputs/apk/preview/app-preview.apk
           if-no-files-found: error
+
+      - name: Main APK download link
+        run: |
+          echo '[Download Lava Blob 1.1.0 main APK (ZIP)](${{ steps.main_apk.outputs.artifact-url }})' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Commit: ${{ github.sha }}' >> "$GITHUB_STEP_SUMMARY"

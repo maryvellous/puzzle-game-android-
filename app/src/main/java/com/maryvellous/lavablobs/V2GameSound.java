@@ -15,7 +15,7 @@ import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 
 /**
- * Audio V2 gameplay bridge ONLY for the standalone .audiov2 variant.
+ * Audio V2.3 gameplay bridge for the main app and isolated preview.
  *
  * The UI/physics thread observes real membranes and puts simple commands in a
  * bounded queue. The worker loads the FOUR original MP3s and drives the exact
@@ -52,6 +52,7 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
     }
 
     private final Context app;
+    private final boolean diagnosticBuild;
     private final SharedPreferences preferences;
     private final ContactTracker tracker;
     private final ArrayBlockingQueue<Command> queue=new ArrayBlockingQueue<>(CAPACITY);
@@ -71,6 +72,7 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
 
     V2GameSound(Context context) {
         app=context.getApplicationContext();
+        diagnosticBuild=app.getPackageName().endsWith(".audiov21");
         preferences=app.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
         volumePercent=Math.max(0,Math.min(100,preferences.getInt(VOLUME_KEY,
                 preferences.getBoolean(EFFECTS_KEY,true)?100:0)));
@@ -181,6 +183,7 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
         synchronized(lifecycle){lifecycle.notifyAll();}
     }
     @Override public String diagnosticStatus() {
+        if(!diagnosticBuild)return null;
         if(!effectsEnabled())return "AUDIO V2 · MUTO";
         if(paused)return "AUDIO V2 · PAUSA";
         return "AUDIO V2 · "+state+(droppedContacts>0?" · Q:"+droppedContacts:"");

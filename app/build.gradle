@@ -10,8 +10,8 @@ android {
         applicationId 'com.maryvellous.lavablobs'
         minSdk 26
         targetSdk 35
-        versionCode 17
-        versionName '1.0.11'
+        versionCode 18
+        versionName '1.1.0'
         manifestPlaceholders = [appLabel: 'Lava Blob']
     }
 
@@ -36,13 +36,13 @@ android {
             if (signingConfigs.findByName('stable') != null)
                 signingConfig signingConfigs.stable
         }
-        // ISOLATED Audio V2 gameplay test build. Not a production upgrade.
+        // ISOLATED preview build; same approved engine, separate package.
         // Distinct applicationId also means separate local progress and saves.
         preview {
             initWith debug
             applicationIdSuffix '.audiov21'
-            versionNameSuffix '-audio-v2.3'
-            manifestPlaceholders = [appLabel: 'Lava Blob - Audio V2.3']
+            versionNameSuffix '-preview'
+            manifestPlaceholders = [appLabel: 'Lava Blob - Preview']
         }
     }
 
