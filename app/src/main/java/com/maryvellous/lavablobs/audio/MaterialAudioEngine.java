@@ -61,7 +61,7 @@ public final class MaterialAudioEngine {
     private int wallIndex;
     private final Map<Long,Pair> pairs=new HashMap<>();
     private final ArrayList<PcmVoice> voices=new ArrayList<>();
-    public enum MixProfile { APPROVED, REFINED }
+    public enum MixProfile { APPROVED, REFINED, CUBIC }
     public enum VoiceFamily { FUSION, GEL, WALL, SQUISH, LAUNCH, POP }
     private float[][] diagnosticStems;
     /** Offline-only dry stems; never alters the mix or the physical event budget. */
@@ -100,7 +100,7 @@ public final class MaterialAudioEngine {
     public MaterialAudioEngine(BloopMaterialBank bank,float[] releaseSwoosh,boolean aggregation,MixProfile profile) {
         if(bank==null||profile==null)throw new IllegalArgumentException("Material bank and mix profile required");
         this.bank=bank;mixProfile=profile;
-        limiter=new PeakLimiter(SAMPLE_RATE,profile==MixProfile.REFINED?Math.round(SAMPLE_RATE*.003f):0);
+        limiter=new PeakLimiter(SAMPLE_RATE,profile!=MixProfile.APPROVED?Math.round(SAMPLE_RATE*.003f):0);
         aggregator=aggregation?new AcousticAggregator((family,sound,gain,rate)->shortVoice(VoiceFamily.valueOf(family.name()),sound,gain,rate)):null;
         if(releaseSwoosh!=null){
             if(releaseSwoosh.length<96)throw new IllegalArgumentException("Release clip too short");
@@ -169,7 +169,7 @@ public final class MaterialAudioEngine {
             return false;
         }
         if(volume>.0001f) {
-            voices.add(new PcmVoice(audio,volume*SECONDARY_GAIN,rate,false,mixProfile==MixProfile.REFINED,family));
+            voices.add(new PcmVoice(audio,volume*SECONDARY_GAIN,rate,false,mixProfile!=MixProfile.APPROVED,family,mixProfile==MixProfile.CUBIC));
             activeShortVoices++;
             peakShortVoices=Math.max(peakShortVoices,activeShortVoices);
             return true;
@@ -302,7 +302,7 @@ public final class MaterialAudioEngine {
         if(parentA>0)cancelBlob(parentA);
         if(parentB>0)cancelBlob(parentB);
         BloopMaterialBank.Material material=bank.at(fusionIndex++);
-        voices.add(new PcmVoice(material.complete,.48f,pitchForRadius(radius),true,mixProfile==MixProfile.REFINED));
+        voices.add(new PcmVoice(material.complete,.48f,pitchForRadius(radius),true,mixProfile!=MixProfile.APPROVED,VoiceFamily.FUSION,mixProfile==MixProfile.CUBIC));
         fusionsStarted++;
     }
 
