@@ -8,10 +8,11 @@ import java.util.ArrayList;
 final class AcousticAggregator {
     enum Family { GEL, WALL, SQUISH }
     interface Sink { boolean emit(float[] sound,float gain,float rate); }
+    interface FamilySink { boolean emit(Family family,float[] sound,float gain,float rate); }
     private static final double RATE_RATIO=1.12;
     private static final int MAX_GROUPS=32,MAX_CONTRIBUTIONS=64;
     private final ArrayList<Group> groups=new ArrayList<>(MAX_GROUPS);
-    private final Sink sink;
+    private final FamilySink sink;
     private long nextDue=Long.MAX_VALUE;
     private long candidates,emitted,collapsed,rejected,cancelled;
     private int maxGroup;
@@ -55,7 +56,8 @@ final class AcousticAggregator {
             return Math.max(firstRate/rate,rate/firstRate)<=RATE_RATIO;
         }
     }
-    AcousticAggregator(Sink sink){this.sink=sink;}
+    AcousticAggregator(Sink sink){this((family,sound,gain,rate)->sink.emit(sound,gain,rate));}
+    AcousticAggregator(FamilySink sink){this.sink=sink;}
     private static int window(Family f){
         return Math.round(MaterialAudioEngine.SAMPLE_RATE*(f==Family.SQUISH?.030f:.012f));
     }
@@ -102,7 +104,7 @@ final class AcousticAggregator {
             rate=(float)Math.exp(g.weightedLogRate/g.energy);
         }
         emitted++;collapsed+=g.count-1;
-        if(!sink.emit(g.representative,gain,rate))rejected++;
+        if(!sink.emit(g.family,g.representative,gain,rate))rejected++;
     }
     /** Impacts already happened; only unplayed deformation contributions are
      * invalidated by removal. Existing PCM voices always finish naturally. */
