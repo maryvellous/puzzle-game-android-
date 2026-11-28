@@ -10,6 +10,7 @@ on:
       - 'build.gradle'
       - 'settings.gradle'
       - '.github/workflows/lava-blobs.yml'
+      - '.github/workflows/lava-blobs-production.yml'
   pull_request:
     paths:
       - 'app/**'
@@ -17,6 +18,7 @@ on:
       - 'build.gradle'
       - 'settings.gradle'
       - '.github/workflows/lava-blobs.yml'
+      - '.github/workflows/lava-blobs-production.yml'
   workflow_dispatch:
 
 concurrency:
@@ -63,7 +65,7 @@ jobs:
           print(f"Valid 112ms mono PCM WAV; peak={peak}, RMS={rms:.0f}")
           PY
       - name: Test solver, audio transport, lifecycle and aggregation
-        run: gradle --no-daemon --no-build-cache :app:testDebugUnitTest :app:testAggregationPreviewUnitTest
+        run: gradle --no-daemon --no-build-cache :app:testDebugUnitTest :app:testAggregationPreviewUnitTest :app:testReleaseUnitTest
       - name: Compare dense late-game solver and event traces with reference
         run: |
           set -euo pipefail
@@ -164,7 +166,14 @@ jobs:
           retention-days: 14
           if-no-files-found: error
       - name: Build APKs
-        run: gradle --no-daemon :app:assembleDebug :app:assembleAggregationPreview
+        run: gradle --no-daemon :app:assembleDebug :app:assembleAggregationPreview :app:assembleRelease
+      - name: Verify unsigned release package (compile gate only)
+        run: |
+          apk=$(find app/build/outputs/apk/release -name '*.apk' -print -quit)
+          test -n "$apk"
+          badging=$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk")
+          printf '%s\n' "$badging" | grep -F "package: name='com.maryvellous.lavablobs'"
+          if printf '%s\n' "$badging" | grep -q '^application-debuggable'; then exit 1; fi
       - name: Upload installable APK
         id: main_apk
         uses: actions/upload-artifact@v4
