@@ -628,7 +628,7 @@ public final class LavaView extends View {
     private void copyFrameProfile(){
         android.content.ClipboardManager clipboard=(android.content.ClipboardManager)getContext().getSystemService(Context.CLIPBOARD_SERVICE);
         if(clipboard==null)return;
-        String report="Lava Blob "+BuildConfig.VERSION_NAME+" | livello="+spec.id+" | shape="+spec.shape+" | "+getWidth()+"x"+getHeight()+" | device="+android.os.Build.MODEL+" | drops="+world.dropCount+"\n"+frameProfile.report()+world.physicsProfile();
+        String report="Lava Blob "+BuildConfig.VERSION_NAME+" | rev="+BuildConfig.BUILD_REVISION+" | livello="+spec.id+" | shape="+spec.shape+" | "+getWidth()+"x"+getHeight()+" | device="+android.os.Build.MODEL+" | drops="+world.dropCount+"\n"+frameProfile.report()+world.physicsProfile();
         clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Lava Blob performance",report));
         android.widget.Toast.makeText(getContext(),"Dati prestazioni copiati",android.widget.Toast.LENGTH_SHORT).show();
     }
