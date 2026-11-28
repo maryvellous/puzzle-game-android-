@@ -63,7 +63,7 @@ jobs:
           print(f"Valid 112ms mono PCM WAV; peak={peak}, RMS={rms:.0f}")
           PY
       - name: Test solver, audio transport, lifecycle and aggregation
-        run: gradle --no-daemon --no-build-cache :app:testDebugUnitTest :app:testPreviewUnitTest :app:testAggregationPreviewUnitTest
+        run: gradle --no-daemon --no-build-cache :app:testDebugUnitTest :app:testAggregationPreviewUnitTest
       - name: Compare dense late-game solver and event traces with reference
         run: |
           set -euo pipefail
@@ -148,7 +148,7 @@ jobs:
           retention-days: 14
           if-no-files-found: error
       - name: Build APKs
-        run: gradle --no-daemon :app:assembleDebug :app:assemblePreview :app:assembleAggregationPreview
+        run: gradle --no-daemon :app:assembleDebug :app:assembleAggregationPreview
       - name: Upload installable APK
         id: main_apk
         uses: actions/upload-artifact@v4
@@ -156,19 +156,12 @@ jobs:
           name: lava-blobs-android-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-      - name: Upload side-by-side preview APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: lava-blob-preview-android
-          path: app/build/outputs/apk/preview/app-preview.apk
-          if-no-files-found: error
-
       - name: Verify isolated aggregation APK package
         run: |
           apk=$(find app/build/outputs/apk/aggregationPreview -name '*.apk' -print -quit)
           test -n "$apk"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk" | grep -F "package: name='com.maryvellous.lavablobs.audioaggregation'"
-      - name: Upload independent aggregation comparison APK
+      - name: Upload approved-engine diagnostic preview APK
         id: cluster_apk
         uses: actions/upload-artifact@v4
         with:
@@ -178,6 +171,6 @@ jobs:
 
       - name: Main APK download link
         run: |
-          echo '[Download Lava Blob 1.1.0 main APK (ZIP)](${{ steps.main_apk.outputs.artifact-url }})' >> "$GITHUB_STEP_SUMMARY"
-          echo '[Download aggregation candidate APK (ZIP)](${{ steps.cluster_apk.outputs.artifact-url }})' >> "$GITHUB_STEP_SUMMARY"
+          echo '[Download main-package debug APK (ZIP)](${{ steps.main_apk.outputs.artifact-url }})' >> "$GITHUB_STEP_SUMMARY"
+          echo '[Download approved-engine diagnostic preview APK (ZIP)](${{ steps.cluster_apk.outputs.artifact-url }})' >> "$GITHUB_STEP_SUMMARY"
           echo 'Commit: ${{ github.sha }}' >> "$GITHUB_STEP_SUMMARY"
