@@ -1,6 +1,5 @@
 package com.maryvellous.lavablobs.audio;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -21,7 +20,6 @@ import java.util.Map;
  */
 public final class MaterialAudioEngine {
     public static final int SAMPLE_RATE=BloopMaterialBank.SAMPLE_RATE;
-    private static final int MAX_SHORT_VOICES=24;
     // Diagnostic V2.2: raise only non-fusion voices by 3x (+9.5 dB).
     private static final float SECONDARY_GAIN=3f;
 
@@ -60,34 +58,16 @@ public final class MaterialAudioEngine {
     private final float[][] gelImpacts=new float[BloopMaterialBank.SOURCE_COUNT][];
     private int wallIndex;
     private final Map<Long,Pair> pairs=new HashMap<>();
-    private final ArrayList<PcmVoice> voices=new ArrayList<>();
     public enum MixProfile { APPROVED, REFINED, CUBIC }
     public enum VoiceFamily { FUSION, GEL, WALL, SQUISH, LAUNCH, POP }
-    private float[][] diagnosticStems;
-    /** Offline-only dry stems; never alters the mix or the physical event budget. */
-    public float[][] captureDryStems(int frames){
-        if(renderedFrames!=0||frames<=0)throw new IllegalStateException("Capture requires fresh engine and positive length");
-        diagnosticStems=new float[VoiceFamily.values().length][frames];return diagnosticStems;
-    }
-    private final MixProfile mixProfile;
-    private final PeakLimiter limiter;
+    private final PcmMixer mixer;
     private final AcousticAggregator aggregator;
-    private int activeShortVoices,peakShortVoices;
-    private float peakOutput,previousOutput,peakSampleStep;
-    private float peakDry,minimumLimiterGain=1f;
-    private long limitedFrames,renderedFrames;
-    private float outputGain=1f,targetOutputGain=1f;
-    private final float volumeSmoothing=(float)(1-Math.exp(-1d/(SAMPLE_RATE*.008)));
-
-    /** Perceptual control AFTER the shared limiter: leaves the internal mix intact. */
-    public void setOutputVolumePercent(int percent){
-        float position=clamp(percent/100f,0f,1f);
-        targetOutputGain=position*position;
-        if(percent<=0)outputGain=0f;
-    }
-    private int fusionIndex,contactBeginCount,fusionsStarted,fusionsCompleted;
-    private int shortVoicesRejected,peakVoices;
+    private int fusionIndex,contactBeginCount;
     private int squishEvents,impactEvents;
+    /** Offline-only dry stems; never alters the mix or physical event budget. */
+    public float[][] captureDryStems(int frames){return mixer.captureDryStems(frames);}
+    /** Perceptual control after the limiter. */
+    public void setOutputVolumePercent(int percent){mixer.setOutputVolumePercent(percent);}
 
     public MaterialAudioEngine(BloopMaterialBank bank) {this(bank,null);}
 
@@ -99,8 +79,7 @@ public final class MaterialAudioEngine {
     }
     public MaterialAudioEngine(BloopMaterialBank bank,float[] releaseSwoosh,boolean aggregation,MixProfile profile) {
         if(bank==null||profile==null)throw new IllegalArgumentException("Material bank and mix profile required");
-        this.bank=bank;mixProfile=profile;
-        limiter=new PeakLimiter(SAMPLE_RATE,profile!=MixProfile.APPROVED?Math.round(SAMPLE_RATE*.003f):0);
+        this.bank=bank;mixer=new PcmMixer(profile);
         aggregator=aggregation?new AcousticAggregator((family,sound,gain,rate)->shortVoice(VoiceFamily.valueOf(family.name()),sound,gain,rate)):null;
         if(releaseSwoosh!=null){
             if(releaseSwoosh.length<96)throw new IllegalArgumentException("Release clip too short");
@@ -164,24 +143,14 @@ public final class MaterialAudioEngine {
     }
 
     private boolean shortVoice(VoiceFamily family,float[] audio,float volume,float rate) {
-        if(activeShortVoices>=MAX_SHORT_VOICES) {
-            shortVoicesRejected++;
-            return false;
-        }
-        if(volume>.0001f) {
-            voices.add(new PcmVoice(audio,volume*SECONDARY_GAIN,rate,false,mixProfile!=MixProfile.APPROVED,family,mixProfile==MixProfile.CUBIC));
-            activeShortVoices++;
-            peakShortVoices=Math.max(peakShortVoices,activeShortVoices);
-            return true;
-        }
-        return false;
+        return mixer.shortVoice(family,audio,volume,rate);
     }
 
     private boolean gesture(AcousticAggregator.Family family,float[] audio,float gain,float rate){
         return gesture(family,0,0,audio,gain,rate);
     }
     private boolean gesture(AcousticAggregator.Family family,int a,int b,float[] audio,float gain,float rate){
-        return aggregator==null?shortVoice(VoiceFamily.valueOf(family.name()),audio,gain,rate):aggregator.offer(family,renderedFrames,a,b,audio,gain,rate);
+        return aggregator==null?shortVoice(VoiceFamily.valueOf(family.name()),audio,gain,rate):aggregator.offer(family,mixer.renderedFrames(),a,b,audio,gain,rate);
     }
 
     /** Backward-compatible test entrypoint with the solver's normal half-step. */
@@ -302,8 +271,7 @@ public final class MaterialAudioEngine {
         if(parentA>0)cancelBlob(parentA);
         if(parentB>0)cancelBlob(parentB);
         BloopMaterialBank.Material material=bank.at(fusionIndex++);
-        voices.add(new PcmVoice(material.complete,.48f,pitchForRadius(radius),true,mixProfile!=MixProfile.APPROVED,VoiceFamily.FUSION,mixProfile==MixProfile.CUBIC));
-        fusionsStarted++;
+        mixer.fusion(material.complete,pitchForRadius(radius));
     }
 
     /** Actual rigid-wall onset: original V2.2 impact timbre and gain. */
@@ -342,64 +310,39 @@ public final class MaterialAudioEngine {
         if(output==null||offset<0||frames<0||offset>output.length-frames)
             throw new IllegalArgumentException("Output buffer bounds");
         for(int s=offset;s<offset+frames;s++) {
-            if(aggregator!=null)aggregator.flushDue(renderedFrames);
-            float dry=0f;
-            for(int i=voices.size()-1;i>=0;i--) {
-                PcmVoice v=voices.get(i);
-                float sample=v.sample();
-                dry+=sample;
-                if(diagnosticStems!=null&&renderedFrames<diagnosticStems[0].length)
-                    diagnosticStems[v.family.ordinal()][(int)renderedFrames]+=sample;
-                if(v.finished()){
-                    if(v.fusion)fusionsCompleted++;else activeShortVoices--;
-                    voices.remove(i);
-                }
-            }
-            // Global gain protects summed complete Bloop voices without
-            // clipping or deleting either full source.
-            peakDry=Math.max(peakDry,Math.abs(dry));
-            float limited=limiter.process(dry);
-            minimumLimiterGain=Math.min(minimumLimiterGain,limiter.gain());
-            if(limiter.gain()<.999f)limitedFrames++;
-            renderedFrames++;
-            outputGain+=(targetOutputGain-outputGain)*volumeSmoothing;
-            output[s]=limited*outputGain;
-            peakSampleStep=Math.max(peakSampleStep,Math.abs(output[s]-previousOutput));previousOutput=output[s];
-            peakOutput=Math.max(peakOutput,Math.abs(output[s]));
-            peakVoices=Math.max(peakVoices,voices.size());
+            if(aggregator!=null)aggregator.flushDue(mixer.renderedFrames());
+            output[s]=mixer.sample();
         }
     }
 
     public void reset() {
-        pairs.clear();voices.clear();activeShortVoices=peakShortVoices=0;
+        pairs.clear();mixer.reset();
         if(aggregator!=null)aggregator.reset();
-        diagnosticStems=null;
-        limiter.reset();peakOutput=previousOutput=peakSampleStep=0f;outputGain=targetOutputGain;
-        peakDry=0f;minimumLimiterGain=1f;limitedFrames=0;renderedFrames=0;
-        fusionIndex=0;wallIndex=0;contactBeginCount=0;fusionsStarted=0;fusionsCompleted=0;
-        shortVoicesRejected=0;peakVoices=0;squishEvents=0;impactEvents=0;
+        fusionIndex=0;wallIndex=0;contactBeginCount=0;squishEvents=0;impactEvents=0;
     }
     public int activePairs(){return pairs.size();}
-    public int activeOneShots(){return voices.size();}
+    public int activeOneShots(){return mixer.activeOneShots();}
     public int contactBegins(){return contactBeginCount;}
-    public int fusionsStarted(){return fusionsStarted;}
-    public int fusionsCompleted(){return fusionsCompleted;}
-    public int rejectedShortVoices(){return shortVoicesRejected;}
-    public int peakVoices(){return peakVoices;}
-    public int peakShortVoices(){return peakShortVoices;}
+    public int fusionsStarted(){return mixer.fusionsStarted();}
+    public int fusionsCompleted(){return mixer.fusionsCompleted();}
+    public int rejectedShortVoices(){return mixer.rejectedShortVoices();}
+    public int peakVoices(){return mixer.peakVoices();}
+    public int peakShortVoices(){return mixer.peakShortVoices();}
+    public long allocatedVoices(){return mixer.allocatedVoices();}
+    public long reusedVoices(){return mixer.reusedVoices();}
     public long aggregateCandidates(){return aggregator==null?0:aggregator.candidates();}
     public long aggregateGroups(){return aggregator==null?0:aggregator.emitted();}
     public long aggregateCollapsed(){return aggregator==null?0:aggregator.collapsed();}
     public long aggregateRejected(){return aggregator==null?0:aggregator.rejected();}
     public long aggregateCancelled(){return aggregator==null?0:aggregator.cancelled();}
-    public float peakOutput(){return peakOutput;}
-    public float peakGainStep(){return limiter.peakGainStep();}
-    public float peakSampleStep(){return peakSampleStep;}
-    public int mixLatencyFrames(){return limiter.latency();}
-    public float peakDry(){return peakDry;}
-    public float minimumLimiterGain(){return minimumLimiterGain;}
-    public long limitedFrames(){return limitedFrames;}
-    public long renderedFrames(){return renderedFrames;}
+    public float peakOutput(){return mixer.peakOutput();}
+    public float peakGainStep(){return mixer.peakGainStep();}
+    public float peakSampleStep(){return mixer.peakSampleStep();}
+    public int mixLatencyFrames(){return mixer.mixLatencyFrames();}
+    public float peakDry(){return mixer.peakDry();}
+    public float minimumLimiterGain(){return mixer.minimumLimiterGain();}
+    public long limitedFrames(){return mixer.limitedFrames();}
+    public long renderedFrames(){return mixer.renderedFrames();}
     public int squishEvents(){return squishEvents;}
     public int impactEvents(){return impactEvents;}
 }
