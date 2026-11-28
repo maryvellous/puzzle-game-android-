@@ -19,7 +19,7 @@ public class PcmMixerTest {
         reused.release();
         assertTrue(reused.finished());assertEquals(0f,reused.sample(),0f);
         reused.start(a,.48f,.7f,true,true,FUSION);
-        PcmVoice fresh=new PcmVoice(a,.48f,.7f,true,true,FUSION,false);
+        PcmVoice fresh=new PcmVoice(a,.48f,.7f,true,true,FUSION);
         while(!fresh.finished())assertEquals(fresh.sample(),reused.sample(),0f);
         assertTrue(reused.finished());assertTrue(reused.fusion);
         assertEquals(FUSION,reused.family);
