@@ -264,15 +264,15 @@ final class BlobWorld {
         // Constraint iterations alternate membrane pressure with true
         // particle-to-edge contact projection. Local contacts flatten the
         // outline. Area pressure redistributes the displaced substance.
+        // Between integration/fusion and finish, constraint passes mutate only
+        // membrane vertices, not the broad-phase centres, radii, tiers or list.
+        // Reuse exactly the same ordered candidates for all five passes.
+        collectProjectionPairs();
         for(int pass=0;pass<PASSES;pass++) {
             for(Blob b:blobs)b.solveMembrane();
-            for(int i=0;i<blobs.size();i++) {
-                Blob a=blobs.get(i);
-                for(int j=i+1;j<blobs.size();j++) {
-                    Blob b=blobs.get(j);
-                    if(a.tier==b.tier||!nearEnough(a,b,1.55f))continue;
-                    projectContacts(a,b,pass==0);
-                }
+            for(int pair=0;pair<projectionPairCount;pair++){
+                long indices=projectionPairs[pair];
+                projectContacts(blobs.get((int)(indices>>>32)),blobs.get((int)indices),pass==0);
             }
             solveAdhesions();
             for(Blob b:blobs)vessel.confine(b,contactProbe);
@@ -280,6 +280,22 @@ final class BlobWorld {
         for(Blob b:blobs)b.finish(dt);
         updateAdhesions(dt);
         if(contactProbe!=null)contactProbe.finishStep(time,dt);
+    }
+
+    private long[] projectionPairs=new long[64];
+    private int projectionPairCount;
+    private void collectProjectionPairs(){
+        projectionPairCount=0;
+        for(int i=0;i<blobs.size();i++){
+            Blob a=blobs.get(i);
+            for(int j=i+1;j<blobs.size();j++){
+                Blob b=blobs.get(j);
+                if(a.tier==b.tier||!nearEnough(a,b,1.55f))continue;
+                if(projectionPairCount==projectionPairs.length)
+                    projectionPairs=java.util.Arrays.copyOf(projectionPairs,projectionPairs.length*2);
+                projectionPairs[projectionPairCount++]=((long)i<<32)|(j&0xffffffffL);
+            }
+        }
     }
 
     private boolean nearEnough(Blob a,Blob b,float scale) {
