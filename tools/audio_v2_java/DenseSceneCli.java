@@ -46,6 +46,7 @@ public final class DenseSceneCli {
         for(int r=-WARMUP;r<RUNS;r++){
             List<AudioEvent> events=new ArrayList<>();
             BlobWorld w=scene(shape,events);
+            maxBlobs=Math.max(maxBlobs,w.blobs.size());
             MessageDigest states=MessageDigest.getInstance("SHA-256");
             try(DataOutputStream snapshots=new DataOutputStream(new DigestOutputStream(OutputStream.nullOutputStream(),states))){
                 for(int frame=0;frame<FRAMES;frame++){
