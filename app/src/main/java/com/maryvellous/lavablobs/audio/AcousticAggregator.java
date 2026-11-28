@@ -6,7 +6,11 @@ import java.util.ArrayList;
  * or POP enters this class. Windows never extend; singleton PCM parameters
  * are retained exactly. The renderer owns admission and mixing. */
 final class AcousticAggregator {
-    enum Family { GEL, WALL, SQUISH }
+    enum Family {
+        GEL(MaterialAudioEngine.VoiceFamily.GEL), WALL(MaterialAudioEngine.VoiceFamily.WALL), SQUISH(MaterialAudioEngine.VoiceFamily.SQUISH);
+        final MaterialAudioEngine.VoiceFamily voiceFamily;
+        Family(MaterialAudioEngine.VoiceFamily voiceFamily){this.voiceFamily=voiceFamily;}
+    }
     interface Sink { boolean emit(float[] sound,float gain,float rate); }
     interface FamilySink { boolean emit(Family family,float[] sound,float gain,float rate); }
     private static final double RATE_RATIO=1.12;
