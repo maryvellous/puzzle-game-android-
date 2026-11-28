@@ -20,8 +20,6 @@ import java.util.Map;
  */
 public final class MaterialAudioEngine {
     public static final int SAMPLE_RATE=BloopMaterialBank.SAMPLE_RATE;
-    // Diagnostic V2.2: raise only non-fusion voices by 3x (+9.5 dB).
-    private static final float SECONDARY_GAIN=3f;
 
     // Units: world coordinates/second for slip; normalized membrane deformation.
     // These are a deliberately conservative initial "dead zone" for solver
@@ -288,7 +286,7 @@ public final class MaterialAudioEngine {
             // Same reversed swoosh and tier-dependent playback rate as 1.0.11.
             // Slightly stronger than the historical .16 to suit this diagnostic mix.
             float rate=Math.max(1.08f,1.23f-.035f*Math.max(0,tier));
-            shortVoice(VoiceFamily.LAUNCH,releaseSwoosh,.20f/SECONDARY_GAIN,rate);
+            shortVoice(VoiceFamily.LAUNCH,releaseSwoosh,.20f/PcmMixer.SECONDARY_GAIN,rate);
         }else{
             BloopMaterialBank.Material m=bank.at((fusionIndex+2)%4);
             shortVoice(VoiceFamily.LAUNCH,m.attack,.055f*sizeGain(radius),pitchForRadius(radius));
