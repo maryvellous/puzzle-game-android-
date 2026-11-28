@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.ArrayDeque;
 import java.util.Arrays;
 
-/** Experimental acoustic clustering AFTER physical gating. No fusion, launch
+/** Acoustic clustering AFTER physical gating. No fusion, launch
  * or POP enters this class. Windows never extend; singleton PCM parameters
  * are retained exactly. The renderer owns admission and mixing. */
 final class AcousticAggregator {
