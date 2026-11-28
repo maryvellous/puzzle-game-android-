@@ -21,7 +21,7 @@ import com.maryvellous.lavablobs.audio.AudioSession;
 
 
 /**
- * Audio V2.3 gameplay bridge for the main app and isolated preview.
+ * Gameplay audio bridge: the approved refined/aggregated PCM engine.
  *
  * The UI/physics thread observes real membranes and puts simple commands in a
  * bounded queue. The worker loads the FOUR original MP3s and drives the exact
@@ -61,7 +61,7 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
 
     V2GameSound(Context context) {
         app=context.getApplicationContext();
-        diagnosticBuild=app.getPackageName().endsWith(".audiov21")||BuildConfig.AUDIO_AGGREGATION;
+        diagnosticBuild=BuildConfig.AUDIO_DIAGNOSTICS;
         traceRecorder=diagnosticBuild?new DiagnosticTraceRecorder(app):null;
         preferences=app.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
         int initialVolume=Math.max(0,Math.min(100,preferences.getInt(VOLUME_KEY,
@@ -143,7 +143,7 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
             case OVERFLOW:label="ERRORE CODA";break;
             default:label=state.name();
         }
-        return (BuildConfig.AUDIO_AGGREGATION? "AUDIO V2 · REFINED CLUSTER · ":"AUDIO V2 · REFINED BYPASS · ")+label+
+        return "AUDIO · REFINED CLUSTER · "+label+
                 (queue.rejectedObservations()>0?" · Q:"+queue.rejectedObservations():"");
     }
     @Override public void release() {
@@ -192,7 +192,7 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
             try{releaseSwoosh=AndroidBloopDecoder.loadLaunch(app);}
             catch(InterruptedException interrupted){throw interrupted;}
             catch(Exception failure){Log.w(TAG,"Classic release unavailable; using material attack",failure);}
-            MaterialAudioEngine engine=new MaterialAudioEngine(materials,releaseSwoosh,BuildConfig.AUDIO_AGGREGATION,MaterialAudioEngine.MixProfile.REFINED);
+            MaterialAudioEngine engine=MaterialAudioEngine.forGameplay(materials,releaseSwoosh);
             engine.setOutputVolumePercent(volumePercent());
             engine.reset();
             device=createTrack();
