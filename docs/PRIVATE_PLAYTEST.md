@@ -15,6 +15,19 @@ Il level design non è una fase isolata: forme e difficoltà, obiettivi e HUD, p
 
 Preservare solver e audio #238/#253; se le geometrie o gli obiettivi cambiano intenzionalmente, aggiornare e motivare le fixture, mantenendo il riferimento fisico approvato. Provare proporzioni schermo diverse, leggibilità e dimensioni touch. Musica eventuale: scelta di prodotto distinta.
 
+## Audit UI/UX — proposte da discutere (28 novembre)
+
+Base: sorgente b73e97e, filmato playtest #238 (HUD/vasetto); Home e altre forme valutate dal codice, non da screenshot o test utente. Nessuna scelta grafica o di gameplay ancora approvata. Identità da preservare: materia elastica, colori esatti delle tre palette, fondo scuro, vetro neutro, titolo deformabile, UI morbida, feedback fisico/sonoro. Rendere la materia protagonista, evitare decorazioni estranee.
+
+| Filone | Evidenza attuale | Direzione proposta |
+|---|---|---|
+| Home | HomeView: griglia 6 livelli/pagina con swipe orizzontale e scroll verticale; miniature da Vessel, testi piccoli; temi e copia dati nel flusso principale. | Collezione di recipienti con silhouette grandi, progressi espliciti, azione primaria Continua/prossimo livello, modalità infinita riconoscibile, impostazioni/export separati, navigazione verticale prevedibile. |
+| Forme | GameSpec: 12 livelli/11 forme, Gola stretta e Clessidra stesso shape 3; Vessel usa stesso poligono per grafica e collisioni. Geometrie campionate e altezze nominali fisse ma adattabili allo spazio. | Archetipi fisici (regolare, pancia, strettoia, asimmetria, concavità), progressione di comportamenti; misurare capacità, min width, spazio lancio inferiore, frequenza blocco, difficulty e obiettivi. Niente collider invisibili, no cambi solver impliciti. |
+| HUD | LavaView: wordmark e grandi contatori in alto, obiettivo statico e extra n/m; riavvio su ACTION_DOWN, tap anche su parti informative può avviare mira/lancio, esito con sole azioni Riprova/Home. Ghost/linea non esplicitano sempre validità, countdown testuale. | Header compatto, obiettivo/progresso e extra leggibili, campo protagonista; vero menu pausa e conferma restart, hitbox separate, ghost coerente con canLaunch e ingresso inferiore, feedback blocco vicino all'ingresso, Prossimo livello. Volume completo in pausa, mute rapido se utile. Non aumentare capacità del recipiente per ragioni puramente estetiche. |
+| Onboarding | Istruzione iniziale sul lancio, etichette PROSSIMO/TRASCINA/SCUOTI, messaggi per blocco/POP; nessun tutorial strutturato rilevato nel flusso Home/MainActivity/LavaView. | Primo vasetto come tutorial giocabile, suggerimenti a evento: lancio dal basso, fusione di pari taglia, shake, obiettivo, recupero ingresso; POP solo in endless. Salta/ripeti, aiuto contestuale, riconoscere azioni reali, niente tutorial che blocchi o sovrascriva una partita. |
+
+Priorità proposta: correggere azioni accidentali e feedback di lancio/HUD; definire archetipi e progressione prima di fissare schede/miniature Home e contenuti onboarding; esplorazione visiva in parallelo. Verificare leggibilità, contrasto e dimensioni touch su più schermi; Canvas richiede valutazione di accessibilità semantica, non solo palette. Misurare con tre tester: primo lancio, prima fusione, comprensione shake, obiettivi, recupero ingresso, passaggio livello; osservazione spontanea senza spiegazioni preventive. Proposte, non task di implementazione autorizzati.
+
 ## Regressione audio e lifecycle
 
 - Preview .audioaggregation: banner AUDIO · REFINED CLUSTER · PRONTO; build normale senza banner.
