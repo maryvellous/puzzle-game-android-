@@ -109,6 +109,7 @@ final class GameSave {
         }catch(Exception failure){
             if(out!=null)slot.failWrite(out);
             android.util.Log.w("LavaSave","Checkpoint write failed; next checkpoint can retry",failure);
+            throw new IllegalStateException("Checkpoint write failed",failure);
         }
     }
 
