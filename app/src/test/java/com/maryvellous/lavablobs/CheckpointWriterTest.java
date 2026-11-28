@@ -58,4 +58,19 @@ public class CheckpointWriterTest {
             assertEquals(Arrays.asList(1,-1,2),writes);
         }finally{executor.shutdownNow();}
     }
+    @Test public void failedWriteIsReportedAndNextCheckpointRecovers() throws Exception{
+        ExecutorService executor=Executors.newSingleThreadExecutor();
+        List<Integer> writes=Collections.synchronizedList(new ArrayList<>());
+        try{
+            CheckpointWriter<Integer> writer=new CheckpointWriter<>(executor,n->{
+                if(n==1)throw new IllegalStateException("disk error");
+                writes.add(n);
+            });
+            writer.offer(1);
+            try{writer.barrier().get(5,TimeUnit.SECONDS);fail("failed write was hidden");}
+            catch(ExecutionException expected){assertEquals("disk error",expected.getCause().getMessage());}
+            writer.offer(2);writer.barrier().get(5,TimeUnit.SECONDS);
+            assertEquals(Collections.singletonList(2),writes);
+        }finally{executor.shutdownNow();}
+    }
 }
