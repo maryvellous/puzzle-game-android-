@@ -105,4 +105,25 @@ public class ContactTrackerTest {
         assertEquals("Reset discards previous world contact memory",0,tracker.activePairs());
         assertEquals("No ghost contact remains after reset",0,world.blobs.size());
     }
+    @Test public void terminalOnlyPreservesReleaseAndCancellationPayloads(){
+        ContactProbe.Contact c=realMembraneSample();
+        List<ContactTracker.Transition> full=new ArrayList<>(),terminal=new ArrayList<>();
+        ContactTracker a=new ContactTracker(full::add),b=new ContactTracker(terminal::add,true);
+        for(ContactTracker tracker:new ContactTracker[]{a,b}){
+            tracker.onContactStep(1f,.008f,Collections.singletonList(c));
+            tracker.onContactStep(1.008f,.008f,Collections.singletonList(c));
+            for(int i=0;i<6;i++)tracker.onContactStep(1.016f+i*.008f,.008f,Collections.emptyList());
+            tracker.onContactStep(1.070f,.008f,Collections.singletonList(c));
+            tracker.onPop(c.blobA,1.075f);
+            assertEquals(0,tracker.activePairs());
+        }
+        full.removeIf(t->t.kind==ContactTracker.Kind.BEGIN||t.kind==ContactTracker.Kind.UPDATE);
+        assertEquals(2,terminal.size());assertEquals(full.size(),terminal.size());
+        for(int j=0;j<full.size();j++){
+            ContactTracker.Transition x=full.get(j),y=terminal.get(j);
+            assertEquals(x.kind,y.kind);assertEquals(x.blobA,y.blobA);assertEquals(x.blobB,y.blobB);
+            assertEquals(x.time,y.time,0f);assertEquals(x.contactAge,y.contactAge,0f);
+            assertSame(x.contact,y.contact);
+        }
+    }
 }

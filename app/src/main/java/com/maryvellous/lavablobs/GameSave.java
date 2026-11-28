@@ -48,11 +48,13 @@ final class GameSave {
 
     boolean exists(){return peek()!=null;}
     Snapshot peek(){
+        flush();
         try {
             JSONObject data=new JSONObject(new String(slot.readFully(),StandardCharsets.UTF_8));
             if(data.optInt("version")!=VERSION)return null;
             GameSpec spec=findSpec(data.getInt("id"));
             if(spec==null||data.optBoolean("gameOver"))return null;
+            if(spec.shape>=14&&(data.optInt("shape",-1)!=spec.shape||data.optInt("roundedGeometry",0)!=1))return null;
             return new Snapshot(spec,data);
         }catch(Exception ignored){return null;}
     }
@@ -64,7 +66,26 @@ final class GameSave {
         return null;
     }
 
-    void clear(){slot.delete();}
+    // One process-wide writer also serializes operations across Activity recreation.
+    private static final java.util.concurrent.ExecutorService WRITER=
+        java.util.concurrent.Executors.newSingleThreadExecutor(r->{
+            Thread t=new Thread(r,"LavaCheckpoint");t.setDaemon(true);return t;
+        });
+    private final CheckpointWriter<Capture> writer=new CheckpointWriter<>(WRITER,this::write);
+
+    // Called only at lifecycle/slot boundaries, never for a normal launch.
+    void flush(){
+        try {writer.barrier().get();}
+        catch(InterruptedException e){Thread.currentThread().interrupt();android.util.Log.w("LavaSave","Checkpoint flush interrupted",e);}
+        catch(java.util.concurrent.ExecutionException e){android.util.Log.w("LavaSave","Checkpoint flush failed",e);}
+    }
+
+    void clear(){
+        // Ordered after any in-flight write, so old saves cannot resurrect.
+        try {writer.discardAndRun(()->slot.delete()).get();}
+        catch(InterruptedException e){Thread.currentThread().interrupt();android.util.Log.w("LavaSave","Clear interrupted",e);}
+        catch(java.util.concurrent.ExecutionException e){android.util.Log.w("LavaSave","Clear failed",e);}
+    }
 
     boolean save(GameSpec spec,BlobWorld world,float aimX,boolean eraseMode){
         return save(spec,world,aimX,eraseMode,world.time);
@@ -72,92 +93,110 @@ final class GameSave {
 
     boolean save(GameSpec spec,BlobWorld world,float aimX,boolean eraseMode,float activeSeconds){
         if(world.gameOver){clear();return true;}
+        final Capture snapshot;
+        try {snapshot=new Capture(spec,world,aimX,eraseMode,activeSeconds);}
+        catch(Exception e){android.util.Log.w("LavaSave","Snapshot failed",e);return false;}
+        writer.offer(snapshot);
+        // Accepted for writing, not necessarily durable yet.
+        return true;
+    }
+
+    private void write(Capture snapshot){
         FileOutputStream out=null;
         try {
-            JSONObject data=encode(spec,world,aimX,eraseMode,activeSeconds);
-            byte[] bytes=data.toString().getBytes(StandardCharsets.UTF_8);
-            out=slot.startWrite();
-            out.write(bytes);
-            slot.finishWrite(out);
-            return true;
+            byte[] bytes=snapshot.json().toString().getBytes(StandardCharsets.UTF_8);
+            out=slot.startWrite();out.write(bytes);slot.finishWrite(out);
         }catch(Exception failure){
             if(out!=null)slot.failWrite(out);
-            return false;
+            android.util.Log.w("LavaSave","Checkpoint write failed; next checkpoint can retry",failure);
+            throw new IllegalStateException("Checkpoint write failed",failure);
         }
+    }
+
+    /** Only immutable copies cross the thread boundary. No live BlobWorld,
+     * Blob, adhesion or Random reference escapes the owner thread. */
+    private static final class Capture {
+        final int id,shape,drops,merges,maxTier,nextTier,nextBlobId,earned,used,eraseCount;
+        final float height,time,activeSeconds,blockedTime,checkClock,aimX;
+        final long score;
+        final boolean gameOver,eraseMode;
+        final int[] byTier;
+        final byte[] rng;
+        final Body[] bodies;
+        final Link[] links;
+        Capture(GameSpec spec,BlobWorld w,float aimX,boolean eraseMode,float seconds) throws Exception{
+            w.ensureBlobIds();
+            id=spec.id;shape=spec.shape;height=w.height;time=w.time;activeSeconds=Math.max(0f,seconds);
+            score=w.score;drops=w.dropCount;merges=w.mergeCount;maxTier=w.maxTierReached;nextTier=w.nextTier;
+            nextBlobId=w.nextBlobId;blockedTime=w.blockedTime;checkClock=w.checkClock;
+            earned=w.earnedErases;used=w.usedErases;eraseCount=w.eraseCount;gameOver=w.gameOver;
+            this.aimX=aimX;this.eraseMode=eraseMode;byTier=w.mergesByTier.clone();
+            ByteArrayOutputStream bytes=new ByteArrayOutputStream();
+            try(ObjectOutputStream stream=new ObjectOutputStream(bytes)){stream.writeObject(w.random);}
+            rng=bytes.toByteArray();
+            bodies=new Body[w.blobs.size()];
+            for(int i=0;i<bodies.length;i++)bodies[i]=new Body(w.blobs.get(i));
+            ArrayList<Link> copy=new ArrayList<>(w.adhesions.size());
+            for(BlobWorld.Adhesion link:w.adhesions){
+                int ia=w.blobs.indexOf(link.a),ib=w.blobs.indexOf(link.b);
+                if(ia>=0&&ib>=0)copy.add(new Link(ia,ib,link.ai,link.bi,link.age));
+            }
+            links=copy.toArray(new Link[0]);
+        }
+        JSONObject json() throws Exception{
+            JSONObject state=new JSONObject();
+            state.put("version",VERSION);state.put("scoringVersion",2);
+            state.put("id",id);state.put("shape",shape);if(shape>=14)state.put("roundedGeometry",1);
+            state.put("height",height);state.put("time",time);state.put("activeSeconds",activeSeconds);
+            state.put("score",score);state.put("drops",drops);state.put("merges",merges);
+            state.put("maxTier",maxTier);state.put("nextTier",nextTier);state.put("nextBlobId",nextBlobId);
+            state.put("blockedTime",blockedTime);state.put("checkClock",checkClock);
+            state.put("eraseEarned",earned);state.put("eraseUsed",used);state.put("eraseCount",eraseCount);
+            state.put("gameOver",gameOver);state.put("aimX",aimX);state.put("eraseMode",eraseMode);
+            state.put("byTier",new JSONArray(byTier));state.put("rng",Base64.getEncoder().encodeToString(rng));
+            JSONArray particles=new JSONArray();for(Body body:bodies)particles.put(body.json());
+            state.put("blobs",particles);
+            JSONArray items=new JSONArray();
+            for(Link link:links){JSONArray item=new JSONArray();item.put(link.a);item.put(link.b);item.put(link.ai);item.put(link.bi);item.put(link.age);items.put(item);}
+            state.put("links",items);
+            return state;
+        }
+    }
+    private static final class Body {
+        final int tier,id;
+        final float age,radiusTarget,launchScale;
+        final float[] nodes=new float[Blob.NODES*4];
+        Body(Blob b){
+            tier=b.tier;id=b.id;age=b.age;radiusTarget=b.radiusTarget;launchScale=b.launchScale;
+            for(int i=0;i<Blob.NODES;i++){int k=i*4;nodes[k]=b.px[i];nodes[k+1]=b.py[i];nodes[k+2]=b.vx[i];nodes[k+3]=b.vy[i];}
+        }
+        JSONObject json() throws Exception{
+            JSONObject body=new JSONObject();body.put("tier",tier);body.put("blobId",id);body.put("age",age);
+            body.put("radiusTarget",radiusTarget);body.put("launchScale",launchScale);
+            JSONArray points=new JSONArray();
+            for(int k=0;k<nodes.length;k+=4){JSONArray node=new JSONArray();node.put(nodes[k]);node.put(nodes[k+1]);node.put(nodes[k+2]);node.put(nodes[k+3]);points.put(node);}
+            body.put("nodes",points);return body;
+        }
+    }
+    private static final class Link {
+        final int a,b,ai,bi;final float age;
+        Link(int a,int b,int ai,int bi,float age){this.a=a;this.b=b;this.ai=ai;this.bi=bi;this.age=age;}
     }
 
     static JSONObject encode(GameSpec spec,BlobWorld w,float aimX,boolean eraseMode) throws Exception {
         return encode(spec,w,aimX,eraseMode,w.time);
     }
 
-    static JSONObject encode(GameSpec spec,BlobWorld w,float aimX,boolean eraseMode,
-            float activeSeconds) throws Exception {
-        // Give even test-injected blobs stable IDs before encoding.
-        w.ensureBlobIds();
-        JSONObject state=new JSONObject();
-        state.put("version",VERSION);
-        state.put("scoringVersion",2);
-        state.put("id",spec.id);
-        state.put("height",w.height);
-        state.put("time",w.time);
-        state.put("activeSeconds",Math.max(0f,activeSeconds));
-        state.put("score",w.score);
-        state.put("drops",w.dropCount);
-        state.put("merges",w.mergeCount);
-        state.put("maxTier",w.maxTierReached);
-        state.put("nextTier",w.nextTier);
-        state.put("nextBlobId",w.nextBlobId);
-        state.put("blockedTime",w.blockedTime);
-        state.put("checkClock",w.checkClock);
-        state.put("eraseEarned",w.earnedErases);
-        state.put("eraseUsed",w.usedErases);
-        state.put("eraseCount",w.eraseCount);
-        state.put("gameOver",w.gameOver);
-        state.put("aimX",aimX);
-        state.put("eraseMode",eraseMode);
-        state.put("byTier",new JSONArray(w.mergesByTier));
-        // java.util.Random is serializable; preserve the future drop sequence
-        // and the turbulence randomness across close/reopen.
-        ByteArrayOutputStream bytes=new ByteArrayOutputStream();
-        ObjectOutputStream stream=new ObjectOutputStream(bytes);
-        stream.writeObject(w.random);stream.close();
-        state.put("rng",Base64.getEncoder().encodeToString(bytes.toByteArray()));
-
-        JSONArray particles=new JSONArray();
-        for(Blob b:w.blobs){
-            JSONObject body=new JSONObject();
-            body.put("tier",b.tier);
-            body.put("blobId",b.id);
-            body.put("age",b.age);
-            body.put("radiusTarget",b.radiusTarget);
-            body.put("launchScale",b.launchScale);
-            JSONArray nodes=new JSONArray();
-            for(int i=0;i<Blob.NODES;i++){
-                JSONArray node=new JSONArray();
-                node.put(b.px[i]);node.put(b.py[i]);
-                node.put(b.vx[i]);node.put(b.vy[i]);
-                nodes.put(node);
-            }
-            body.put("nodes",nodes);
-            particles.put(body);
-        }
-        state.put("blobs",particles);
-        JSONArray links=new JSONArray();
-        for(BlobWorld.Adhesion link:w.adhesions){
-            int ia=w.blobs.indexOf(link.a),ib=w.blobs.indexOf(link.b);
-            if(ia<0||ib<0)continue;
-            JSONArray item=new JSONArray();
-            item.put(ia);item.put(ib);item.put(link.ai);item.put(link.bi);item.put(link.age);
-            links.put(item);
-        }
-        state.put("links",links);
-        return state;
+    static JSONObject encode(GameSpec spec,BlobWorld w,float aimX,boolean eraseMode,float activeSeconds) throws Exception {
+        return new Capture(spec,w,aimX,eraseMode,activeSeconds).json();
     }
 
     static void restore(BlobWorld w,JSONObject state) throws Exception {
         if(state.getInt("version")!=VERSION||state.getInt("id")!=w.spec.id)
             throw new IllegalArgumentException("Incompatible save");
         w.reset();
+        if(state.has("shape")&&state.getInt("shape")!=w.spec.shape)
+            throw new IllegalArgumentException("Saved vessel geometry differs");
         w.setHeight((float)state.getDouble("height"));
         w.time=(float)state.getDouble("time");
         w.score=state.getLong("score");

@@ -2,26 +2,24 @@
 
 Puzzle game *cozy* con blob morbidi che si deformano, collidono e si fondono dentro recipienti di forme diverse.
 
-**Versione di sviluppo su main:** 1.1.0 (versionCode 18), package `com.maryvellous.lavablobs`. Ultima release pubblicata: 1.0.11; la pubblicazione della 1.1.0 è separata dall'integrazione del codice. Progetto attivo: `app/`.
+**Versione di sviluppo:** 1.1.0 (versionCode 18), package `com.maryvellous.lavablobs`. Progetto attivo: `app/`. Consolidamento verificato dalla [CI #253](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46097012021), baseline collaudata #238. PR #27 ancora da integrare in main; distribuzione separata.
 
 ## Stato e documenti di riferimento
 
-- **27 novembre 2026:** l'utente approva Audio V2.3 sul telefono e chiede di adottarlo come nuova app principale e base dello sviluppo. Preview approvata: `cfb03c96fd5e348b5e0ddd0c201255101913fa5f`. Il motore è attivo in tutte le build, non solo nella preview.
-- **Specifica vigente:** [la materia diventa suono](docs/AUDIO_ENGINE_V2_MATERIAL_BLOOP.md). Probe/Tracker → Material Engine → Scene Mixer → AudioTrack. Fusioni con i Bloop completi, urti contro vetro con attacco V2.2, urti tra blob gelatinosi, squish finiti dinamici, swoosh classico al lancio, silenzio in quiete.
-- **Slider:** volume 0–100% persistente, mute e ripristino dell'ultimo valore; nessuna musica implementata.
-- **Preview:** package separato `com.maryvellous.lavablobs.audiov21`, stesso motore, banner diagnostico. La build normale non mostra il banner. Non sono richiesti interventi aggiuntivi di migrazione dei salvataggi.
-- **Verifica:** preview approvata percettivamente; [CI main verde](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46060029269); APK con package principale non ancora collaudata separatamente sul telefono.
-- **Fase 2:** primo stadio concluso; lieve frittura sotto stress da diagnosticare. [Piano di aggregazione](docs/AUDIO_AGGREGATION_PLAN.md), [audit debito tecnico](docs/TECHNICAL_DEBT_AUDIT.md), [protocollo collaudo](docs/PLAYTEST_AUDIO_V2.3.md). Nessuna aggregazione implementata ancora.
-- **Storia:** SoundPool 1.0.11, PR #23/#24 e laboratori A/B–C4.1 sono riferimenti storici, non requisiti. Non reintrodurre loop di contatto o cambiare il timbro approvato.
+- **Baseline approvata:** [43aca8e](https://github.com/maryvellous/puzzle-game-android-/tree/baseline/late-game-approved-2026-11-28), Aggregation Preview #238. Il playtest indica maggiore fluidità e assenza del frittino percepito durante la prova.
+- **Specifica vigente:** [la materia diventa suono](docs/AUDIO_ENGINE_V2_MATERIAL_BLOOP.md). Un solo percorso di gameplay: eventi fisici → scheduler → aggregazione dopo gating → mixer PCM refined → AudioTrack.
+- **Preview diagnostica:** package separato `com.maryvellous.lavablobs.audioaggregation`, stesso motore della build normale; banner e trace locale solo nella preview. I vecchi profili bypass e approved sono controlli offline; l'esperimento cubico e la variante APK bypass sono ritirati.
+- **Stato tecnico e risultati:** [TECHNICAL_ROADMAP.md](docs/TECHNICAL_ROADMAP.md). I report superati restano nella storia Git.
+- **Anteprima prodotto attuale:** `uiPreview` (`com.maryvellous.lavablobs.uipreview`), Home a carosello verticale e console, HUD Console, dodici recipienti storia arrotondati. [Stato operativo e passaggio di sessione](docs/PRIVATE_PLAYTEST.md). Nuovo logo Home composto da forme morbide in `29624f4`, da verificare visivamente; fluidità da diagnosticare, nessun merge autorizzato.
 
 ## Gameplay e UX attuali
 
-- **Fisica soft-body:** membrane con 24 nodi, pressione, molle e adesione temporanea; preservare il solver e la risposta dei blob durante il lavoro sull'audio.
+- **Fisica soft-body:** membrane con 24 nodi, pressione, molle e adesione temporanea; solver approvato, da preservare.
 - **12 livelli** con recipienti diversi e obiettivi, più modalità infinita con tre recipienti a scelta. I valori di bilanciamento sono nel codice; le soglie sono ancora soggette a playtest.
 - **Lanci:** rilascio rapido nel recipiente oppure pulsante **TRASCINA** con anteprima e annullamento sul vassoio. **SCUOTI** usa gli impulsi fisici; lo scuotimento via accelerometro funziona in primo piano.
 - **POP:** solo in modalità infinita, disponibile ogni 2.000 punti (soglia provvisoria); rimuove un blob dopo selezione corretta. Il Game Over verifica l'ingresso disponibile, con conto alla rovescia.
 - **Punteggio:** fusioni a partire da 10 punti, fattore 1,6 con arrotondamento; drop tier 1–5 con probabilità 45/28/16/8/3%.
-- **Aspetto:** titolo elastico, tre palette, contenitori irregolari, UI morbida. La Home gestisce ripresa della partita, selezione livelli/temi e copia dei dati.
+- **Aspetto:** tre palette, recipienti irregolari, UI morbida. Home con carosello, Continua nella console, temi in popup e aiuto. Il titolo Home è ora costruito con contorni morbidi espliciti, senza font, con animazione lenta e palette attiva; ricostruzione nuova, non recupero del logo originale.
 - **Salvataggi e privacy:** partita e progressi persistono **localmente** sul telefono, senza account, backend né telemetria remota. **COPIA DATI PARTITE** esporta manualmente JSON delle ultime 50 partite; `activeSeconds` esclude periodi di inattività prolungata.
 
 ## Audio della versione 1.1.0
@@ -37,12 +35,13 @@ Puzzle game *cozy* con blob morbidi che si deformano, collidono e si fondono den
 Richiede **JDK 17**, **Android SDK 35** e **Gradle 8.9**.
 
 ```bash
-gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug :app:assemblePreview
+gradle --no-daemon :app:testDebugUnitTest :app:testAggregationPreviewUnitTest :app:testReleaseUnitTest
+gradle --no-daemon :app:assembleDebug :app:assembleAggregationPreview :app:assembleRelease
 ```
 
-La CI ordinaria è `.github/workflows/lava-blobs.yml`. La pubblicazione di `com.maryvellous.lavablobs` è **solo manuale** tramite `.github/workflows/lava-blobs-production.yml` e non deve essere avviata senza richiesta esplicita.
+La CI ordinaria è `.github/workflows/lava-blobs.yml`. La distribuzione di `com.maryvellous.lavablobs` è **solo manuale** su main tramite `.github/workflows/lava-blobs-production.yml`: per default produce un artefatto APK firmato con checksum; un GitHub Release richiede la scelta esplicita `publish_release=true`. Nessun fallback debug per distribuzione. Non avviare senza richiesta esplicita.
 
-**Firma APK:** un certificato debug generato da runner diversi potrebbe impedire l'aggiornamento sopra l'APK installata. Una firma persistente richiede i secret `LAVA_KEYSTORE_BASE64`, `LAVA_SIGNING_STORE_PASSWORD`, `LAVA_SIGNING_KEY_ALIAS`, `LAVA_SIGNING_KEY_PASSWORD`. Mai versionare keystore o password. **Non suggerire disinstallazioni senza avvertire del rischio di perdita dei salvataggi.**
+**Firma APK:** un certificato debug generato da runner diversi potrebbe impedire l'aggiornamento sopra l'APK installata. Per la distribuzione, una firma persistente obbligatoria richiede i secret `LAVA_KEYSTORE_BASE64`, `LAVA_SIGNING_STORE_PASSWORD`, `LAVA_SIGNING_KEY_ALIAS`, `LAVA_SIGNING_KEY_PASSWORD`. Mai versionare keystore o password. **Non suggerire disinstallazioni senza avvertire del rischio di perdita dei salvataggi.**
 
 ## Criteri di verifica
 

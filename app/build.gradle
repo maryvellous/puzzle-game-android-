@@ -6,12 +6,17 @@ android {
     namespace 'com.maryvellous.lavablobs'
     compileSdk 35
 
+    buildFeatures { buildConfig true }
+
     defaultConfig {
         applicationId 'com.maryvellous.lavablobs'
         minSdk 26
         targetSdk 35
         versionCode 18
         versionName '1.1.0'
+        buildConfigField 'boolean', 'AUDIO_DIAGNOSTICS', 'false'
+        def revision = System.getenv('GITHUB_SHA') ?: 'local'
+        buildConfigField 'String', 'BUILD_REVISION', '"' + revision + '"'
         manifestPlaceholders = [appLabel: 'Lava Blob']
     }
 
@@ -36,13 +41,19 @@ android {
             if (signingConfigs.findByName('stable') != null)
                 signingConfig signingConfigs.stable
         }
-        // ISOLATED preview build; same approved engine, separate package.
-        // Distinct applicationId also means separate local progress and saves.
-        preview {
+        uiPreview {
             initWith debug
-            applicationIdSuffix '.audiov21'
-            versionNameSuffix '-preview'
-            manifestPlaceholders = [appLabel: 'Lava Blob - Preview']
+            applicationIdSuffix '.uipreview'
+            versionNameSuffix '-ui-preview'
+            manifestPlaceholders = [appLabel: 'Lava Blob - UI Preview']
+        }
+        // Preserve the approved preview package for side-by-side device tests.
+        aggregationPreview {
+            initWith debug
+            applicationIdSuffix '.audioaggregation'
+            versionNameSuffix '-aggregation-preview'
+            buildConfigField 'boolean', 'AUDIO_DIAGNOSTICS', 'true'
+            manifestPlaceholders = [appLabel: 'Lava Blob - Aggregation']
         }
     }
 

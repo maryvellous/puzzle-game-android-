@@ -2,6 +2,8 @@ package com.maryvellous.lavablobs;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.ArrayDeque;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,8 +23,13 @@ final class ContactProbe {
     interface Listener {
         void onContactStep(float simulationTime, float dt, List<Contact> contacts);
         default void onWallImpact(int blobId,int side,float approach,float radius) {}
+        default void onWallImpact(int blobId,int side,float approach,float radius,float time) {
+            onWallImpact(blobId,side,approach,radius);
+        }
+        default void onLaunch(int tier,float radius,float time) {}
         default void onMerge(BlobWorld.Merge event) {}
         default void onPop(int blobId,float simulationTime) {}
+        default void onPop(int blobId,float simulationTime,float radius) {onPop(blobId,simulationTime);}
         default void onReset() {}
     }
 
@@ -39,7 +46,7 @@ final class ContactProbe {
         final float bulkMotion;
         final int projectionSamples; // Includes repeat observations across solver passes.
 
-        Contact(Accumulator a, float time, float dt) {
+        Contact(Accumulator a, float time, float dt, BodyMetrics first, BodyMetrics second) {
             blobA=a.a.id;
             blobB=a.b.id;
             this.time=time;
@@ -64,9 +71,9 @@ final class ContactProbe {
             // Area loss is a global membrane proxy; depth is local. Neither is
             // an exact contact force in this position-based solver.
             compression=Math.max(a.localCompression,
-                    Math.max(areaLoss(a.a),areaLoss(a.b)));
+                    Math.max(first.areaLoss,second.areaLoss));
             projectionSamples=a.samples;
-            bulkMotion=Math.max(bodySpeed(a.a),bodySpeed(a.b));
+            bulkMotion=Math.max(first.bodySpeed,second.bodySpeed);
         }
 
         private static float bodySpeed(Blob b) {
@@ -81,11 +88,41 @@ final class ContactProbe {
         }
     }
 
+    /** Lazily measured after Blob.finish, valid only within finishStep.
+     * Recycle storage, never retain a blob across substeps. */
+    private static final class BodyMetrics {
+        float areaLoss,bodySpeed;
+        void measure(Blob blob){
+            areaLoss=Contact.areaLoss(blob);
+            bodySpeed=Contact.bodySpeed(blob);
+        }
+    }
+    private final IdentityHashMap<Blob,BodyMetrics> bodyMetrics=new IdentityHashMap<>();
+    private final ArrayDeque<BodyMetrics> freeMetrics=new ArrayDeque<>();
+    private long measuredBodies,contactMetricRequests;
+    private BodyMetrics metrics(Blob blob){
+        contactMetricRequests++;
+        BodyMetrics m=bodyMetrics.get(blob);
+        if(m==null){
+            m=freeMetrics.pollLast();
+            if(m==null)m=new BodyMetrics();
+            m.measure(blob);bodyMetrics.put(blob,m);measuredBodies++;
+        }
+        return m;
+    }
+    private void clearMetrics(){
+        for(BodyMetrics m:bodyMetrics.values())if(freeMetrics.size()<128)freeMetrics.addLast(m);
+        bodyMetrics.clear();
+    }
+    long measuredBodies(){return measuredBodies;}
+    long contactMetricRequests(){return contactMetricRequests;}
+
     private static final class Accumulator {
-        final Blob a,b;
+        Blob a,b;
         float x,y,nx,ny,peakApproach,slide,localCompression;
         int samples;
-        Accumulator(Blob first, Blob second) {
+        void start(Blob first, Blob second) {
+            x=y=nx=ny=peakApproach=slide=localCompression=0f;samples=0;
             if(first.id<second.id) { a=first; b=second; }
             else { a=second; b=first; }
         }
@@ -94,6 +131,17 @@ final class ContactProbe {
     private final Listener listener;
     // LinkedHashMap keeps contact order deterministic for offline traces.
     private final Map<Long,Accumulator> contacts=new LinkedHashMap<>();
+    private final ArrayDeque<Accumulator> freeAccumulators=new ArrayDeque<>();
+    private long lastPairKey;
+    private Accumulator lastPair;
+    private void clearContacts(){
+        lastPair=null;lastPairKey=0;
+        for(Accumulator a:contacts.values()){
+            a.a=a.b=null;
+            if(freeAccumulators.size()<512)freeAccumulators.addLast(a);
+        }
+        contacts.clear();
+    }
 
     ContactProbe(Listener listener) {
         if(listener==null)throw new IllegalArgumentException("Missing probe listener");
@@ -115,15 +163,20 @@ final class ContactProbe {
     }
     private final Map<Long,WallContact> wallStep=new LinkedHashMap<>();
     private final Map<Long,WallState> wallStates=new LinkedHashMap<>();
-    void beginStep() {contacts.clear();wallStep.clear();}
+    void beginStep() {clearContacts();wallStep.clear();}
 
     void observeWall(Blob b,int side,float nx,float ny) {
+        float vx=0f,vy=0f;
+        for(int i=0;i<Blob.NODES;i++){vx+=b.vx[i];vy+=b.vy[i];}
+        observeWall(b,side,nx,ny,vx,vy);
+    }
+    // Bulk sums may be reused across vertex projections in one confine call:
+    // only positions are mutated by Vessel.confine, never velocities.
+    void observeWall(Blob b,int side,float nx,float ny,float vx,float vy) {
         long key=((long)b.id<<2)|side;
         WallContact c=wallStep.get(key);
         if(c==null){c=new WallContact(b,side);wallStep.put(key,c);}
         // Use whole-body closing velocity, not isolated vertex correction jitter.
-        float vx=0f,vy=0f;
-        for(int i=0;i<Blob.NODES;i++){vx+=b.vx[i];vy+=b.vy[i];}
         c.peak=Math.max(c.peak,Math.max(0f,-(vx*nx+vy*ny)/Blob.NODES));
     }
 
@@ -136,7 +189,7 @@ final class ContactProbe {
             state.last=time;
             if(!state.fired&&time-state.first<=.060f&&c.peak>70f){
                 state.fired=true;
-                listener.onWallImpact(c.blobId,c.side,c.peak,c.radius);
+                listener.onWallImpact(c.blobId,c.side,c.peak,c.radius,time);
             }
         }
         wallStep.clear();
@@ -147,11 +200,15 @@ final class ContactProbe {
         if(source.id<=0||target.id<=0||source.id==target.id)
             throw new IllegalStateException("Contact requires distinct registered blob IDs");
         long key=BlobWorld.pairKey(source.id,target.id);
-        Accumulator a=contacts.get(key);
+        // Projections for a pair are consecutive, including reversed directions.
+        // Avoid a boxed Long lookup on every membrane vertex.
+        Accumulator a=lastPair!=null&&lastPairKey==key?lastPair:contacts.get(key);
         if(a==null) {
-            a=new Accumulator(source,target);
-            contacts.put(key,a);
+            a=freeAccumulators.pollLast();
+            if(a==null)a=new Accumulator();
+            a.start(source,target);contacts.put(key,a);
         }
+        lastPair=a;lastPairKey=key;
         int next=(edgeNode+1)%Blob.NODES;
         float tvx=target.vx[edgeNode]*(1f-t)+target.vx[next]*t;
         float tvy=target.vy[edgeNode]*(1f-t)+target.vy[next]*t;
@@ -176,17 +233,22 @@ final class ContactProbe {
 
     void finishStep(float time,float dt) {
         List<Contact> result=new ArrayList<>(contacts.size());
-        for(Accumulator a:contacts.values())
-            result.add(new Contact(a,time,dt));
-        contacts.clear();
+        try {
+            for(Accumulator a:contacts.values())
+                result.add(new Contact(a,time,dt,metrics(a.a),metrics(a.b)));
+        } finally {clearMetrics();}
+        clearContacts();
         listener.onContactStep(time,dt,Collections.unmodifiableList(result));
         finishWalls(time);
     }
 
     void merged(BlobWorld.Merge event) {listener.onMerge(event);}
+    void launched(int tier,float radius,float time) {listener.onLaunch(tier,radius,time);}
+    void popped(int blobId,float time,float radius) {listener.onPop(blobId,time,radius);}
     void popped(int blobId,float time) {listener.onPop(blobId,time);}
     void reset() {
-        contacts.clear();wallStep.clear();wallStates.clear();
+        clearContacts();wallStep.clear();wallStates.clear();clearMetrics();
+        measuredBodies=contactMetricRequests=0;
         listener.onReset();
     }
 }

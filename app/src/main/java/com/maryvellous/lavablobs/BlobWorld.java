@@ -53,11 +53,38 @@ final class BlobWorld {
     final ArrayList<Blob> blobs = new ArrayList<>();
     final ArrayList<Merge> merges = new ArrayList<>();
     private final ArrayList<Impact> impacts = new ArrayList<>();
+    private boolean legacyImpactCollection=true;
     private final Map<Long,Float> impactTimes = new HashMap<>();
     final ArrayList<Adhesion> adhesions = new ArrayList<>();
     // IDs are monotonic for one game, including deleted/merged blobs and saves.
     int nextBlobId=1;
-    private ContactProbe contactProbe; // Null in 1.0.11: zero DSP/probe overhead.
+    private ContactProbe contactProbe; // Optional passive observer.
+    // Local opt-in instrumentation: time batches, never individual vertices.
+    private boolean profileEnabled;
+    private int profileBucket;
+    private final long[][] profileNs=new long[5][9];
+    private final long[] profileTicks=new long[5],profilePairs=new long[5];
+    private static final String[] PROFILE_NAMES={"integrate","merge","pairs","membrane","contacts+probe","adhesions","walls+probe","finish","probe-boundaries+entry"};
+    private static final String[] PROFILE_BUCKETS={"0-4","5-7","8-10","11-15","16+"};
+    void setProfiling(boolean enabled){profileEnabled=enabled;}
+    private long profileStart(){return profileEnabled?System.nanoTime():0L;}
+    private long profileMark(long start,int phase){
+        if(!profileEnabled)return 0L;
+        long now=System.nanoTime();
+        profileNs[profileBucket][phase]+=now-start;
+        return now;
+    }
+    String physicsProfile(){
+        StringBuilder out=new StringBuilder("Solver stage wall times (ms/tick; probe observe included in contact/wall).\n");
+        for(int b=0;b<5;b++){
+            if(profileTicks[b]==0)continue;
+            out.append("blob=").append(PROFILE_BUCKETS[b]).append(" ticks=").append(profileTicks[b]);
+            for(int p=0;p<PROFILE_NAMES.length;p++)
+                out.append(String.format(java.util.Locale.US," %s=%.3f",PROFILE_NAMES[p],profileNs[b][p]/(1e6*profileTicks[b])));
+            out.append(String.format(java.util.Locale.US," candidates/tick=%.1f%n",(double)profilePairs[b]/profileTicks[b]));
+        }
+        return out.toString();
+    }
     Random random;
     final GameSpec spec;
     Vessel vessel;
@@ -78,11 +105,15 @@ final class BlobWorld {
     }
 
     /**
-     * Diagnostic-only subscription for physics/acoustic tests and future V2.
-     * No listener is installed by the current gameplay/audio implementation.
+     * Passive simulation observation for gameplay audio and deterministic tests.
      */
     void setContactProbe(ContactProbe.Listener listener) {
         contactProbe=listener==null?null:new ContactProbe(listener);
+    }
+
+    // Kept for historical regression fixtures only. Gameplay uses the probe.
+    void disableLegacyImpactCollection(){
+        legacyImpactCollection=false;impacts.clear();impactTimes.clear();
     }
 
     // Canonical unordered key; both IDs must be positive. No identityHashCode.
@@ -166,6 +197,7 @@ final class BlobWorld {
         blobs.add(b);
         dropCount++;
         maxTierReached=Math.max(maxTierReached,nextTier);
+        if(contactProbe!=null)contactProbe.launched(b.tier,b.radius(),time);
         nextTier=rollTier();
         checkClock=.2f;
         return true;
@@ -207,7 +239,7 @@ final class BlobWorld {
             lastPoppedTier=b.tier;
             lastPoppedId=b.id;
             blobs.remove(i);
-            if(contactProbe!=null)contactProbe.popped(b.id,time);
+            if(contactProbe!=null)contactProbe.popped(b.id,time,lastPoppedRadius);
             adhesions.removeIf(link->link.a==b||link.b==b);
             eraseCount--;usedErases++;
             blockedTime=0;checkClock=.2f;
@@ -219,7 +251,9 @@ final class BlobWorld {
     void tick(float dt) {
         if(gameOver)return;
         dt=clamp(dt,0f,.042f);
+        if(profileEnabled){int n=blobs.size();profileBucket=n<=4?0:n<=7?1:n<=10?2:n<=15?3:4;profileTicks[profileBucket]++;}
         for(int s=0;s<2;s++)step(dt*.5f);
+        long profile=profileStart();
         // No Y-threshold. Check real incoming-object clearance, repeatedly,
         // after giving the soft bodies time to rebound from any phone shake.
         checkClock+=dt;
@@ -229,14 +263,18 @@ final class BlobWorld {
             else blockedTime+=.18f;
         }
         if(blockedTime>=graceSeconds())gameOver=true;
+        profileMark(profile,8);
     }
 
     private void step(float dt) {
         if(dt<=0f)return;
+        long profile=profileStart();
         time+=dt;
         ensureBlobIds(); // Also supports test worlds that inject Blob instances directly.
         if(contactProbe!=null)contactProbe.beginStep();
+        profile=profileMark(profile,8);
         for(Blob b:blobs)b.integrate(dt,time);
+        profile=profileMark(profile,0);
 
         // Merge detection uses actual mesh boundaries. No spherical "sum of
         // radii" may trigger fusion across a visible gap.
@@ -258,22 +296,47 @@ final class BlobWorld {
         // Constraint iterations alternate membrane pressure with true
         // particle-to-edge contact projection. Local contacts flatten the
         // outline. Area pressure redistributes the displaced substance.
+        // Between integration/fusion and finish, constraint passes mutate only
+        // membrane vertices, not the broad-phase centres, radii, tiers or list.
+        // Reuse exactly the same ordered candidates for all five passes.
+        profile=profileMark(profile,1);
+        collectProjectionPairs();
+        if(profileEnabled)profilePairs[profileBucket]+=projectionPairCount;
+        profile=profileMark(profile,2);
         for(int pass=0;pass<PASSES;pass++) {
             for(Blob b:blobs)b.solveMembrane();
-            for(int i=0;i<blobs.size();i++) {
-                Blob a=blobs.get(i);
-                for(int j=i+1;j<blobs.size();j++) {
-                    Blob b=blobs.get(j);
-                    if(a.tier==b.tier||!nearEnough(a,b,1.55f))continue;
-                    projectContacts(a,b,pass==0);
-                }
+            profile=profileMark(profile,3);
+            for(int pair=0;pair<projectionPairCount;pair++){
+                long indices=projectionPairs[pair];
+                projectContacts(blobs.get((int)(indices>>>32)),blobs.get((int)indices),pass==0);
             }
+            profile=profileMark(profile,4);
             solveAdhesions();
+            profile=profileMark(profile,5);
             for(Blob b:blobs)vessel.confine(b,contactProbe);
+            profile=profileMark(profile,6);
         }
         for(Blob b:blobs)b.finish(dt);
         updateAdhesions(dt);
+        profile=profileMark(profile,7);
         if(contactProbe!=null)contactProbe.finishStep(time,dt);
+        profileMark(profile,8);
+    }
+
+    private long[] projectionPairs=new long[64];
+    private int projectionPairCount;
+    private void collectProjectionPairs(){
+        projectionPairCount=0;
+        for(int i=0;i<blobs.size();i++){
+            Blob a=blobs.get(i);
+            for(int j=i+1;j<blobs.size();j++){
+                Blob b=blobs.get(j);
+                if(a.tier==b.tier||!nearEnough(a,b,1.55f))continue;
+                if(projectionPairCount==projectionPairs.length)
+                    projectionPairs=java.util.Arrays.copyOf(projectionPairs,projectionPairs.length*2);
+                projectionPairs[projectionPairCount++]=((long)i<<32)|(j&0xffffffffL);
+            }
+        }
     }
 
     private boolean nearEnough(Blob a,Blob b,float scale) {
@@ -313,11 +376,13 @@ final class BlobWorld {
     }
 
     private boolean surfaceTouch(Blob a,Blob b,float tolerance) {
+        contactBoundsA.set(a);contactBoundsB.set(b);
+        if(contactBoundsA.separated(contactBoundsB,tolerance+.01f))return false;
         for(int i=0;i<Blob.NODES;i++) {
-            if(pointInside(b,a.px[i],a.py[i])||
-                    closestEdge(b,a.px[i],a.py[i]).distance<tolerance) return true;
-            if(pointInside(a,b.px[i],b.py[i])||
-                    closestEdge(a,b.px[i],b.py[i]).distance<tolerance) return true;
+            if(!contactBoundsB.cannotTouch(a.px[i],a.py[i],tolerance+.01f)&&
+                    (pointInside(b,a.px[i],a.py[i])||closestEdge(b,a.px[i],a.py[i],tolerance).distance<tolerance)) return true;
+            if(!contactBoundsA.cannotTouch(b.px[i],b.py[i],tolerance+.01f)&&
+                    (pointInside(a,b.px[i],b.py[i])||closestEdge(a,b.px[i],b.py[i],tolerance).distance<tolerance)) return true;
         }
         return false;
     }
@@ -337,8 +402,13 @@ final class BlobWorld {
             if(y<minY)minY=y;else if(y>maxY)maxY=y;
         }
         boolean cannotTouch(float x,float y) {
-            float margin=SKIN+.01f;
+            return cannotTouch(x,y,SKIN+.01f);
+        }
+        boolean cannotTouch(float x,float y,float margin){
             return x<minX-margin||x>maxX+margin||y<minY-margin||y>maxY+margin;
+        }
+        boolean separated(Bounds other,float margin){
+            return maxX<other.minX-margin||minX>other.maxX+margin||maxY<other.minY-margin||minY>other.maxY+margin;
         }
     }
 
@@ -346,10 +416,16 @@ final class BlobWorld {
     // temporary result avoids thousands of short-lived objects per frame.
     private final Edge edgeScratch=new Edge();
     private final Bounds contactBoundsA=new Bounds(),contactBoundsB=new Bounds();
+    // Only valid during projectContacts: links cannot disappear inside a pair.
+    private int pairAdhesionCount;
 
-    private Edge closestEdge(Blob polygon,float x,float y) {
+    private Edge closestEdge(Blob polygon,float x,float y){
+        return closestEdge(polygon,x,y,Float.POSITIVE_INFINITY);
+    }
+    private Edge closestEdge(Blob polygon,float x,float y,float cutoff) {
         Edge found=edgeScratch;
         float minSq=Float.MAX_VALUE;
+        float cutoffSq=cutoff*cutoff;
         for(int j=0;j<Blob.NODES;j++) {
             int k=(j+1)%Blob.NODES;
             float ax=polygon.px[j],ay=polygon.py[j];
@@ -360,7 +436,7 @@ final class BlobWorld {
             float boxDx=x<minX?minX-x:(x>maxX?x-maxX:0f);
             float minY=ay<by?ay:by,maxY=ay>by?ay:by;
             float boxDy=y<minY?minY-y:(y>maxY?y-maxY:0f);
-            if(boxDx*boxDx+boxDy*boxDy>minSq+1e-3f)continue;
+            if(boxDx*boxDx+boxDy*boxDy>Math.min(minSq,cutoffSq)+1e-3f)continue;
             float dx=bx-ax,dy=by-ay;
             float len2=dx*dx+dy*dy;
             float t=len2<1e-6f?0f:clamp(((x-ax)*dx+(y-ay)*dy)/len2,0f,1f);
@@ -391,6 +467,8 @@ final class BlobWorld {
         // Include every current vertex, then only expand as projections move
         // vertices. These bounds remain conservative throughout this pair.
         contactBoundsA.set(a);contactBoundsB.set(b);
+        if(contactBoundsA.separated(contactBoundsB,SKIN+.01f))return;
+        pairAdhesionCount=-1;
         boolean touched=false;
         for(int i=0;i<Blob.NODES;i++) {
             if(pushPointFromPolygon(a,i,b,contactBoundsA,contactBoundsB,createAdhesion))touched=true;
@@ -398,7 +476,7 @@ final class BlobWorld {
         }
         // Later solver passes may create the first actual contact; audio must
         // observe them too. Per-pair cooldown in recordImpact prevents repeats.
-        if(touched)recordImpact(a,b);
+        if(touched&&legacyImpactCollection)recordImpact(a,b);
     }
 
     private void recordImpact(Blob a,Blob b) {
@@ -437,8 +515,11 @@ final class BlobWorld {
         // A point outside the expanded target box can neither be inside the
         // polygon nor within contact distance of any of its edges.
         if(targetBounds.cannotTouch(x,y))return false;
-        Edge edge=closestEdge(target,x,y);
-        boolean inside=pointInside(target,x,y);
+        // Exterior points cannot create a contact beyond SKIN. Limit the
+        // search by that distance, while interior points retain the complete
+        // nearest-edge search. The old traversal and strict tie-break remain.
+        boolean inside=!targetBounds.cannotTouch(x,y,.01f)&&pointInside(target,x,y);
+        Edge edge=closestEdge(target,x,y,inside?Float.POSITIVE_INFINITY:SKIN);
         if(!inside&&edge.distance>=SKIN)return false;
 
         int j=edge.start,k=(j+1)%Blob.NODES;
@@ -456,7 +537,7 @@ final class BlobWorld {
         }
         float overlap=inside?edge.distance+SKIN:SKIN-edge.distance;
         // Observe pre-projection local speeds, direction and penetration. The
-        // probe is passive and is disabled in the current shipping game.
+        // probe is passive; it cannot modify the projection.
         if(contactProbe!=null)
             contactProbe.observe(source,i,target,j,edge.t,nx,ny,overlap,
                     (x+edge.qx)*.5f,(y+edge.qy)*.5f);
@@ -481,14 +562,19 @@ final class BlobWorld {
     }
 
     private void addAdhesion(Blob a,Blob b,int ai,int bi) {
-        int pairCount=0;
-        for(Adhesion link:adhesions) {
-            if((link.a==a&&link.b==b)||(link.a==b&&link.b==a)) {
-                pairCount++;
-                if(pairCount>=2)return; // avoid making a rigid glue seam
+        // Both projection directions belong to the same unordered pair.
+        // Count lazily once rather than scanning every link for each vertex.
+        if(pairAdhesionCount<0){
+            pairAdhesionCount=0;
+            for(Adhesion link:adhesions){
+                if((link.a==a&&link.b==b)||(link.a==b&&link.b==a)){
+                    if(++pairAdhesionCount>=2)break;
+                }
             }
         }
+        if(pairAdhesionCount>=2)return;
         adhesions.add(new Adhesion(a,b,ai,bi));
+        pairAdhesionCount++;
     }
 
     private void solveAdhesions() {

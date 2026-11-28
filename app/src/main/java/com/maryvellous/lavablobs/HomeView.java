@@ -1,35 +1,23 @@
 package com.maryvellous.lavablobs;
-
+import android.animation.ValueAnimator;
+import android.app.AlertDialog;
 import android.content.Context;
 import android.graphics.Canvas;
-import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.Path;
-import android.graphics.PathMeasure;
-import android.graphics.RectF;
-import android.graphics.Shader;
 import android.graphics.Typeface;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.animation.DecelerateInterpolator;
+import android.widget.LinearLayout;
+import android.widget.Toast;
 import java.util.HashMap;
 
-/**
- * Minimal, theme-aware home screen. The hand-deformed Lava Blob title is
- * deliberately preserved; visual hierarchy and all other surfaces are new.
- * The content scrolls on smaller devices rather than shrinking touch targets.
- */
+/** Vertically snapping vessel carousel with a permanent neutral bottom console. */
 public final class HomeView extends View {
-    interface Listener { void start(GameSpec spec); }
+    interface Listener {void start(GameSpec spec);}
     private static final float W=420f;
-    private static final float MARGIN=29f;
-    private static final float CARD_WIDTH=176f;
-    private static final float CARD_HEIGHT=99f;
-    private static final float CARD_GAP=10f;
-    private static final Typeface NORMAL=Typeface.create("sans-serif",Typeface.NORMAL);
-    private static final Typeface MEDIUM=Typeface.create("sans-serif-medium",Typeface.NORMAL);
-    private static final Typeface HEAVY=Typeface.create("sans-serif-black",Typeface.BOLD);
-    private static final Typeface DISPLAY=Typeface.create("casual",Typeface.BOLD);
-
+    private static final Typeface NORMAL=Typeface.create("sans-serif",Typeface.NORMAL),MEDIUM=Typeface.create("sans-serif-medium",Typeface.NORMAL),DISPLAY=Typeface.create("casual",Typeface.BOLD);
     private final Listener listener;
     private final Runnable resume;
     private final GameSave.Snapshot saved;
@@ -37,177 +25,164 @@ public final class HomeView extends View {
     private final ThemeStore themeStore;
     private Palette.Theme theme;
     private int selectedTheme;
-
-    private final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint letter=new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Path path=new Path(), glyph=new Path(), warped=new Path();
+    private final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG),letter=new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Path path=new Path(),glyph=new Path(),warped=new Path();
+    private final android.content.SharedPreferences uiPreferences;
+    private boolean showScrollHint;
+    private float hintAlpha=1f;
+    private ValueAnimator hintAnimator;
     private final HashMap<Integer,Vessel> miniatures=new HashMap<>();
-    private Shader backdrop;
-    private float backdropHeight=-1f;
     private final long start=System.nanoTime();
-
-    private int page=0,section=0;
-    private float scrollY,gestureStartX,gestureStartY,scrollOnDown;
-    private boolean dragged;
-    private int pressedCard=-1;
-    private float cardPress;
-
-    HomeView(Context context,ProgressStore progress,Listener listener,
-             Runnable resume,GameSave gameSave) {
-        super(context);
-        this.progress=progress;
-        this.listener=listener;
-        this.resume=resume;
-        this.saved=gameSave.peek();
-        themeStore=new ThemeStore(context);
-        selectedTheme=themeStore.selection();
-        theme=themeStore.current();
-        setLayerType(View.LAYER_TYPE_HARDWARE,null);
-        letter.setTextAlign(Paint.Align.LEFT);
+    private boolean endless,dragging,carouselGesture;
+    private float position,storyPosition,endlessPosition,downX,downY,downPosition;
+    private ValueAnimator animator;
+    private AlertDialog modal;
+    private int pointer=MotionEvent.INVALID_POINTER_ID;
+    HomeView(Context context,ProgressStore progress,Listener listener,Runnable resume,GameSave gameSave){
+        super(context);this.progress=progress;this.listener=listener;this.resume=resume;
+        uiPreferences=context.getSharedPreferences("lava_blobs",Context.MODE_PRIVATE);
+        showScrollHint=!uiPreferences.getBoolean("home_carousel_swiped_v1",false);
+        saved=gameSave.peek();themeStore=new ThemeStore(context);selectedTheme=themeStore.selection();theme=themeStore.current();
+        if(!showScrollHint)hintAlpha=0;
+        storyPosition=progress.highestUnlocked();endless=saved!=null&&saved.spec.endless;
+        if(endless)for(int i=0;i<GameSpec.ENDLESS.length;i++)if(GameSpec.ENDLESS[i].id==saved.spec.id)endlessPosition=i;
+        position=endless?endlessPosition:storyPosition;setLayerType(View.LAYER_TYPE_HARDWARE,null);
     }
-
-    private float scale(){return getWidth()/W;}
-    private float offX(){return 0f;}
-    private float navTop(){return saved==null?154f:228f;}
-    private float cardTop(){return navTop()+57f;}
-    private float cardBottom(){return cardTop()+3*CARD_HEIGHT+2*CARD_GAP;}
-    private float themesTop(){return cardBottom()+39f;}
-    private float themesCardsTop(){return themesTop()+18f;}
-    private float copyTop(){return themesCardsTop()+82f;}
-    private float contentHeight(){return copyTop()+59f;}
-    private float viewportHeight(){return getHeight()/Math.max(.001f,scale());}
-    private float maxScroll(){return Math.max(0f,contentHeight()-viewportHeight());}
-
-    @Override protected void onDraw(Canvas raw) {
-        super.onDraw(raw);
-        if(getWidth()==0||getHeight()==0)return;
-        float sc=scale(),h=viewportHeight();
-        scrollY=Math.min(scrollY,maxScroll());
-        raw.drawColor(Palette.BACKGROUND_TOP);
-        raw.save();
-        raw.scale(sc,sc);
-        drawBackdrop(raw,h);
-        cardPress+=((pressedCard>=0?1f:0f)-cardPress)*.28f;
-        if(cardPress<.001f&&pressedCard<0)cardPress=0f;
-        raw.translate(0,-scrollY);
-        drawTitle(raw,(System.nanoTime()-start)/1_000_000_000f);
-        if(saved!=null)drawResume(raw);
-        drawNavigation(raw);
-        drawLevels(raw);
-        drawThemes(raw);
-        drawCopy(raw);
-        raw.restore();
-        postInvalidateOnAnimation();
-    }
-
-    private void drawBackdrop(Canvas c,float h){
-        if(backdrop==null||Math.abs(backdropHeight-h)>.25f){
-            backdrop=new LinearGradient(0f,0f,W,h,Palette.BACKGROUND_TOP,
-                    Palette.BACKGROUND_BOTTOM,Shader.TileMode.CLAMP);
-            backdropHeight=h;
-        }
-        paint.setStyle(Paint.Style.FILL);
-        paint.setShader(backdrop);
-        c.drawRect(0,0,W,h,paint);
-        paint.setShader(null);
-    }
-
-    // The deforming wordmark remains original, now held by a fixed ivory
-    // cushion so dark or low-saturation glyphs never disappear into the backdrop.
-    private void drawTitle(Canvas c,float t) {
-        panel(c,19f,53f,401f,135f,35f,Palette.NEUTRAL_SURFACE,
-                Palette.NEUTRAL_SURFACE,0f);
-        BlobTitle.draw(c,letter,paint,glyph,warped,theme,t,58f,119f);
-    }
-
-    private void drawResume(Canvas c){
-        final float l=MARGIN,t=142f,r=W-MARGIN,b=214f;
-        panel(c,l,t,r,b,19f,theme.surfaceRaised,Palette.mix(theme.surface,theme.border,.58f),1.2f);
-        drawPreview(c,saved.spec.shape,l+11,t+8,l+75,b-8,false);
-        text(c,"PARTITA SALVATA",l+87,t+19,10f,theme.onSurfaceMuted,false,243f);
-        text(c,"Continua",l+87,t+43,22f,theme.onSurface,true,230f);
-        String detail=(saved.spec.endless?"Infinita":saved.spec.trial?"Prova":"Livello "+(saved.spec.id+1))
-                +" · "+saved.points()+" punti";
-        text(c,detail,l+87,t+61,11.5f,theme.onSurfaceMuted,false,235f);
-        textCentered(c,"›",r-17,t+46,34,theme.primary,true);
-    }
-
-    private void drawNavigation(Canvas c){
-        float y=navTop();
-        panel(c,MARGIN,y,W-MARGIN,y+43f,22f,theme.surface,
-                Palette.mix(theme.surface,theme.border,.46f),1f);
-        float l=section==0?MARGIN+3:W/2f+1;
-        panel(c,l,y+3,l+W/2f-MARGIN-4,y+40f,19f,theme.primary,theme.primary,0f);
-        int activeInk=Palette.relativeLuminance(theme.primary)>.43f?
-                0xFF211A26:0xFFF7F1F3;
-        textCentered(c,"LIVELLI",118,y+28,13,section==0?activeInk:theme.onSurface,true);
-        textCentered(c,"∞  INFINITA",302,y+28,13,section==1?activeInk:theme.onSurface,true);
-    }
-
-    private void drawLevels(Canvas c){
-        int count=section==0?6:3;
-        for(int i=0;i<count;i++){
-            int id=page*6+i;
-            GameSpec spec=section==1?GameSpec.ENDLESS[i]:
-                id<GameSpec.LEVELS.length?GameSpec.LEVELS[id]:null;
-            if(spec==null)continue;
-            float x=section==1?MARGIN:MARGIN+(i%2)*(CARD_WIDTH+10f);
-            float y=cardTop()+(section==1?i:i/2)*(CARD_HEIGHT+CARD_GAP);
-            float width=section==1?W-2*MARGIN:CARD_WIDTH;
-            boolean locked=!spec.endless&&id>progress.highestUnlocked();
-            boolean next=!locked&&!spec.endless&&!progress.cleared(id)&&id==progress.highestUnlocked();
-            c.save();
-            if(i==pressedCard){
-                float shrink=1f-.035f*cardPress;
-                c.scale(shrink,shrink,x+width*.5f,y+CARD_HEIGHT*.5f);
+    private float scale(){return Math.min(getWidth()/W,getHeight()/620f);}
+    private float offX(){return (getWidth()-W*scale())*.5f;}
+    private float h(){return getHeight()/Math.max(.001f,scale());}
+    private float consoleTop(){return h()-(saved==null?94:166);}
+    private float top(){return 134;}
+    private float controlsTop(){return h()-94;}
+    private float bottom(){return consoleTop()-38;}
+    private float center(){return (top()+bottom())*.5f;}
+    private float cardHeight(){return Math.min(192,Math.max(88,(bottom()-top())*.53f));}
+    private float step(){return cardHeight()*.93f+12;}
+    private GameSpec[] specs(){return endless?GameSpec.ENDLESS:GameSpec.LEVELS;}
+    private int focus(){return HomeCarousel.nearest(position,specs().length);}
+    private boolean locked(GameSpec s){return !s.endless&&s.id>progress.highestUnlocked();}
+    private void flat(Canvas c,float l,float t,float r,float b,float radius,int fill){panel(c,l,t,r,b,radius,fill,fill,0);}
+    @Override protected void onDraw(Canvas c){
+        super.onDraw(c);if(getWidth()==0||getHeight()==0)return;
+        c.drawColor(Palette.BACKGROUND_TOP);c.save();c.translate(offX(),0);c.scale(scale(),scale());
+        flat(c,22,22,398,99,32,theme.forTier(BlobTitle.backing(selectedTheme)));
+        float t=ValueAnimator.areAnimatorsEnabled()?(System.nanoTime()-start)/1e9f:0;
+        BlobTitle.drawHome(c,letter,paint,glyph,warped,theme,selectedTheme,t,55,79);
+        textCentered(c,endless?"Scegli un recipiente":"Scegli un livello",210,122,15,theme.text,true);
+        c.save();c.clipRect(0,top(),W,bottom());
+        int f=focus();for(int i=0;i<specs().length;i++)if(i!=f&&Math.abs(i-position)<2.5f)drawCard(c,i);
+        drawCard(c,f);c.restore();
+        if(!endless&&hintAlpha>.01f){
+            float gap=center()-cardHeight()*.5f-top();
+            if(f==0&&gap>=41){
+                float y=top()+gap*.46f;
+                int color=Palette.alpha(theme.text,Math.round(235*hintAlpha));
+                textCentered(c,"Scorri in basso per gli altri livelli",210,y,13,color,false);
+                textCentered(c,"↓",210,y+21,19,color,true);
             }
-            drawCard(c,spec,x,y,width,CARD_HEIGHT,locked,next);
-            c.restore();
         }
-        float hintY=cardBottom()+19f;
-        if(section==0){
-            int pages=(GameSpec.LEVELS.length+5)/6;
-            for(int i=0;i<pages;i++){
-                paint.setColor(i==page?theme.primary:Palette.alpha(theme.muted,100));
-                paint.setStyle(Paint.Style.FILL);
-                c.drawCircle(W/2f+(i-(pages-1)*.5f)*17f,hintY-4f,3.8f,paint);
-            }
-            textCentered(c,"Scorri per altri livelli",W/2f,hintY+15f,10f,theme.muted,false);
-        }else{
-            textCentered(c,"Scegli un recipiente e gioca senza limite",W/2f,
-                    hintY+6,11f,theme.muted,false);
+        textCentered(c,"‹",70,consoleTop()-13,24,theme.text,true);
+        textCentered(c,(f+1)+" / "+specs().length,210,consoleTop()-15,13,theme.text,true);
+        textCentered(c,"›",350,consoleTop()-13,24,theme.text,true);
+        drawConsole(c);c.restore();
+        if(ValueAnimator.areAnimatorsEnabled()&&hasWindowFocus()&&isShown())postInvalidateDelayed(33);
+    }
+    @Override public void onWindowFocusChanged(boolean focus){super.onWindowFocusChanged(focus);if(focus)invalidate();}
+    private void drawCard(Canvas c,int i){
+        GameSpec s=specs()[i];boolean lock=locked(s),selected=i==focus();
+        float f=HomeCarousel.scale(i-position),width=376*f,height=cardHeight()*f,cy=center()+(i-position)*step(),l=(W-width)*.5f,t=cy-height*.5f;
+        flat(c,l,t,l+width,t+height,30*f,selected?(lock?0xFFD2C9D0:Palette.NEUTRAL_SURFACE):0xFF514B52);
+        drawPreview(c,s.shape,l+12*f,t+9*f,l+width*.43f,t+height-9*f,lock);
+        float tx=l+width*.47f,avail=width*.48f;
+        int ink=selected?theme.onSurface:theme.text,muted=selected?theme.onSurfaceMuted:theme.muted;
+        text(c,s.endless?"INFINITA":"LIVELLO "+(s.id+1),tx,t+height*.22f,11*f,muted,true,avail);
+        text(c,s.name.replace("Infinita · ",""),tx,t+height*.43f,23*f,ink,true,avail);
+        String status=lock?"Bloccato":s.endless?"Record "+progress.record(s.id):progress.cleared(s.id)?"Completato · "+progress.extras(s.id)+"/"+s.totalExtras()+" extra":"Obiettivo "+s.minScore;
+        text(c,status,tx,t+height*.63f,13*f,muted,false,avail);
+        if(!lock&&selected){
+            float by=t+height*.71f,bh=Math.min(33,height*.23f);int fill=theme.forTier(4);
+            flat(c,tx,by,tx+avail,by+bh,15*f,fill);textCentered(c,"Gioca",tx+avail*.5f,by+bh*.68f,14*f,ConsoleUi.ink(fill),true);
         }
     }
-
-    private void drawCard(Canvas c,GameSpec spec,float x,float y,float width,float height,
-                          boolean locked,boolean next){
-        int face=locked?Palette.mix(theme.surface,Palette.BACKGROUND_TOP,.16f):theme.surface;
-        panel(c,x,y,x+width,y+height,25f,face,face,0f);
-        drawPreview(c,spec.shape,x+8,y+10,x+69,y+height-10,locked);
-
-        float tx=x+77f,available=width-85f;
-        if(spec.endless){
-            text(c,"∞  INFINITA",tx,y+25,9.8f,theme.onSurfaceMuted,true,available);
-            text(c,spec.name.replace("Infinita · ",""),tx,y+49,15f,theme.onSurface,true,available);
-            text(c,"Gioca",tx,y+80,11f,theme.onSurfaceMuted,false,available);
-            return;
+    private void drawConsole(Canvas c){
+        float p=consoleTop(),y=controlsTop();
+        flat(c,0,p,W,h()+28,30,Palette.NEUTRAL_SURFACE);
+        if(saved!=null){
+            int fill=theme.forTier(4),ink=ConsoleUi.ink(fill);
+            flat(c,22,p+12,398,p+68,20,fill);
+            text(c,"Continua partita",38,p+35,19,ink,true,300);
+            text(c,(saved.spec.endless?"Infinita":"Livello "+(saved.spec.id+1))+" · "+saved.points()+" punti",38,p+55,12,ink,false,290);
+            textCentered(c,"›",372,p+46,28,ink,true);
         }
-
-        text(c,"LIVELLO "+(spec.id+1),tx,y+23,9.5f,theme.onSurfaceMuted,true,available);
-        text(c,spec.name,tx,y+47,14f,locked?theme.onSurfaceMuted:theme.onSurface,true,available);
-        String status=locked?"Bloccato":progress.cleared(spec.id)?"Completato":"Da giocare";
-        int statusColor=locked?theme.onSurfaceMuted:progress.cleared(spec.id)?theme.positive:theme.secondary;
-        paint.setColor(statusColor);
-        paint.setStyle(Paint.Style.FILL);
-        c.drawCircle(tx+3,y+69,2.8f,paint);
-        text(c,status,tx+10,y+73,10.4f,theme.onSurfaceMuted,false,available-10);
-        if(progress.cleared(spec.id)&&!locked)
-            text(c,"Extra "+progress.extras(spec.id)+"/"+spec.totalExtras(),
-                    tx,y+89,9.2f,theme.onSurfaceMuted,false,available);
-        else if(next)
-            text(c,"Tocca per iniziare",tx,y+89,9.2f,theme.onSurfaceMuted,false,available);
+        text(c,"Modalità",20,y+29,13,theme.onSurface,true,105);text(c,"infinita",20,y+48,13,theme.onSurface,true,105);
+        flat(c,110,y+20,178,y+58,19,endless?theme.forTier(4):0xFFB8AFB8);
+        paint.setColor(Palette.NEUTRAL_SURFACE);c.drawCircle(endless?159:129,y+39,15,paint);
+        int colors=theme.forTier(5),help=theme.forTier(3);
+        flat(c,196,y+16,324,y+68,23,colors);textCentered(c,"Temi",260,y+49,18,ConsoleUi.ink(colors),true);
+        flat(c,339,y+16,397,y+68,24,help);textCentered(c,"?",368,y+51,24,ConsoleUi.ink(help),true);
     }
-
+    private void dismissScrollHint(){
+        if(!showScrollHint)return;showScrollHint=false;
+        uiPreferences.edit().putBoolean("home_carousel_swiped_v1",true).apply();
+        if(!ValueAnimator.areAnimatorsEnabled()){hintAlpha=0;return;}
+        hintAnimator=ValueAnimator.ofFloat(hintAlpha,0);hintAnimator.setDuration(180);
+        hintAnimator.addUpdateListener(a->{hintAlpha=(float)a.getAnimatedValue();invalidate();});hintAnimator.start();
+    }
+    private void stopAnimation(){if(animator!=null){animator.cancel();animator=null;}}
+    private void snap(int n){
+        stopAnimation();int dest=HomeCarousel.nearest(n,specs().length);
+        if(!ValueAnimator.areAnimatorsEnabled()){position=dest;invalidate();return;}
+        animator=ValueAnimator.ofFloat(position,dest);animator.setDuration(300);animator.setInterpolator(new DecelerateInterpolator(1.6f));
+        animator.addUpdateListener(a->{position=(float)a.getAnimatedValue();invalidate();});animator.start();
+    }
+    private void switchMode(){stopAnimation();if(endless)endlessPosition=focus();else storyPosition=focus();endless=!endless;position=endless?endlessPosition:storyPosition;invalidate();}
+    private boolean hit(int i,float x,float y){float f=HomeCarousel.scale(i-position),cy=center()+(i-position)*step();return Math.abs(x-210)<=188*f&&Math.abs(y-cy)<=cardHeight()*f*.5f;}
+    @Override public boolean onTouchEvent(MotionEvent e){
+        if(getWidth()==0||getHeight()==0)return false;float x=(e.getX()-offX())/scale(),y=e.getY()/scale();
+        switch(e.getActionMasked()){
+            case MotionEvent.ACTION_DOWN:pointer=e.getPointerId(0);downX=x;downY=y;dragging=false;carouselGesture=y>=top()&&y<=bottom();if(carouselGesture)stopAnimation();downPosition=position;return true;
+            case MotionEvent.ACTION_MOVE:{int p=e.findPointerIndex(pointer);if(p<0)return true;y=e.getY(p)/scale();
+                if(carouselGesture&&Math.abs(y-downY)>7)dragging=true;
+                if(dragging){position=HomeCarousel.clamp(downPosition+(downY-y)/step(),specs().length);if(!endless&&position>downPosition+.08f)dismissScrollHint();invalidate();}return true;}
+            case MotionEvent.ACTION_POINTER_UP:if(e.getPointerId(e.getActionIndex())==pointer){pointer=MotionEvent.INVALID_POINTER_ID;if(carouselGesture)snap(focus());}return true;
+            case MotionEvent.ACTION_CANCEL:pointer=MotionEvent.INVALID_POINTER_ID;if(carouselGesture)snap(focus());return true;
+            case MotionEvent.ACTION_UP:
+                if(pointer==MotionEvent.INVALID_POINTER_ID)return true;pointer=MotionEvent.INVALID_POINTER_ID;
+                if(dragging){int target=HomeCarousel.target(downPosition,position,downY-y,step(),specs().length);if(!endless&&target>HomeCarousel.nearest(downPosition,specs().length))dismissScrollHint();snap(target);return true;}
+                if(Math.abs(x-downX)>18||Math.abs(y-downY)>18)return true;
+                performClick();
+                if(y>=consoleTop()&&downY>=consoleTop()){
+                    if(saved!=null&&x>=22&&x<=398&&downX>=22&&downX<=398&&y>=consoleTop()+12&&y<=consoleTop()+68&&downY>=consoleTop()+12&&downY<=consoleTop()+68){resume.run();return true;}
+                    if(y>=controlsTop()&&downY>=controlsTop()){if(x<190)switchMode();else if(x<331)showThemes();else showHelp();}
+                    return true;
+                }
+                if(y>=top()&&y<=bottom()){
+                    int i=focus();if(!hit(i,x,y)){for(int j=0;j<specs().length;j++)if(hit(j,x,y)){snap(j);break;}return true;}
+                    if(locked(specs()[i]))Toast.makeText(getContext(),"Completa il livello precedente",Toast.LENGTH_SHORT).show();else listener.start(specs()[i]);
+                }else if(y>bottom()&&y<consoleTop())snap(focus()+(x<210?-1:1));
+                return true;
+            default:return true;
+        }
+    }
+    @Override public boolean performClick(){super.performClick();return true;}
+    private void showThemes(){
+        LinearLayout body=ConsoleUi.column(getContext());
+        modal=ConsoleUi.sheet(getContext(),"Scegli un tema",body);
+        for(int i=0;i<Palette.COUNT;i++){
+            final int index=i;LinearLayout tile=ConsoleUi.column(getContext());
+            tile.setBackground(ConsoleUi.round(getContext(),i==selectedTheme?0xFFD2C9D0:0xFFF7F1F3,16));
+            tile.addView(ConsoleUi.text(getContext(),Palette.at(i).name+(i==selectedTheme?"  ✓":""),16));
+            ConsoleUi.swatches(tile,Palette.at(i),false);body.addView(tile);
+            tile.setClickable(true);tile.setFocusable(true);tile.setOnClickListener(view->{themeStore.select(index);selectedTheme=index;theme=themeStore.current();invalidate();modal.dismiss();});
+        }
+        modal.setOnDismissListener(d->modal=null);modal.show();
+    }
+    private void showHelp(){
+        LinearLayout body=ConsoleUi.column(getContext());ConsoleUi.help(body,theme,endless);
+        ConsoleUi.action(body,"Copia dati partite",theme.forTier(5),progress::copyReport);
+        modal=ConsoleUi.sheet(getContext(),"Come si gioca",body);modal.setOnDismissListener(d->modal=null);modal.show();
+    }
+    @Override protected void onDetachedFromWindow(){stopAnimation();if(hintAnimator!=null)hintAnimator.cancel();if(modal!=null)modal.dismiss();super.onDetachedFromWindow();}
     private Vessel miniature(int shape) {
         Vessel v=miniatures.get(shape);
         if(v==null){v=new Vessel(shape,850f);miniatures.put(shape,v);}
@@ -250,55 +225,10 @@ public final class HomeView extends View {
         c.restore();
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeWidth(1.7f);
-        paint.setColor(Palette.alpha(theme.onSurfaceMuted,locked?125:205));
+        paint.setColor(locked?Palette.alpha(Palette.VESSEL_OUTLINE,165):Palette.alpha(theme.onSurfaceMuted,205));
         c.drawPath(path,paint);
         paint.setStyle(Paint.Style.FILL);
         c.restore();
-    }
-
-    private void drawThemes(Canvas c){
-        float y=themesTop();
-        text(c,"Temi",MARGIN,y+7,17.5f,theme.text,true,110);
-        textRight(c,"Tocca per cambiare",W-MARGIN,y+6,10f,theme.muted);
-        float top=themesCardsTop();
-        for(int i=0;i<Palette.COUNT;i++){
-            Palette.Theme swatch=Palette.at(i);
-            float x=MARGIN+i*122f,w=118f,bottom=top+73f;
-            boolean chosen=i==selectedTheme;
-            panel(c,x,top,x+w,bottom,15f,chosen?theme.surfaceRaised:theme.surface,
-                    chosen?theme.primary:Palette.mix(theme.surface,theme.border,.56f),
-                    chosen?2f:1f);
-            text(c,swatch.name,x+11,top+18,11.5f,theme.onSurface,chosen,65);
-            if(chosen){
-                paint.setColor(theme.primary);
-                paint.setStyle(Paint.Style.FILL);
-                c.drawCircle(x+w-15,top+15,7f,paint);
-                textCentered(c,"✓",x+w-15,top+19,9.5f,theme.onPrimary,true);
-            }
-            c.save();c.clipRect(x+8,top+29,x+w-8,bottom-6);
-            for(int j=0;j<9;j++){
-                float xx=x+15+j*10.7f;
-                float yy=top+58f+(float)Math.sin(j*.8f)*4f;
-                paint.setStyle(Paint.Style.FILL);
-                paint.setColor(swatch.forTier(j));
-                c.drawCircle(xx,yy,9f,paint);
-                if(i==2&&j==8){
-                    paint.setStyle(Paint.Style.STROKE);
-                    paint.setColor(Palette.VESSEL_OUTLINE);
-                    paint.setStrokeWidth(.75f);
-                    c.drawCircle(xx,yy,9f,paint);
-                    paint.setStyle(Paint.Style.FILL);
-                }
-            }
-            c.restore();
-        }
-    }
-
-    private void drawCopy(Canvas c){
-        float y=copyTop();
-        panel(c,96f,y,324f,y+40f,20f,theme.surface,
-                Palette.mix(theme.surface,theme.border,.58f),1.0f);
-        textCentered(c,"COPIA DATI PARTITE",210,y+25,11f,theme.onSurface,true);
     }
 
     private void panel(Canvas c,float l,float t,float r,float b,float radius,
@@ -338,94 +268,5 @@ public final class HomeView extends View {
         letter.setTextAlign(Paint.Align.LEFT);
     }
 
-    @Override public boolean onTouchEvent(MotionEvent e){
-        if(getWidth()==0||getHeight()==0)return false;
-        float x=(e.getX()-offX())/scale();
-        float y=e.getY()/scale();
-        switch(e.getActionMasked()){
-            case MotionEvent.ACTION_DOWN:
-                gestureStartX=x;gestureStartY=y;scrollOnDown=scrollY;
-                dragged=false;pressedCard=-1;
-                float adjustedDownY=y+scrollY;
-                int hitCount=section==0?6:3;
-                for(int i=0;i<hitCount;i++){
-                    int id=page*6+i;
-                    float left=section==1?MARGIN:MARGIN+(i%2)*(CARD_WIDTH+10f);
-                    float top=cardTop()+(section==1?i:i/2)*(CARD_HEIGHT+CARD_GAP);
-                    float width=section==1?W-2*MARGIN:CARD_WIDTH;
-                    if(x>=left&&x<=left+width&&adjustedDownY>=top
-                            &&adjustedDownY<=top+CARD_HEIGHT
-                            &&(section==1||id<=progress.highestUnlocked())){
-                        pressedCard=i;
-                        break;
-                    }
-                }
-                invalidate();
-                return true;
-            case MotionEvent.ACTION_MOVE:
-                float dy=y-gestureStartY,dx=x-gestureStartX;
-                if(Math.abs(dy)>7f&&Math.abs(dy)>Math.abs(dx)*1.2f){
-                    dragged=true;pressedCard=-1;
-                    scrollY=Blob.clamp(scrollOnDown-dy,0f,maxScroll());
-                    invalidate();
-                }
-                return true;
-            case MotionEvent.ACTION_UP:
-                pressedCard=-1;
-                float movedX=x-gestureStartX;
-                float movedY=y-gestureStartY;
-                if(dragged||Math.abs(movedY)>17f)return true;
-                float adjustedY=y+scrollY;
-                if(Math.abs(movedX)>46f&&section==0&&adjustedY>cardTop()-15f
-                        &&adjustedY<cardBottom()+25f){
-                    page=Math.max(0,Math.min((GameSpec.LEVELS.length-1)/6,
-                            page+(movedX<0?1:-1)));
-                    invalidate();
-                    return true;
-                }
-                if(Math.abs(movedX)>18f)return true;
-                if(saved!=null&&adjustedY>=142f&&adjustedY<=214f
-                        &&x>=MARGIN&&x<=W-MARGIN){
-                    resume.run();return true;
-                }
-                if(adjustedY>=navTop()&&adjustedY<=navTop()+43f
-                        &&x>=MARGIN&&x<=W-MARGIN){
-                    section=x<W/2f?0:1;
-                    page=0;invalidate();return true;
-                }
-                if(adjustedY>=themesCardsTop()&&adjustedY<=themesCardsTop()+73f){
-                    for(int i=0;i<Palette.COUNT;i++){
-                        float left=MARGIN+i*122f;
-                        if(x>=left&&x<=left+118f){
-                            if(themeStore.select(i)){
-                                selectedTheme=i;
-                                theme=themeStore.current();
-                                invalidate();
-                            }
-                            return true;
-                        }
-                    }
-                }
-                if(adjustedY>=copyTop()&&adjustedY<=copyTop()+40f
-                        &&x>=96f&&x<=324f){
-                    progress.copyReport();return true;
-                }
-                int count=section==0?6:3;
-                for(int i=0;i<count;i++){
-                    float l=section==1?MARGIN:MARGIN+(i%2)*(CARD_WIDTH+10f);
-                    float t=cardTop()+(section==1?i:i/2)*(CARD_HEIGHT+CARD_GAP);
-                    float w=section==1?W-2*MARGIN:CARD_WIDTH;
-                    if(x>=l&&x<=l+w&&adjustedY>=t&&adjustedY<=t+CARD_HEIGHT){
-                        int id=page*6+i;
-                        if(section==1)listener.start(GameSpec.ENDLESS[i]);
-                        else if(id<GameSpec.LEVELS.length&&id<=progress.highestUnlocked())
-                            listener.start(GameSpec.LEVELS[id]);
-                        return true;
-                    }
-                }
-                return true;
-            case MotionEvent.ACTION_CANCEL:dragged=false;pressedCard=-1;return true;
-            default:return true;
-        }
-    }
+
 }

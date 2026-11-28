@@ -12,10 +12,16 @@ import com.maryvellous.lavablobs.audio.BloopMaterialBank;
 import com.maryvellous.lavablobs.audio.MaterialAudioEngine;
 
 import java.util.List;
-import java.util.concurrent.ArrayBlockingQueue;
+import com.maryvellous.lavablobs.audio.AudioEventQueue;
+import com.maryvellous.lavablobs.audio.AudioTimeline;
+import com.maryvellous.lavablobs.audio.AudioEvent;
+import com.maryvellous.lavablobs.audio.AudioBlockScheduler;
+import com.maryvellous.lavablobs.audio.TimingHistogram;
+import com.maryvellous.lavablobs.audio.AudioSession;
+
 
 /**
- * Audio V2.3 gameplay bridge for the main app and isolated preview.
+ * Gameplay audio bridge: the approved refined/aggregated PCM engine.
  *
  * The UI/physics thread observes real membranes and puts simple commands in a
  * bounded queue. The worker loads the FOUR original MP3s and drives the exact
@@ -33,38 +39,21 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
     private static final int RATE=BloopMaterialBank.SAMPLE_RATE;
     private static final int BLOCK_FRAMES=384; // ~8.7 ms; device buffers may be larger.
     private static final int CAPACITY=8192;
-
-    private static final int CONTACT=1,END=2,CANCEL=3,MERGE=4,LAUNCH=5,POP=6,RESET=7,WALL=8;
-    private static final class Command {
-        final int type,a,b;
-        final float normal,slip,compression,radiusA,radiusB,dt,bulkMotion;
-        Command(int type,int a,int b,float normal,float slip,
-                float compression,float radiusA,float radiusB){
-            this(type,a,b,normal,slip,compression,radiusA,radiusB,1f/120f,0f);
-        }
-        Command(int type,int a,int b,float normal,float slip,
-                float compression,float radiusA,float radiusB,float dt,
-                float bulkMotion){
-            this.type=type;this.a=a;this.b=b;this.normal=normal;this.slip=slip;
-            this.compression=compression;this.radiusA=radiusA;
-            this.radiusB=radiusB;this.dt=dt;this.bulkMotion=bulkMotion;
-        }
-    }
+    private static final int MAX_DISPATCH_PER_BLOCK=512;
 
     private final Context app;
     private final boolean diagnosticBuild;
+    private final DiagnosticTraceRecorder traceRecorder;
     private final SharedPreferences preferences;
-    private final ContactTracker tracker;
-    private final ArrayBlockingQueue<Command> queue=new ArrayBlockingQueue<>(CAPACITY);
-    private final Object lifecycle=new Object();
+    private final PhysicsAudioEvents physicsEvents;
+    private final AudioEventQueue<AudioEvent> queue=new AudioEventQueue<>(CAPACITY,1024);
+    private final AudioSession session;
     private final Thread audioThread;
-    private volatile boolean paused,closed,ready;
-    private volatile int volumePercent;
-    private volatile int muteEpoch;
     private int lastNonzeroVolume;
-    private volatile AudioTrack track;
-    private volatile String state="CARICAMENTO";
-    private volatile int droppedContacts;
+    private long maxWriteNs;
+    private final TimingHistogram renderTiming=new TimingHistogram(),writeTiming=new TimingHistogram();
+    private final java.util.concurrent.atomic.AtomicLongArray rejectedByType=new java.util.concurrent.atomic.AtomicLongArray(AudioEvent.Type.values().length);
+    private volatile long startupDiscarded;
     private long latestReportMs;
     private int blocksSinceReport;
     private long renderNsSinceReport,worstRenderNs;
@@ -72,21 +61,23 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
 
     V2GameSound(Context context) {
         app=context.getApplicationContext();
-        diagnosticBuild=app.getPackageName().endsWith(".audiov21");
+        diagnosticBuild=BuildConfig.AUDIO_DIAGNOSTICS;
+        traceRecorder=diagnosticBuild?new DiagnosticTraceRecorder(app):null;
         preferences=app.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
-        volumePercent=Math.max(0,Math.min(100,preferences.getInt(VOLUME_KEY,
+        int initialVolume=Math.max(0,Math.min(100,preferences.getInt(VOLUME_KEY,
                 preferences.getBoolean(EFFECTS_KEY,true)?100:0)));
+        session=new AudioSession(queue,initialVolume);
         lastNonzeroVolume=Math.max(1,Math.min(100,preferences.getInt(LAST_VOLUME_KEY,
-                volumePercent>0?volumePercent:100)));
-        tracker=new ContactTracker(this::onTransition);
+                initialVolume>0?initialVolume:100)));
+        physicsEvents=new PhysicsAudioEvents(this::send,()->session.snapshot().generation,System::nanoTime,this::reset);
         audioThread=new Thread(this::runAudio,"LavaV2-PCM");
         audioThread.setDaemon(true);
         audioThread.start();
     }
 
-    @Override public boolean effectsEnabled(){return volumePercent>0;}
+    @Override public boolean effectsEnabled(){return session.snapshot().volume>0;}
     @Override public boolean supportsVolumeSlider(){return true;}
-    @Override public int volumePercent(){return volumePercent;}
+    @Override public int volumePercent(){return session.snapshot().volume;}
     @Override public void setEffectsEnabled(boolean next) {
         if(next==effectsEnabled())return;
         setVolumePercent(next?lastNonzeroVolume:0);
@@ -94,107 +85,71 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
 
     @Override public void setVolumePercent(int percent) {
         int next=Math.max(0,Math.min(100,percent));
-        if(closed||volumePercent==next)return;
-        volumePercent=next;
+        if(session.snapshot().state==AudioSession.State.STOPPED||volumePercent()==next)return;
+        int previousGeneration=session.snapshot().generation;
+        session.volume(next);
+        flushIfChanged(previousGeneration);
         if(next>0)lastNonzeroVolume=next;
         preferences.edit().putInt(VOLUME_KEY,next)
                 .putInt(LAST_VOLUME_KEY,lastNonzeroVolume)
                 .putBoolean(EFFECTS_KEY,next>0).apply();
-        if(next==0){
-            queue.clear();
-            muteEpoch++;
-            // The worker owns pause/flush, even if the thumb immediately
-            // leaves zero. Avoid pausing AudioTrack behind its back.
-        }
-        synchronized(lifecycle){lifecycle.notifyAll();}
     }
 
-    @Override public void merge(BlobWorld.Merge merge) {
-        send(new Command(MERGE,merge.parentAId,merge.parentBId,
-                0,0,0,merge.radius,0));
+    // The authoritative source is the simulation, never the View.
+    @Override public void onContactStep(float time,float dt,List<ContactProbe.Contact> contacts){
+        physicsEvents.onContactStep(time,dt,contacts);
     }
-    @Override public void launch(int tier,float radius) {
-        send(new Command(LAUNCH,tier,0,0,0,0,radius,0));
+    @Override public void onWallImpact(int blobId,int side,float approach,float radius,float time){
+        physicsEvents.onWallImpact(blobId,side,approach,radius,time);
     }
-    @Override public void pop(int blobId,float radius) {
-        send(new Command(POP,blobId,0,0,0,0,radius,0));
-    }
+    @Override public void onMerge(BlobWorld.Merge merge){physicsEvents.onMerge(merge);}
+    @Override public void onLaunch(int tier,float radius,float time){physicsEvents.onLaunch(tier,radius,time);}
+    @Override public void onPop(int blobId,float time,float radius){physicsEvents.onPop(blobId,time,radius);}
+    @Override public void onReset(){physicsEvents.onReset();}
 
-    /** V2 never plays the legacy strongest-impact-per-frame SoundPool event. */
-    @Override public void discardLegacyImpacts(){}
-
-    @Override public void onContactStep(float time,float dt,List<ContactProbe.Contact> contacts) {
-        for(ContactProbe.Contact c:contacts){
-            send(new Command(CONTACT,c.blobA,c.blobB,c.approachSpeed,
-                    c.slideSpeed,c.compression,c.radiusA,c.radiusB,
-                    dt,c.bulkMotion));
-        }
-        tracker.onContactStep(time,dt,contacts);
+    private void flushIfChanged(int previousGeneration){
+        if(traceRecorder!=null&&previousGeneration!=session.snapshot().generation)
+            traceRecorder.flush(queue.rejectedObservations(),queue.rejectedControls());
     }
-
-    @Override public void onWallImpact(int blobId,int side,float approach,float radius){
-        send(new Command(WALL,blobId,side,approach,0,0,radius,0));
-    }
-
-    private void onTransition(ContactTracker.Transition transition) {
-        if(transition.kind==ContactTracker.Kind.END)
-            send(new Command(END,transition.blobA,transition.blobB,0,0,0,0,0));
-        else if(transition.kind==ContactTracker.Kind.CANCELLED)
-            send(new Command(CANCEL,transition.blobA,transition.blobB,0,0,0,0,0));
-    }
-
-    @Override public void onMerge(BlobWorld.Merge merge){
-        // Actual full fusion is sent exactly once from LavaView's merge event.
-        // Cancel phantom contact tails immediately at the physics source.
-        tracker.onMerge(merge);
-    }
-    @Override public void onPop(int blobId,float simulationTime){tracker.onPop(blobId,simulationTime);}
-    @Override public void onReset(){tracker.reset();reset();}
-
     @Override public void reset() {
-        if(!closed){
-            queue.clear();
-            send(new Command(RESET,0,0,0,0,0,0,0));
+        int before=session.snapshot().generation;session.reset();flushIfChanged(before);
+    }
+    private void send(AudioEvent event) {
+        // Record admitted inputs and overload candidates; generation changes
+        // split traces, including when a control overflow invalidates the queue.
+        if(traceRecorder!=null&&session.snapshot().running())traceRecorder.record(event);
+        AudioSession.Admission result=session.submit(event);
+        if(result==AudioSession.Admission.STARTUP){startupDiscarded++;return;}
+        if(result==AudioSession.Admission.OBSERVATION_REJECTED||result==AudioSession.Admission.CONTROL_OVERFLOW)
+            rejectedByType.incrementAndGet(event.type.ordinal());
+        if(result==AudioSession.Admission.CONTROL_OVERFLOW){
+            flushIfChanged(event.generation);
+            Log.e(TAG,"Authoritative audio overflow; audio suspended until lifecycle reset");
         }
     }
-
-    private void send(Command command) {
-        if(closed||!effectsEnabled()||!ready)return;
-        if(queue.offer(command))return;
-        if(command.type==CONTACT||command.type==WALL) {
-            droppedContacts++;
-        }else{
-            // Critical fusion/POP/mute reset must not be dropped behind
-            // stale contact observations in a busy scene.
-            queue.poll();
-            if(!queue.offer(command))Log.w(TAG,"Critical audio command overflow");
-        }
-    }
-
     @Override public void pause() {
-        paused=true;
-        queue.clear();
-        AudioTrack playing=track;
-        if(playing!=null)try{playing.pause();playing.flush();}catch(Exception ignored){}
-        synchronized(lifecycle){lifecycle.notifyAll();}
+        int before=session.snapshot().generation;session.pause();flushIfChanged(before);
     }
-    @Override public void resume() {
-        paused=false;
-        synchronized(lifecycle){lifecycle.notifyAll();}
-    }
+    @Override public void resume(){session.resume();}
     @Override public String diagnosticStatus() {
         if(!diagnosticBuild)return null;
-        if(!effectsEnabled())return "AUDIO V2 · MUTO";
-        if(paused)return "AUDIO V2 · PAUSA";
-        return "AUDIO V2 · "+state+(droppedContacts>0?" · Q:"+droppedContacts:"");
+        AudioSession.State state=session.snapshot().state;
+        String label;
+        switch(state){
+            case READY:label="PRONTO";break;
+            case STARTING:label="CARICAMENTO";break;
+            case PAUSED:label="PAUSA";break;
+            case MUTED:label="MUTO";break;
+            case OVERFLOW:label="ERRORE CODA";break;
+            default:label=state.name();
+        }
+        return "AUDIO · REFINED CLUSTER · "+label+
+                (queue.rejectedObservations()>0?" · Q:"+queue.rejectedObservations():"");
     }
     @Override public void release() {
-        if(closed)return;
-        closed=true;ready=false;
-        queue.clear();
-        AudioTrack playing=track;
-        if(playing!=null)try{playing.pause();playing.flush();}catch(Exception ignored){}
-        synchronized(lifecycle){lifecycle.notifyAll();}
+        if(session.snapshot().state==AudioSession.State.STOPPED)return;
+        int before=session.snapshot().generation;session.close();flushIfChanged(before);
+        if(traceRecorder!=null)traceRecorder.close();
         audioThread.interrupt();
     }
 
@@ -226,95 +181,51 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
         return created;
     }
 
-    private void process(MaterialAudioEngine engine,Command c) {
-        switch(c.type){
-            case CONTACT:
-                engine.contact(c.a,c.b,c.normal,c.slip,c.compression,
-                        c.radiusA,c.radiusB,c.dt,c.bulkMotion);
-                break;
-            case WALL:
-                engine.wallImpact(c.normal,c.radiusA);
-                break;
-            case END:
-                engine.endContact(c.a,c.b);
-                break;
-            case CANCEL:
-                engine.endContact(c.a,c.b);
-                break;
-            case MERGE:
-                engine.merge(c.a,c.b,c.radiusA);
-                break;
-            case LAUNCH:
-                engine.launch(c.a,c.radiusA);
-                break;
-            case POP:
-                engine.pop(c.a,c.radiusA);
-                break;
-            case RESET:
-                engine.reset();
-                break;
-            default:throw new IllegalStateException("Unknown audio command");
-        }
-    }
-
     private void runAudio(){
         AudioTrack device=null;
         try{
             Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO);
             // All expensive MP3 decoding and acoustic segmentation occur here.
             BloopMaterialBank materials=AndroidBloopDecoder.load(app);
-            if(closed)return;
+            if(session.snapshot().stopped())return;
             float[] releaseSwoosh=null;
             try{releaseSwoosh=AndroidBloopDecoder.loadLaunch(app);}
             catch(InterruptedException interrupted){throw interrupted;}
             catch(Exception failure){Log.w(TAG,"Classic release unavailable; using material attack",failure);}
-            MaterialAudioEngine engine=new MaterialAudioEngine(materials,releaseSwoosh);
-            engine.setOutputVolumePercent(volumePercent);
+            MaterialAudioEngine engine=MaterialAudioEngine.forGameplay(materials,releaseSwoosh);
+            engine.setOutputVolumePercent(volumePercent());
             engine.reset();
             device=createTrack();
-            track=device;
-            if(closed)return;
-            queue.clear();
-            ready=true;
-            state="PRONTO";
+            if(session.snapshot().stopped())return;
+            session.ready();
             float[] floatBlock=new float[BLOCK_FRAMES];
             short[] shortBlock=new short[BLOCK_FRAMES];
             boolean playing=false;
-            int seenMuteEpoch=muteEpoch;
-            while(!closed){
-                if(seenMuteEpoch!=muteEpoch){
-                    seenMuteEpoch=muteEpoch;
+            int seenGeneration=session.snapshot().generation;
+            AudioTimeline timeline=new AudioTimeline(RATE,BLOCK_FRAMES,Math.round(RATE*.12f));
+            AudioBlockScheduler scheduler=new AudioBlockScheduler(queue,timeline,MAX_DISPATCH_PER_BLOCK);
+            java.util.function.IntSupplier generationSource=()->session.snapshot().generation;
+            underrunBaseline=device.getUnderrunCount();
+            while(true){
+                AudioSession.Snapshot current=session.snapshot();
+                if(current.stopped())break;
+                if(seenGeneration!=current.generation){
+                    seenGeneration=current.generation;
                     if(playing){device.pause();device.flush();playing=false;}
-                    engine.setOutputVolumePercent(0);engine.reset();
+                    engine.setOutputVolumePercent(current.volume);
+                    engine.reset();scheduler.reset();
                 }
-                if(paused||!effectsEnabled()){
-                    if(playing){
-                        device.pause();
-                        device.flush();
-                        playing=false;
-                    }
-                    engine.reset();
-                    queue.clear();
-                    synchronized(lifecycle){
-                        while((paused||!effectsEnabled())&&!closed)
-                            lifecycle.wait(200);
-                    }
+                if(!current.running()){
+                    if(playing){device.pause();device.flush();playing=false;}
+                    session.awaitRunnable();
                     continue;
                 }
                 if(!playing){device.play();playing=true;}
-                // Single owner for all engine mutations, never concurrent
-                // with Android Canvas or the physics step.
-                Command cmd;
-                int processed=0;
-                while((cmd=queue.poll())!=null){
-                    process(engine,cmd);
-                    if(++processed>=CAPACITY)break;
-                }
                 long started=System.nanoTime();
-                engine.setOutputVolumePercent(volumePercent);
-                engine.renderMono(floatBlock,0,BLOCK_FRAMES);
+                engine.setOutputVolumePercent(current.volume);
+                if(!scheduler.render(engine,floatBlock,seenGeneration,generationSource))continue;
                 long spent=System.nanoTime()-started;
-                worstRenderNs=Math.max(worstRenderNs,spent);
+                worstRenderNs=Math.max(worstRenderNs,spent);renderTiming.record(spent);
                 renderNsSinceReport+=spent;
                 blocksSinceReport++;
                 for(int i=0;i<BLOCK_FRAMES;i++){
@@ -322,36 +233,58 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
                     shortBlock[i]=(short)Math.round(sample*32767f);
                 }
                 int written=0;
-                while(written<BLOCK_FRAMES&&!closed&&!paused&&effectsEnabled()){
+                long writeStart=System.nanoTime();
+                while(written<BLOCK_FRAMES&&session.snapshot().running()&&seenGeneration==session.snapshot().generation){
                     int n=device.write(shortBlock,written,BLOCK_FRAMES-written,
                             AudioTrack.WRITE_BLOCKING);
                     if(n<0)throw new IllegalStateException("PCM write error "+n);
-                    if(n==0)break;
+                    if(n==0)throw new IllegalStateException("Blocking PCM write made no progress");
                     written+=n;
                 }
+                long writeNs=System.nanoTime()-writeStart;
+                maxWriteNs=Math.max(maxWriteNs,writeNs);writeTiming.record(writeNs);
                 long now=android.os.SystemClock.elapsedRealtime();
                 if(now-latestReportMs>=5000){
                     Log.d(TAG,"audioBlockAvg="+(blocksSinceReport==0?0:
                             renderNsSinceReport/(blocksSinceReport*1_000_000.0))+
                             "ms worst="+worstRenderNs/1_000_000.0+
-                            "ms underruns="+device.getUnderrunCount()+
+                            "ms underrunsDelta="+(device.getUnderrunCount()-underrunBaseline)+
                             " active="+engine.activePairs()+" fullFusions="+
                             engine.fusionsCompleted()+" peak="+engine.peakOutput()+
                             " squishes="+engine.squishEvents()+
                             " impacts="+engine.impactEvents()+
-                            " dropped="+droppedContacts);
+                            " droppedObs="+queue.rejectedObservations()+" rejectedControl="+queue.rejectedControls()+
+                            " queueDepth="+queue.size()+" queueHigh="+queue.highWater()+
+                            " maxQueueAgeMs="+scheduler.maxQueueAgeNs()/1e6+" maxDispatchMs="+scheduler.maxDispatchNs()/1e6+
+                            " maxWriteMs="+maxWriteNs/1e6+
+                            " p99QueueAgeUpperMs="+scheduler.p99QueueAgeNs()/1e6+
+                            " p99DispatchUpperMs="+scheduler.p99DispatchNs()/1e6+
+                            " p99RenderUpperMs="+renderTiming.p99UpperNs()/1e6+
+                            " p99WriteUpperMs="+writeTiming.p99UpperNs()/1e6+
+                            " rejectedByType="+rejectedByType+" dispatched="+scheduler.dispatched()+
+                            " lateEvents="+scheduler.lateEvents()+" rebases="+scheduler.rebases()+
+                            " dispatchBudgetHits="+scheduler.budgetHits()+" startupDiscarded="+startupDiscarded+
+                            " peakDry="+engine.peakDry()+" minLimiterGain="+engine.minimumLimiterGain()+
+                            " limitedFrames="+engine.limitedFrames()+" renderedFrames="+engine.renderedFrames()+
+                            " peakGainStep="+engine.peakGainStep()+" peakSampleStep="+engine.peakSampleStep()+
+                            " mixLatencyFrames="+engine.mixLatencyFrames()+
+                            " voiceObjectsAllocated="+engine.allocatedVoices()+" voicePoolHits="+engine.reusedVoices()+
+                            " peakVoices="+engine.peakVoices()+" peakSecondary="+engine.peakShortVoices()+
+                            " clusterCandidates="+engine.aggregateCandidates()+" groups="+engine.aggregateGroups()+
+                            " collapsed="+engine.aggregateCollapsed()+" rejectedClusters="+engine.aggregateRejected()+
+                            " cancelledClusters="+engine.aggregateCancelled());
                     latestReportMs=now;
                     blocksSinceReport=0;renderNsSinceReport=0;worstRenderNs=0;
+                    scheduler.resetIntervalMaxima();maxWriteNs=0;renderTiming.reset();writeTiming.reset();underrunBaseline=device.getUnderrunCount();
                 }
             }
         }catch(InterruptedException ignored){
             Thread.currentThread().interrupt();
         }catch(Exception failure){
-            state="ERRORE";
+            session.fail();
             Log.e(TAG,"Audio V2 unavailable (gameplay can continue silently)",failure);
         }finally{
-            ready=false;
-            track=null;
+            if(!session.snapshot().stopped())session.fail();
             if(device!=null){
                 try{device.pause();}catch(Exception ignored){}
                 try{device.flush();}catch(Exception ignored){}

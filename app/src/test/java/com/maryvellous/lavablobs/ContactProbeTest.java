@@ -205,4 +205,24 @@ public class ContactProbeTest {
         assertEquals(1,merged.consumeMerges().size());
         assertEquals("Fusion shouldn't emit an unrelated pair impact",0,touches[0]);
     }
+    @Test public void sharedBodyMetricsAreMeasuredOncePerStepAndNeverStale(){
+        Blob a=blob(100,400,1),b=blob(150,400,1),c=blob(200,400,1);
+        a.id=1;b.id=2;c.id=3;
+        List<ContactProbe.Contact> seen=new ArrayList<>();
+        ContactProbe p=new ContactProbe((t,dt,contacts)->seen.addAll(contacts));
+        for(int step=1;step<=2;step++){
+            speed(a,100f*step,0);speed(b,0,0);speed(c,0,0);
+            p.beginStep();
+            p.observe(a,0,b,0,.5f,1f,0f,1f,125f,400f);
+            p.observe(a,0,c,0,.5f,1f,0f,1f,150f,400f);
+            p.observe(b,0,c,0,.5f,1f,0f,1f,175f,400f);
+            p.finishStep(step*.008f,.008f);
+            assertEquals(3L*step,p.measuredBodies());
+            assertEquals(6L*step,p.contactMetricRequests());
+            assertEquals(100f*step,seen.get((step-1)*3).bulkMotion,0f);
+            assertEquals(100f*step,seen.get((step-1)*3+1).bulkMotion,0f);
+            assertEquals(0f,seen.get((step-1)*3+2).bulkMotion,0f);
+        }
+        p.reset();assertEquals(0,p.measuredBodies());assertEquals(0,p.contactMetricRequests());
+    }
 }

@@ -6,16 +6,24 @@ on:
       - main
     paths:
       - 'app/**'
+      - 'tools/audio_v2_java/**'
       - 'build.gradle'
       - 'settings.gradle'
       - '.github/workflows/lava-blobs.yml'
+      - '.github/workflows/lava-blobs-production.yml'
   pull_request:
     paths:
       - 'app/**'
+      - 'tools/audio_v2_java/**'
       - 'build.gradle'
       - 'settings.gradle'
       - '.github/workflows/lava-blobs.yml'
+      - '.github/workflows/lava-blobs-production.yml'
   workflow_dispatch:
+
+concurrency:
+  group: lava-blobs-ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -56,8 +64,43 @@ jobs:
           assert 1000 < rms < 10000, rms
           print(f"Valid 112ms mono PCM WAV; peak={peak}, RMS={rms:.0f}")
           PY
-      - name: Test game physics and collision SFX regression
-        run: gradle --no-daemon :app:testDebugUnitTest :app:testPreviewUnitTest
+      - name: Test solver, audio transport, lifecycle and aggregation
+        run: gradle --no-daemon --no-build-cache :app:testDebugUnitTest :app:testAggregationPreviewUnitTest :app:testReleaseUnitTest
+      - name: Compare dense late-game solver and event traces with reference
+        run: |
+          set -euo pipefail
+          reference=f14cf960a780cdadb803e67b43f61c86e709a91d
+          previous=43aca8e1927457621d292508ed9b1ba5dc428cf2
+          git fetch --no-tags --depth=1 origin "$reference" "$previous"
+          root=build/dense-scene
+          pkg=app/src/main/java/com/maryvellous/lavablobs
+          mkdir -p "$root/reference" "$root/previous" "$root/reference-classes" "$root/previous-classes" "$root/candidate-classes" "$root/results/reference" "$root/results/previous" "$root/results/candidate"
+          git archive "$reference" "$pkg" | tar -x -C "$root/reference"
+          git archive "$previous" "$pkg" | tar -x -C "$root/previous"
+          for version in reference previous candidate; do
+            source="$pkg"
+            if [[ "$version" != candidate ]]; then source="$root/$version/$pkg"; fi
+            javac -encoding UTF-8 -d "$root/$version-classes" \
+              "$source"/{Blob,BlobWorld,Vessel,GameSpec,ContactProbe,ContactTracker,PhysicsAudioEvents,AudioPolicy}.java \
+              "$source"/audio/*.java tools/audio_v2_java/DenseSceneCli.java
+            java -cp "$root/$version-classes" com.maryvellous.lavablobs.DenseSceneCli "$root/results/$version" \
+              | tee "$root/results/$version/timing.txt"
+          done
+          for shape in 0 1 2; do
+            diff "$root/results/reference/dense-$shape-hashes.txt" "$root/results/candidate/dense-$shape-hashes.txt"
+            for window in {0..5}; do
+              cmp "$root/results/reference/dense-$shape-$window-events.csv" "$root/results/candidate/dense-$shape-$window-events.csv"
+            done
+          done
+          echo 'Dense fixture state hashes and event traces match across all three vessel shapes.' >> "$GITHUB_STEP_SUMMARY"
+          cat "$root/results/"{reference,previous,candidate}/timing.txt >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload dense scene regression and timing data
+        uses: actions/upload-artifact@v4
+        with:
+          name: lava-dense-scene-${{ github.sha }}
+          path: build/dense-scene/results/
+          retention-days: 14
+          if-no-files-found: error
       - name: Upload V2 contact-control trace (offline diagnostics only)
         uses: actions/upload-artifact@v4
         with:
@@ -65,8 +108,72 @@ jobs:
           path: app/build/audio_v2/contact_probe_trace.csv
           retention-days: 14
           if-no-files-found: error
+      - name: Render runtime-equivalent A/B replay from real solver trace
+        run: |
+          set -euo pipefail
+          if ! test -s app/build/audio_v2/runtime_events_v1.csv; then
+            echo '::error::Runtime trace missing after Gradle tests'
+            find . -name '*trace*.csv' -o -name 'TEST-*AudioRuntimeTraceTest*.xml'
+            exit 1
+          fi
+          mkdir -p build/runtime-replay/classes build/runtime-replay/decoded build/runtime-replay/results
+          if ! command -v ffmpeg; then
+            sudo apt-get update
+            sudo apt-get install -y ffmpeg
+          fi
+          ffmpeg -version | head -n 1 || true
+          shopt -s nullglob
+          for name in bloop_1 bloop_2 bloop_3 bloop_4 swoosh_source; do
+            sources=(app/src/main/res/raw/"$name".*)
+            if [[ "${#sources[@]}" -ne 1 ]]; then
+              echo "::error::Expected exactly one resource for $name; found ${#sources[@]}"
+              exit 1
+            fi
+            echo "Decoding ${sources[0]}"
+            ffmpeg -nostdin -v error -y -i "${sources[0]}" -ac 1 -ar 44100 -c:a pcm_s16le "build/runtime-replay/decoded/$name.wav"
+          done
+          echo 'Compiling shared replay core'
+          javac -encoding UTF-8 -d build/runtime-replay/classes \
+            app/src/main/java/com/maryvellous/lavablobs/audio/*.java \
+            tools/audio_v2_java/RuntimeReplayCli.java
+          echo 'Rendering shared runtime trace'
+          java -cp build/runtime-replay/classes com.maryvellous.lavablobs.audio.RuntimeReplayCli \
+            build/runtime-replay/decoded app/build/audio_v2/runtime_events_v1.csv build/runtime-replay/results
+          cp app/build/audio_v2/runtime_events_v1.csv build/runtime-replay/results/
+          # Compile the exact phone-approved source and its replay tool separately.
+          approved=43aca8e1927457621d292508ed9b1ba5dc428cf2
+          git archive "$approved" tools/audio_v2_java/RuntimeReplayCli.java | tar -x -C build/dense-scene/previous
+          mkdir -p build/runtime-replay/approved-classes build/runtime-replay/approved-results
+          javac -encoding UTF-8 -d build/runtime-replay/approved-classes \
+            build/dense-scene/previous/app/src/main/java/com/maryvellous/lavablobs/audio/*.java \
+            build/dense-scene/previous/tools/audio_v2_java/RuntimeReplayCli.java
+          java -cp build/runtime-replay/approved-classes com.maryvellous.lavablobs.audio.RuntimeReplayCli \
+            build/runtime-replay/decoded app/build/audio_v2/runtime_events_v1.csv build/runtime-replay/approved-results
+          for file in build/runtime-replay/results/*.wav; do
+            cmp "$file" "build/runtime-replay/approved-results/$(basename "$file")"
+          done
+          for dir in build/runtime-replay/results/*-dry-stems; do
+            diff -r "$dir" "build/runtime-replay/approved-results/$(basename "$dir")"
+          done
+          echo 'Gameplay mix and retained comparison WAVs match phone-approved #238 byte for byte.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Runtime replay (desktop decode, shared event adapter/scheduler/DSP):' >> "$GITHUB_STEP_SUMMARY"
+          cat build/runtime-replay/results/metrics.csv >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload versioned runtime replay metrics and listening comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: lava-runtime-replay-${{ github.sha }}
+          path: build/runtime-replay/results/
+          retention-days: 14
+          if-no-files-found: error
       - name: Build APKs
-        run: gradle --no-daemon :app:assembleDebug :app:assemblePreview
+        run: gradle --no-daemon :app:assembleDebug :app:assembleAggregationPreview :app:assembleRelease
+      - name: Verify unsigned release package (compile gate only)
+        run: |
+          apk=$(find app/build/outputs/apk/release -name '*.apk' -print -quit)
+          test -n "$apk"
+          badging=$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk")
+          printf '%s\n' "$badging" | grep -F "package: name='com.maryvellous.lavablobs'"
+          if printf '%s\n' "$badging" | grep -q '^application-debuggable'; then exit 1; fi
       - name: Upload installable APK
         id: main_apk
         uses: actions/upload-artifact@v4
@@ -74,14 +181,21 @@ jobs:
           name: lava-blobs-android-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-      - name: Upload side-by-side preview APK
+      - name: Verify isolated aggregation APK package
+        run: |
+          apk=$(find app/build/outputs/apk/aggregationPreview -name '*.apk' -print -quit)
+          test -n "$apk"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk" | grep -F "package: name='com.maryvellous.lavablobs.audioaggregation'"
+      - name: Upload approved-engine diagnostic preview APK
+        id: cluster_apk
         uses: actions/upload-artifact@v4
         with:
-          name: lava-blob-preview-android
-          path: app/build/outputs/apk/preview/app-preview.apk
+          name: lava-aggregation-preview-${{ github.sha }}
+          path: app/build/outputs/apk/aggregationPreview/*.apk
           if-no-files-found: error
 
       - name: Main APK download link
         run: |
-          echo '[Download Lava Blob 1.1.0 main APK (ZIP)](${{ steps.main_apk.outputs.artifact-url }})' >> "$GITHUB_STEP_SUMMARY"
+          echo '[Download main-package debug APK (ZIP)](${{ steps.main_apk.outputs.artifact-url }})' >> "$GITHUB_STEP_SUMMARY"
+          echo '[Download approved-engine diagnostic preview APK (ZIP)](${{ steps.cluster_apk.outputs.artifact-url }})' >> "$GITHUB_STEP_SUMMARY"
           echo 'Commit: ${{ github.sha }}' >> "$GITHUB_STEP_SUMMARY"
