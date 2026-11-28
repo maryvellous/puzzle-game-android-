@@ -11,6 +11,7 @@ import com.maryvellous.lavablobs.audio.MaterialAudioEngine.VoiceFamily;
  * Stable compaction runs once per frame with finished voices. */
 final class PcmMixer {
     private static final int MAX_SHORT_VOICES=24,RETAINED_VOICES=64;
+    static final float SECONDARY_GAIN=3f;
     private final ArrayList<PcmVoice> voices=new ArrayList<>(RETAINED_VOICES);
     private final ArrayDeque<PcmVoice> free=new ArrayDeque<>(RETAINED_VOICES);
     private final MixProfile profile;
@@ -43,8 +44,8 @@ final class PcmMixer {
     }
     boolean shortVoice(VoiceFamily family,float[] sound,float volume,float rate){
         if(activeShortVoices>=MAX_SHORT_VOICES){shortVoicesRejected++;return false;}
-        if(volume<=.0001f)return false;
-        start(family,sound,volume*3f,rate,false);
+        if(!(volume>.0001f))return false;
+        start(family,sound,volume*SECONDARY_GAIN,rate,false);
         activeShortVoices++;peakShortVoices=Math.max(peakShortVoices,activeShortVoices);
         return true;
     }
