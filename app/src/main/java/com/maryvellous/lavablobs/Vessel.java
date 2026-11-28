@@ -213,13 +213,22 @@ final class Vessel {
     }
 
     boolean contains(float x,float y) {
-        boolean inside=false;
-        for(int i=0,j=xs.length-1;i<xs.length;j=i++) {
-            if((ys[i]>y)!=(ys[j]>y)) {
-                if(x<(xs[j]-xs[i])*(y-ys[i])/(ys[j]-ys[i])+xs[i])inside=!inside;
-            }
-        }
-        return inside;
+        if(!(y>=top&&y<bottom))return false;
+        // Both sides are monotonic in y. Locate the only two crossings
+        // with the same strict comparison and arithmetic as the ray loop.
+        int lo=1,hi=segments;
+        while(lo<hi){int mid=(lo+hi)>>>1;if(ys[mid]>y)hi=mid;else lo=mid+1;}
+        int right=lo;
+        lo=segments+2;hi=ys.length-1;
+        while(lo<hi){int mid=(lo+hi)>>>1;if(ys[mid]<=y)hi=mid;else lo=mid+1;}
+        int left=lo;
+        return crossesRay(right,x,y)^crossesRay(left,x,y);
+    }
+
+    private boolean crossesRay(int i,float x,float y){
+        int j=i-1;
+        return ((ys[i]>y)!=(ys[j]>y))&&
+                x<(xs[j]-xs[i])*(y-ys[i])/(ys[j]-ys[i])+xs[i];
     }
 
     private static final class Closest {
