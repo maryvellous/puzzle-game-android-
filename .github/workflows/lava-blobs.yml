@@ -84,7 +84,9 @@ jobs:
           done
           for shape in 0 1 2; do
             diff "$root/results/reference/dense-$shape-hashes.txt" "$root/results/candidate/dense-$shape-hashes.txt"
-            cmp "$root/results/reference/dense-$shape-events.csv" "$root/results/candidate/dense-$shape-events.csv"
+            for window in {0..5}; do
+              cmp "$root/results/reference/dense-$shape-$window-events.csv" "$root/results/candidate/dense-$shape-$window-events.csv"
+            done
           done
           echo 'Dense fixture state hashes and event traces match across all three vessel shapes.' >> "$GITHUB_STEP_SUMMARY"
           cat "$root/results/"{reference,candidate}/timing.txt >> "$GITHUB_STEP_SUMMARY"
