@@ -13,6 +13,7 @@ final class Vessel {
     // Each vase is x-monotone with straight, sampled left/right sides.
     // A conservative interior corridor avoids expensive exact wall queries.
     private final float safeClearance;
+    private final float[] edgeDx,edgeDy,edgeLengthSq,edgeMinX,edgeMaxX,edgeMinY,edgeMaxY;
     private final Closest closestScratch=new Closest();
 
     Vessel(int shape,float screenHeight) {
@@ -49,6 +50,16 @@ final class Vessel {
             x[SEGMENTS+1+i]=mid+offset-half; y[SEGMENTS+1+i]=yy;
         }
         xs=x;ys=y;
+        int n=xs.length;
+        edgeDx=new float[n];edgeDy=new float[n];edgeLengthSq=new float[n];
+        edgeMinX=new float[n];edgeMaxX=new float[n];edgeMinY=new float[n];edgeMaxY=new float[n];
+        for(int i=0;i<n;i++){
+            int k=(i+1)%n;
+            float dx=xs[k]-xs[i],dy=ys[k]-ys[i];
+            edgeDx[i]=dx;edgeDy[i]=dy;edgeLengthSq[i]=dx*dx+dy*dy;
+            edgeMinX[i]=Math.min(xs[i],xs[k]);edgeMaxX[i]=Math.max(xs[i],xs[k]);
+            edgeMinY[i]=Math.min(ys[i],ys[k]);edgeMaxY[i]=Math.max(ys[i],ys[k]);
+        }
         float maxSlope=0f;
         for(int i=0;i<xs.length-1;i++){
             float dy=Math.abs(ys[i+1]-ys[i]);
@@ -139,9 +150,12 @@ final class Vessel {
         Closest result=closestScratch;
         float d2Min=Float.MAX_VALUE;
         for(int i=0;i<xs.length;i++) {
-            int k=(i+1)%xs.length;
-            float dx=xs[k]-xs[i],dy=ys[k]-ys[i];
-            float len=dx*dx+dy*dy;
+            // A segment's box gives a conservative lower bound; retain edge
+            // traversal order, strict comparison and original projection math.
+            float boxDx=x<edgeMinX[i]?edgeMinX[i]-x:(x>edgeMaxX[i]?x-edgeMaxX[i]:0f);
+            float boxDy=y<edgeMinY[i]?edgeMinY[i]-y:(y>edgeMaxY[i]?y-edgeMaxY[i]:0f);
+            if(boxDx*boxDx+boxDy*boxDy>d2Min+1e-3f)continue;
+            float dx=edgeDx[i],dy=edgeDy[i],len=edgeLengthSq[i];
             float t=len<1e-5f?0f:Blob.clamp(
                     ((x-xs[i])*dx+(y-ys[i])*dy)/len,0f,1f);
             float qx=xs[i]+dx*t,qy=ys[i]+dy*t;
