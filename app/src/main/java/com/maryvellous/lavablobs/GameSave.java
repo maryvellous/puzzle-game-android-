@@ -53,7 +53,7 @@ final class GameSave {
             if(data.optInt("version")!=VERSION)return null;
             GameSpec spec=findSpec(data.getInt("id"));
             if(spec==null||data.optBoolean("gameOver"))return null;
-            if(spec.shape>=14&&data.optInt("shape",-1)!=spec.shape)return null;
+            if(spec.shape>=14&&(data.optInt("shape",-1)!=spec.shape||data.optInt("roundedGeometry",0)!=1))return null;
             return new Snapshot(spec,data);
         }catch(Exception ignored){return null;}
     }
@@ -100,6 +100,7 @@ final class GameSave {
         state.put("scoringVersion",2);
         state.put("id",spec.id);
         state.put("shape",spec.shape);
+        if(spec.shape>=14)state.put("roundedGeometry",1);
         state.put("height",w.height);
         state.put("time",w.time);
         state.put("activeSeconds",Math.max(0f,activeSeconds));

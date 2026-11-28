@@ -518,6 +518,7 @@ public final class LavaView extends View {
     private void drawVesselRim(Canvas c) {
         line.setColor(Palette.VESSEL_OUTLINE);
         line.setStrokeWidth(4.2f);
+        line.setStrokeJoin(Paint.Join.ROUND);
         c.drawPath(glassPath(),line);
         line.setColor(Palette.alpha(Palette.VESSEL_OUTLINE,112));
         line.setStrokeWidth(1.1f);

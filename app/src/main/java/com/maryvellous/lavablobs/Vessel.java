@@ -9,7 +9,9 @@ final class Vessel {
     final float[] xs,ys;
     final float top,bottom;
     final int shape;
-    private static final int SEGMENTS=24;
+    private static final int LEGACY_SEGMENTS=24;
+    private static final int ROUNDED_SEGMENTS=80;
+    final int segments;
     // Each vase is x-monotone with straight, sampled left/right sides.
     // A conservative interior corridor avoids expensive exact wall queries.
     private final float safeClearance;
@@ -18,6 +20,7 @@ final class Vessel {
 
     Vessel(int shape,float screenHeight) {
         this.shape=shape;
+        segments=shape>=14?ROUNDED_SEGMENTS:LEGACY_SEGMENTS;
         if(shape==-1) { // Preserve v0.5 test fixture coordinates exactly.
             top=155f;
             bottom=Math.max(470f,screenHeight-153f);
@@ -32,22 +35,24 @@ final class Vessel {
             top=playableTop+(free-(jarHeight+launcherSpace))*.5f;
             bottom=top+jarHeight;
         }
-        float[] x=new float[(SEGMENTS+1)*2];
+        float[] x=new float[(segments+1)*2];
         float[] y=new float[x.length];
         float mid=210f;
-        for(int i=0;i<=SEGMENTS;i++) {
-            float t=i/(float)SEGMENTS;
+        for(int i=0;i<=segments;i++) {
+            float t=i/(float)segments;
             float yy=top+(bottom-top)*t;
             float half=halfWidth(shape,t);
+            if(shape>=14)half-=cornerInset(t*(bottom-top),bottom-top,halfWidth(shape,0),halfWidth(shape,1));
             float offset=offset(shape,t);
             x[i]=mid+offset+half; y[i]=yy; // clockwise right side
         }
-        for(int i=0;i<=SEGMENTS;i++) {
-            float t=1f-i/(float)SEGMENTS;
+        for(int i=0;i<=segments;i++) {
+            float t=1f-i/(float)segments;
             float yy=top+(bottom-top)*t;
             float half=halfWidth(shape,t);
+            if(shape>=14)half-=cornerInset(t*(bottom-top),bottom-top,halfWidth(shape,0),halfWidth(shape,1));
             float offset=offset(shape,t);
-            x[SEGMENTS+1+i]=mid+offset-half; y[SEGMENTS+1+i]=yy;
+            x[segments+1+i]=mid+offset-half; y[segments+1+i]=yy;
         }
         xs=x;ys=y;
         int n=xs.length;
@@ -68,6 +73,21 @@ final class Vessel {
         // Minimum horizontal margin guaranteeing >0.8 world units of
         // Euclidean distance from even the steepest side segment.
         safeClearance=.8f*(float)Math.sqrt(1f+maxSlope*maxSlope)+2f;
+    }
+
+    /**
+     * Elliptical end-cap fillets, sampled into the actual physical polygon.
+     * Keep a flat inlet and a wide roof, but join their ends with curved
+     * shoulders. The y samples stay uniform, so the conservative interior
+     * corridor and original exact wall response remain valid.
+     */
+    private static float cornerInset(float y,float height,float topHalf,float bottomHalf){
+        final float ry=Math.min(54f,height*.19f);
+        float dist=Math.min(y,height-y);
+        if(dist>=ry)return 0f;
+        float rx=Math.min(58f,(y<height*.5f?topHalf:bottomHalf)*.49f);
+        float u=1f-Math.max(0f,dist)/ry;
+        return rx*(1f-(float)Math.sqrt(Math.max(0f,1f-u*u)));
     }
 
     // Shape heights are in game-world units and remain consistent on phones
@@ -125,7 +145,7 @@ final class Vessel {
             case 10:return 127f+24f*(float)Math.sin(3*Math.PI*t+.35f)
                               +14f*(float)Math.sin(5*Math.PI*t);
             // New rounded single-contour profiles. End caps remain wide enough
-            // for all five initial drop sizes; the same 50 edges draw and collide.
+            // for all five initial drop sizes; the same sampled edges draw and collide.
             case 14:return 105f+43f*(float)Math.sin(Math.PI*(.15f+.85f*t));
             case 15:return 94f+68f*(float)Math.sin(Math.PI*(.17f+.83f*t));
             case 16:return 73f+91f*bump(t,.34f,.42f);
@@ -205,8 +225,8 @@ final class Vessel {
 
     private boolean safelyInside(float x,float y) {
         if(y<=top+safeClearance||y>=bottom-safeClearance)return false;
-        float position=(y-top)*SEGMENTS/(bottom-top);
-        int band=Math.min(SEGMENTS-1,(int)position);
+        float position=(y-top)*segments/(bottom-top);
+        int band=Math.min(segments-1,(int)position);
         float t=position-band;
         float right=xs[band]+(xs[band+1]-xs[band])*t;
         int leftIndex=xs.length-1-band;
@@ -242,7 +262,7 @@ final class Vessel {
             float direction=inside?1f:-1f;
             if(probe!=null){
                 int edge=wall.edge;
-                int side=edge<SEGMENTS?0:edge==SEGMENTS?1:edge<xs.length-1?2:3;
+                int side=edge<segments?0:edge==segments?1:edge<xs.length-1?2:3;
                 if(!bulkMeasured){
                     for(int node=0;node<Blob.NODES;node++){bulkVx+=blob.vx[node];bulkVy+=blob.vy[node];}
                     bulkMeasured=true;
