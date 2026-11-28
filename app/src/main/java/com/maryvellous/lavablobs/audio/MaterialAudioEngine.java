@@ -80,7 +80,7 @@ public final class MaterialAudioEngine {
     public MaterialAudioEngine(BloopMaterialBank bank,float[] releaseSwoosh,boolean aggregation,MixProfile profile) {
         if(bank==null||profile==null)throw new IllegalArgumentException("Material bank and mix profile required");
         this.bank=bank;mixer=new PcmMixer(profile);
-        aggregator=aggregation?new AcousticAggregator((family,sound,gain,rate)->shortVoice(VoiceFamily.valueOf(family.name()),sound,gain,rate)):null;
+        aggregator=aggregation?new AcousticAggregator((family,sound,gain,rate)->shortVoice(family.voiceFamily,sound,gain,rate)):null;
         if(releaseSwoosh!=null){
             if(releaseSwoosh.length<96)throw new IllegalArgumentException("Release clip too short");
             for(float sample:releaseSwoosh)if(!Float.isFinite(sample)||Math.abs(sample)>1.01f)
@@ -150,7 +150,7 @@ public final class MaterialAudioEngine {
         return gesture(family,0,0,audio,gain,rate);
     }
     private boolean gesture(AcousticAggregator.Family family,int a,int b,float[] audio,float gain,float rate){
-        return aggregator==null?shortVoice(VoiceFamily.valueOf(family.name()),audio,gain,rate):aggregator.offer(family,mixer.renderedFrames(),a,b,audio,gain,rate);
+        return aggregator==null?shortVoice(family.voiceFamily,audio,gain,rate):aggregator.offer(family,mixer.renderedFrames(),a,b,audio,gain,rate);
     }
 
     /** Backward-compatible test entrypoint with the solver's normal half-step. */
