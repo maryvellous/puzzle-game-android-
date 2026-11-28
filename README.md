@@ -2,19 +2,19 @@
 
 Puzzle game *cozy* con blob morbidi che si deformano, collidono e si fondono dentro recipienti di forme diverse.
 
-**Versione di sviluppo:** 1.1.0 (versionCode 18), package `com.maryvellous.lavablobs`. Progetto attivo: `app/`. La versione candidata al consolidamento è basata sul collaudo positivo della [CI #238](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46094635920); il merge e la distribuzione sono decisioni separate.
+**Versione di sviluppo:** 1.1.0 (versionCode 18), package `com.maryvellous.lavablobs`. Progetto attivo: `app/`. Consolidamento verificato dalla [CI #253](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46097012021), baseline collaudata #238. PR #27 ancora da integrare in main; distribuzione separata.
 
 ## Stato e documenti di riferimento
 
 - **Baseline approvata:** [43aca8e](https://github.com/maryvellous/puzzle-game-android-/tree/baseline/late-game-approved-2026-11-28), Aggregation Preview #238. Il playtest indica maggiore fluidità e assenza del frittino percepito durante la prova.
 - **Specifica vigente:** [la materia diventa suono](docs/AUDIO_ENGINE_V2_MATERIAL_BLOOP.md). Un solo percorso di gameplay: eventi fisici → scheduler → aggregazione dopo gating → mixer PCM refined → AudioTrack.
 - **Preview diagnostica:** package separato `com.maryvellous.lavablobs.audioaggregation`, stesso motore della build normale; banner e trace locale solo nella preview. I vecchi profili bypass e approved sono controlli offline; l'esperimento cubico e la variante APK bypass sono ritirati.
-- **Roadmap tecnica e risultati:** [TECHNICAL_ROADMAP.md](docs/TECHNICAL_ROADMAP.md); [audit](docs/TECHNICAL_DEBT_AUDIT.md) e [piano aggregazione](docs/AUDIO_AGGREGATION_PLAN.md) sono documenti storici.
-- **Prossimo lavoro di prodotto:** finitura UI, level design e bilanciamento, poi [collaudo e distribuzione privata](docs/PRIVATE_PLAYTEST.md). Non è previsto rimettere mano a solver o timbro senza un difetto riproducibile.
+- **Stato tecnico e risultati:** [TECHNICAL_ROADMAP.md](docs/TECHNICAL_ROADMAP.md). I report superati restano nella storia Git.
+- **Prossimo lavoro di prodotto:** progettazione integrata UI/UX e level design (Home, contenitori, HUD, onboarding), poi [collaudo e distribuzione privata](docs/PRIVATE_PLAYTEST.md). Non è previsto rimettere mano a solver o timbro senza un difetto riproducibile.
 
 ## Gameplay e UX attuali
 
-- **Fisica soft-body:** membrane con 24 nodi, pressione, molle e adesione temporanea; preservare il solver e la risposta dei blob durante il lavoro sull'audio.
+- **Fisica soft-body:** membrane con 24 nodi, pressione, molle e adesione temporanea; solver approvato, da preservare.
 - **12 livelli** con recipienti diversi e obiettivi, più modalità infinita con tre recipienti a scelta. I valori di bilanciamento sono nel codice; le soglie sono ancora soggette a playtest.
 - **Lanci:** rilascio rapido nel recipiente oppure pulsante **TRASCINA** con anteprima e annullamento sul vassoio. **SCUOTI** usa gli impulsi fisici; lo scuotimento via accelerometro funziona in primo piano.
 - **POP:** solo in modalità infinita, disponibile ogni 2.000 punti (soglia provvisoria); rimuove un blob dopo selezione corretta. Il Game Over verifica l'ingresso disponibile, con conto alla rovescia.
@@ -35,7 +35,8 @@ Puzzle game *cozy* con blob morbidi che si deformano, collidono e si fondono den
 Richiede **JDK 17**, **Android SDK 35** e **Gradle 8.9**.
 
 ```bash
-gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug :app:assembleAggregationPreview
+gradle --no-daemon :app:testDebugUnitTest :app:testAggregationPreviewUnitTest :app:testReleaseUnitTest
+gradle --no-daemon :app:assembleDebug :app:assembleAggregationPreview :app:assembleRelease
 ```
 
 La CI ordinaria è `.github/workflows/lava-blobs.yml`. La distribuzione di `com.maryvellous.lavablobs` è **solo manuale** su main tramite `.github/workflows/lava-blobs-production.yml`: per default produce un artefatto APK firmato con checksum; un GitHub Release richiede la scelta esplicita `publish_release=true`. Nessun fallback debug per distribuzione. Non avviare senza richiesta esplicita.

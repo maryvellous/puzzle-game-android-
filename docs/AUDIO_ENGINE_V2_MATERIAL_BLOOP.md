@@ -4,7 +4,7 @@
 > «Un sistema in cui il comportamento della materia diventa suono.»
 
 ## Stato
-Baseline approvata dall'utente: Aggregation Preview [CI #238](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46094635920), sorgente [43aca8e](https://github.com/maryvellous/puzzle-game-android-/tree/baseline/late-game-approved-2026-11-28). Feedback: più fluido, nessun frittino percepito durante il collaudo. Il consolidamento adotta REFINED + aggregazione in tutte le build; gli altri profili mantenuti sono controlli offline. Non è una misura strumentale di underrun. Main e distribuzione richiedono promozione separata. Vedi [roadmap](TECHNICAL_ROADMAP.md).
+Baseline approvata dall'utente: Aggregation Preview [CI #238](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46094635920), sorgente [43aca8e](https://github.com/maryvellous/puzzle-game-android-/tree/baseline/late-game-approved-2026-11-28). Feedback: più fluido, nessun frittino percepito durante il collaudo. Il consolidamento verificato dalla [CI #253](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46097012021) adotta REFINED + aggregazione in tutte le build; gli altri profili sono controlli offline. Non è una misura strumentale di underrun. Main e distribuzione richiedono promozione separata. Vedi [roadmap](TECHNICAL_ROADMAP.md).
 
 ## Grammatica approvata
 | Evento | Risposta |
@@ -28,8 +28,8 @@ Fusioni riconoscibili per completezza e ricchezza, non necessariamente più fort
 - REFINED: interpolazione lineare, envelope 0.5/1.5 ms, limiter .87 con 132 frame (~3 ms) lookahead e rilascio 150 ms; slider quadratico 0–100% a valle, rampa 8 ms, preferenza locale. Campioni originali immutati; il cubico non è stato adottato.
 - Debug principale e preview diagnostica usano la stessa factory del runtime release; solo la preview mostra banner e registra trace locale. Offline usa lo stesso scheduler e core, decoder desktop diverso. Confronti bypass/APPROVED rimangono per regressioni, non opzioni di gioco. Musica futura separata.
 
-## Regressioni da non reintrodurre
-Il playtest V2.0 ha bocciato un ronzio acuto persistente (~576 Hz rilevato nel filmato) da loop della coda eccitato da micro-movimenti. V2.1 ha eliminato i loop: [CI 45279301704](https://github.com/maryvellous/puzzle-game-android-/actions/runs/45279301704) scena ferma 1303 osservazioni, 0 squish/impatti, PCM zero; stessa scena agitata 9 squish/8 impatti. V2.2 ha alzato non-fusioni 3x, valutazioni 3,5/4/2/4/4,5 (fisica/timbro/bilanciamento/pulizia/sincronia). V2.3 ha distinto vetro/gel, ripristinato swoosh e aggiunto slider. L'utente l'ha approvata. Queste misure e feedback sono storici, non parametri da ritarare automaticamente.
-
-## Gate per ogni modifica
-Test deterministici con solver reale e stress; silenzio a riposo; un Bloop intero per fusione; nessun clipping/artefatto; latenza e comportamento percettivo verificati sul telefono. CI non sostituisce il playtest. [Protocollo collaudo](PLAYTEST_AUDIO_V2.3.md). Non modificare fisica, UI o timbro senza motivo; non promuovere o pubblicare senza richiesta. Le vecchie prove Python, SoundPool e branch A/B–C4.1 sono ricerca storica; Git conserva le versioni precedenti della specifica.
+## Invarianti e regressioni
+- Nessun ronzio o loop da contatto statico; PCM zero dopo le code.
+- Vetro e gel distinti, fusioni complete; nessuna fusione troncata per liberare voci. Non sostituire materiali o swoosh senza decisione di prodotto e confronto.
+- Conservare sincronizzazione, volume e gerarchia sonora. L'aggregazione non deve mascherare perdite di eventi. Limiter .87 è un limite di picco campionato, non true peak.
+- Usare i gate dello [stato tecnico](TECHNICAL_ROADMAP.md) e il [collaudo dispositivo](PRIVATE_PLAYTEST.md#regressione-audio-e-lifecycle). Un replay offline non prova assenza di underrun sul telefono.
