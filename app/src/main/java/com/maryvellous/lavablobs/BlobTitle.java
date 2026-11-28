@@ -12,6 +12,27 @@ import android.graphics.Typeface;
  */
 final class BlobTitle {
     private BlobTitle() {}
+    // Transform complete vector glyphs, never resample their individual contours.
+    static int backing(int index){return index==0?8:index==1?5:8;}
+    static void drawHome(Canvas c,Paint letters,Paint paint,Path glyph,Palette.Theme theme,int index,float t,float size,float baseline){
+        Paint.Align align=letters.getTextAlign();
+        letters.setTextAlign(Paint.Align.LEFT);
+        letters.setTypeface(Typeface.create("sans-serif-black",Typeface.BOLD));letters.setTextSize(size);
+        String word="Lava Blob";float x=(420-letters.measureText(word))*.5f;
+        int[] colors=index==0?new int[]{1,2,4,6}:index==1?new int[]{2,3,4,6}:new int[]{0,1,6,7};
+        for(int i=0;i<word.length();i++){
+            String ch=word.substring(i,i+1);float advance=letters.measureText(ch);
+            if(!ch.equals(" ")){
+                glyph.reset();letters.getTextPath(ch,0,1,x,baseline,glyph);
+                float wave=(float)Math.sin(t*.85f+i*.7f);
+                c.save();c.translate(0,wave*.8f);
+                c.scale(1f+wave*.012f,1f-wave*.015f,x+advance*.5f,baseline-size*.42f);
+                paint.setShader(null);paint.setStyle(Paint.Style.FILL);paint.setColor(theme.forTier(colors[i%4]));
+                c.drawPath(glyph,paint);c.restore();
+            }x+=advance;
+        }
+        letters.setTextAlign(align);
+    }
 
     static void draw(Canvas c, Paint letters, Paint paint, Path glyph,
             Path warped, Palette.Theme theme, float time,

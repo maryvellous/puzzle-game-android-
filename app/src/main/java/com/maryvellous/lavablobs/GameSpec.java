@@ -19,18 +19,18 @@ final class GameSpec {
     }
 
     static final GameSpec[] LEVELS = {
-        new GameSpec(0,"Primo vasetto",0,1500,2200,5,0,false),
-        new GameSpec(1,"La coppa",2,950,1450,6,0,false),
-        new GameSpec(2,"Anfora",1,1600,2200,6,0,false),
-        new GameSpec(3,"Gola stretta",3,1850,2500,7,0,false),
-        new GameSpec(4,"La fiala",4,2200,2700,7,0,false),
-        new GameSpec(5,"Onde",5,2000,2550,8,24,false),
-        new GameSpec(6,"Pancia",6,2100,2800,8,30,false),
-        new GameSpec(7,"Clessidra",3,1900,2550,8,36,false),
-        new GameSpec(8,"Piccola goccia",7,1800,2450,9,40,false),
-        new GameSpec(9,"Vaso lunare",8,2150,2850,9,44,false),
-        new GameSpec(10,"Il nodo",9,2000,2750,9,48,false),
-        new GameSpec(11,"Ultima danza",10,2150,2900,10,52,false)
+        new GameSpec(0,"Primo vasetto",14,1500,2200,5,0,false),
+        new GameSpec(1,"La coppa",15,950,1450,6,0,false),
+        new GameSpec(2,"Ampolla rovesciata",16,1600,2200,6,0,false),
+        new GameSpec(3,"Gola stretta",17,1850,2500,7,0,false),
+        new GameSpec(4,"La fiala",18,2200,2700,7,0,false),
+        new GameSpec(5,"Onde",19,2000,2550,8,24,false),
+        new GameSpec(6,"Pancia",20,2100,2800,8,30,false),
+        new GameSpec(7,"Clessidra",21,1900,2550,8,36,false),
+        new GameSpec(8,"Piccola goccia",22,1800,2450,9,40,false),
+        new GameSpec(9,"Vaso lunare",23,2150,2850,9,44,false),
+        new GameSpec(10,"Il nodo",24,2000,2750,9,48,false),
+        new GameSpec(11,"Ultima danza",25,2150,2900,10,52,false)
     };
 
     static final GameSpec[] ENDLESS = {

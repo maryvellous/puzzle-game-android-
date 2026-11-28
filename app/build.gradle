@@ -39,6 +39,12 @@ android {
             if (signingConfigs.findByName('stable') != null)
                 signingConfig signingConfigs.stable
         }
+        uiPreview {
+            initWith debug
+            applicationIdSuffix '.uipreview'
+            versionNameSuffix '-ui-preview'
+            manifestPlaceholders = [appLabel: 'Lava Blob - UI Preview']
+        }
         // Preserve the approved preview package for side-by-side device tests.
         aggregationPreview {
             initWith debug

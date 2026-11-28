@@ -58,3 +58,10 @@ Lasciare giocare senza spiegare tutte le meccaniche in anticipo; raccogliere imp
 - Eventuale esportazione manuale dei dati partita (JSON locale), solo con consenso; nessuna raccolta automatica.
 
 Classificare bug bloccanti, problemi UX, bilanciamento e preferenze personali. Correggere prima i difetti riproducibili; tenere separati feedback e idee nuove.
+
+## Anteprima UI e geometrie
+
+- Home: carosello verticale con snap animato, console fissa, selezione temi in popup e aiuto. Partita salvata resta raggiungibile; esportazione dati nell'aiuto.
+- HUD: riferimento Console definitivo, prossimo blob adiacente all'ingresso, avviso bloccato, palette intermedie, pausa e comandi separati.
+- Dodici recipienti storia: profili arrotondati 14–25; sagoma e contorno fisico coincidono. Geometrie precedenti conservate per test e Infinita. Ciambella rinviata. Obiettivi numerici ancora provvisori da valutare nei playtest.
+- Build isolata `uiPreview` (package `com.maryvellous.lavablobs.uipreview`), firmata debug; non sostituisce l'app installata. Main non va integrato prima del collaudo dell'autrice. Le vecchie partite storia in corso non vengono ripristinate su geometrie incompatibili; i progressi restano conservati nell'app originale.

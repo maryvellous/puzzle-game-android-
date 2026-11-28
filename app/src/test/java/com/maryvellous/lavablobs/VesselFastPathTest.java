@@ -6,7 +6,7 @@ import static org.junit.Assert.assertEquals;
 /** The fast interior rejection must never change the exact wall response. */
 public class VesselFastPathTest {
     @Test public void fastInteriorAndExactWallSolverMatchAcrossAllShapes() {
-        for (int shape=-1;shape<=13;shape++) {
+        for (int shape=-1;shape<=25;shape++) {
             Vessel vessel=new Vessel(shape,850f);
             float height=vessel.bottom-vessel.top;
             for (int row=0;row<=10;row++) {
@@ -40,7 +40,7 @@ public class VesselFastPathTest {
     @Test public void offGridAndNearWallSamplesMatchOriginalSolver() {
         java.util.Random random=new java.util.Random(20261117L);
         for(float screenHeight:new float[]{680f,850f,1080f}) {
-            for(int shape=-1;shape<=13;shape++) {
+            for(int shape=-1;shape<=25;shape++) {
                 Vessel vessel=new Vessel(shape,screenHeight);
                 for(int sample=0;sample<48;sample++) {
                     Blob optimized=new Blob(210f,420f,0,1f);

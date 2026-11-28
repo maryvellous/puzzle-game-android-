@@ -89,6 +89,18 @@ final class Vessel {
             case 11:return 285f; // comparison A
             case 12:return 340f; // comparison B
             case 13:return 400f; // comparison C
+            case 14:return 340f;
+            case 15:return 325f;
+            case 16:return 360f;
+            case 17:return 355f;
+            case 18:return 340f;
+            case 19:return 350f;
+            case 20:return 360f;
+            case 21:return 355f;
+            case 22:return 320f;
+            case 23:return 370f;
+            case 24:return 370f;
+            case 25:return 340f;
             default:return 340f;
         }
     }
@@ -112,6 +124,20 @@ final class Vessel {
             case 9:return 132f-45f*bump(t,.28f,.12f)-43f*bump(t,.70f,.11f);
             case 10:return 127f+24f*(float)Math.sin(3*Math.PI*t+.35f)
                               +14f*(float)Math.sin(5*Math.PI*t);
+            // New rounded single-contour profiles. End caps remain wide enough
+            // for all five initial drop sizes; the same 50 edges draw and collide.
+            case 14:return 105f+43f*(float)Math.sin(Math.PI*(.15f+.85f*t));
+            case 15:return 94f+68f*(float)Math.sin(Math.PI*(.17f+.83f*t));
+            case 16:return 73f+91f*bump(t,.34f,.42f);
+            case 17:return 88f+74f*bump(t,.33f,.33f);
+            case 18:return 78f+73f*bell;
+            case 19:return 119f+30f*bell+20f*(float)Math.sin(4*Math.PI*t);
+            case 20:return 78f+90f*(float)Math.pow(bell,.7);
+            case 21:return 90f+70f*(float)Math.pow(Math.cos(Math.PI*t),2);
+            case 22:return 77f+82f*bump(t,.48f,.37f);
+            case 23:return 80f+83f*(float)Math.pow(bell,.8);
+            case 24:return 100f+50f*bell-25f*bump(t,.48f,.13f);
+            case 25:return 84f+66f*bell+20f*(float)Math.sin(3*Math.PI*t);
             default:return 125f;
         }
     }
@@ -124,8 +150,14 @@ final class Vessel {
         if(kind==8)return -22f*(float)Math.sin(Math.PI*t);
         if(kind==9)return 18f*(float)Math.sin(2*Math.PI*t);
         if(kind==10)return 20f*(float)Math.sin(2*Math.PI*t+.35f);
+        if(kind==19)return 19f*(float)Math.sin(2*Math.PI*t);
+        if(kind==22)return 18f*bell(t);
+        if(kind==23)return -31f*bell(t);
+        if(kind==24)return 25f*(float)Math.sin(2*Math.PI*t);
+        if(kind==25)return -24f*(float)Math.sin(Math.PI*t);
         return 0f;
     }
+    private static float bell(float t){return (float)Math.sin(Math.PI*t);}
 
     private static float bump(float t,float center,float spread) {
         float d=(t-center)/spread;

@@ -53,6 +53,7 @@ final class GameSave {
             if(data.optInt("version")!=VERSION)return null;
             GameSpec spec=findSpec(data.getInt("id"));
             if(spec==null||data.optBoolean("gameOver"))return null;
+            if(spec.shape>=14&&data.optInt("shape",-1)!=spec.shape)return null;
             return new Snapshot(spec,data);
         }catch(Exception ignored){return null;}
     }
@@ -98,6 +99,7 @@ final class GameSave {
         state.put("version",VERSION);
         state.put("scoringVersion",2);
         state.put("id",spec.id);
+        state.put("shape",spec.shape);
         state.put("height",w.height);
         state.put("time",w.time);
         state.put("activeSeconds",Math.max(0f,activeSeconds));
@@ -158,6 +160,8 @@ final class GameSave {
         if(state.getInt("version")!=VERSION||state.getInt("id")!=w.spec.id)
             throw new IllegalArgumentException("Incompatible save");
         w.reset();
+        if(state.has("shape")&&state.getInt("shape")!=w.spec.shape)
+            throw new IllegalArgumentException("Saved vessel geometry differs");
         w.setHeight((float)state.getDouble("height"));
         w.time=(float)state.getDouble("time");
         w.score=state.getLong("score");
