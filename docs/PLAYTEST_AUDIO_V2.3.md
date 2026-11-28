@@ -1,14 +1,13 @@
 # Protocollo di collaudo audio
-**Baseline V2.3 / app 1.1.0 · 27 novembre 2026**
+**Baseline vigente: refined + aggregazione, CI #238 · 28 novembre 2026**
 
-Preview cfb03c9 approvata sul telefono («è molto molto buono»); main acf6d2b, [CI verde](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46060029269). La build main non è stata collaudata separatamente sul telefono. Segnalazione successiva: lieve frittura con molte collisioni simultanee. Non attribuirla a clipping senza misure.
+La preview è risultata più fluida e senza frittino percepito nel collaudo utente. Conservare questo riferimento. I successivi test devono cercare regressioni, non ritarare il timbro arbitrariamente.
 
-Per ogni nuova preview:
-1. Verificare SHA/versione e package preview separato. Volume app 100%, volume telefono costante; aspettare AUDIO V2 · PRONTO.
-2. Rilasciare blob di varie taglie (swoosh), urtare vetro e gel separatamente, verificare POP e fusioni singole/cascate.
-3. Riempire vaso, scuotere piano/forte, stress ripetibile; annotare distorsione, latenza, suoni sovrapposti. Registrare se possibile video/audio e log locali.
-4. Lasciare a riposo per 15–20 s: nessun ronzio/ripetizione. Testare mute/ripristino e slider 100/50/0%, drag senza lanci, pausa/ripresa.
-5. A/B a pari condizioni per fase 2: baseline vs clustering; valutare coerenza fisica, timbro, bilanciamento, pulizia, sincronia 1–5. Verificare che gli urti singoli non cambino e fusioni restino leggibili.
-6. Misurare prima di dichiarare causa: underruns, queue age/depth, gain reduction e tempi di elaborazione, voci attive. Non pubblicare automaticamente.
+1. Verificare SHA/versione, package `com.maryvellous.lavablobs.audioaggregation` e banner AUDIO · REFINED CLUSTER · PRONTO nella preview. Volume app e dispositivo costanti.
+2. Provare lancio, vetro, gel, squish, fusioni singole/cascate, POP in endless; lasciare a riposo per 15–20 s. Silenzio dopo le code.
+3. Riempire contenitore, scuotere piano/forte, confrontare reattività, artefatti e scatti con #238.
+4. Verificare slider 100/50/0%, mute/ripristino, pause/resume rapide, home/riapertura, restart, checkpoint e game over. Nessun evento stantio.
+5. Solo se emergono difetti, catturare logcat LavaPerf e LavaV2Audio nello stesso intervallo (gap, p99 render/dispatch, coda, underruns), video facoltativo. Il trace locale della preview non equivale a telemetria remota e non prova i tempi hardware.
+6. Build normale: nessun banner, stesso motore; testare installazione e aggiornamento compatibili con la firma senza cancellare salvataggi. Non pubblicare automaticamente.
 
-[Specifica](AUDIO_ENGINE_V2_MATERIAL_BLOOP.md) · [Piano fase 2](AUDIO_AGGREGATION_PLAN.md)
+[Specifica](AUDIO_ENGINE_V2_MATERIAL_BLOOP.md) · [Roadmap](TECHNICAL_ROADMAP.md) · [Collaudo privato](PRIVATE_PLAYTEST.md)
