@@ -319,11 +319,13 @@ final class BlobWorld {
     }
 
     private boolean surfaceTouch(Blob a,Blob b,float tolerance) {
+        contactBoundsA.set(a);contactBoundsB.set(b);
+        if(contactBoundsA.separated(contactBoundsB,tolerance+.01f))return false;
         for(int i=0;i<Blob.NODES;i++) {
-            if(pointInside(b,a.px[i],a.py[i])||
-                    closestEdge(b,a.px[i],a.py[i]).distance<tolerance) return true;
-            if(pointInside(a,b.px[i],b.py[i])||
-                    closestEdge(a,b.px[i],b.py[i]).distance<tolerance) return true;
+            if(!contactBoundsB.cannotTouch(a.px[i],a.py[i],tolerance+.01f)&&
+                    (pointInside(b,a.px[i],a.py[i])||closestEdge(b,a.px[i],a.py[i]).distance<tolerance)) return true;
+            if(!contactBoundsA.cannotTouch(b.px[i],b.py[i],tolerance+.01f)&&
+                    (pointInside(a,b.px[i],b.py[i])||closestEdge(a,b.px[i],b.py[i]).distance<tolerance)) return true;
         }
         return false;
     }
@@ -343,8 +345,13 @@ final class BlobWorld {
             if(y<minY)minY=y;else if(y>maxY)maxY=y;
         }
         boolean cannotTouch(float x,float y) {
-            float margin=SKIN+.01f;
+            return cannotTouch(x,y,SKIN+.01f);
+        }
+        boolean cannotTouch(float x,float y,float margin){
             return x<minX-margin||x>maxX+margin||y<minY-margin||y>maxY+margin;
+        }
+        boolean separated(Bounds other,float margin){
+            return maxX<other.minX-margin||minX>other.maxX+margin||maxY<other.minY-margin||minY>other.maxY+margin;
         }
     }
 
@@ -397,6 +404,7 @@ final class BlobWorld {
         // Include every current vertex, then only expand as projections move
         // vertices. These bounds remain conservative throughout this pair.
         contactBoundsA.set(a);contactBoundsB.set(b);
+        if(contactBoundsA.separated(contactBoundsB,SKIN+.01f))return;
         boolean touched=false;
         for(int i=0;i<Blob.NODES;i++) {
             if(pushPointFromPolygon(a,i,b,contactBoundsA,contactBoundsB,createAdhesion))touched=true;
@@ -444,7 +452,7 @@ final class BlobWorld {
         // polygon nor within contact distance of any of its edges.
         if(targetBounds.cannotTouch(x,y))return false;
         Edge edge=closestEdge(target,x,y);
-        boolean inside=pointInside(target,x,y);
+        boolean inside=!targetBounds.cannotTouch(x,y,.01f)&&pointInside(target,x,y);
         if(!inside&&edge.distance>=SKIN)return false;
 
         int j=edge.start,k=(j+1)%Blob.NODES;
@@ -462,7 +470,7 @@ final class BlobWorld {
         }
         float overlap=inside?edge.distance+SKIN:SKIN-edge.distance;
         // Observe pre-projection local speeds, direction and penetration. The
-        // probe is passive and is disabled in the current shipping game.
+        // probe is passive; it cannot modify the projection.
         if(contactProbe!=null)
             contactProbe.observe(source,i,target,j,edge.t,nx,ny,overlap,
                     (x+edge.qx)*.5f,(y+edge.qy)*.5f);
