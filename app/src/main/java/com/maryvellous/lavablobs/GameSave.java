@@ -71,21 +71,18 @@ final class GameSave {
         java.util.concurrent.Executors.newSingleThreadExecutor(r->{
             Thread t=new Thread(r,"LavaCheckpoint");t.setDaemon(true);return t;
         });
-    private final Object pendingLock=new Object();
-    private Capture pending;
-    private boolean drainScheduled;
+    private final CheckpointWriter<Capture> writer=new CheckpointWriter<>(WRITER,this::write);
 
     // Called only at lifecycle/slot boundaries, never for a normal launch.
     void flush(){
-        try {WRITER.submit(()->{}).get();}
+        try {writer.barrier().get();}
         catch(InterruptedException e){Thread.currentThread().interrupt();android.util.Log.w("LavaSave","Checkpoint flush interrupted",e);}
         catch(java.util.concurrent.ExecutionException e){android.util.Log.w("LavaSave","Checkpoint flush failed",e);}
     }
 
     void clear(){
-        synchronized(pendingLock){pending=null;}
         // Ordered after any in-flight write, so old saves cannot resurrect.
-        try {WRITER.submit(()->slot.delete()).get();}
+        try {writer.discardAndRun(()->slot.delete()).get();}
         catch(InterruptedException e){Thread.currentThread().interrupt();android.util.Log.w("LavaSave","Clear interrupted",e);}
         catch(java.util.concurrent.ExecutionException e){android.util.Log.w("LavaSave","Clear failed",e);}
     }
@@ -99,23 +96,9 @@ final class GameSave {
         final Capture snapshot;
         try {snapshot=new Capture(spec,world,aimX,eraseMode,activeSeconds);}
         catch(Exception e){android.util.Log.w("LavaSave","Snapshot failed",e);return false;}
-        synchronized(pendingLock){
-            pending=snapshot;
-            if(!drainScheduled){drainScheduled=true;WRITER.execute(this::drain);}
-        }
+        writer.offer(snapshot);
         // Accepted for writing, not necessarily durable yet.
         return true;
-    }
-
-    private void drain(){
-        while(true){
-            Capture snapshot;
-            synchronized(pendingLock){
-                snapshot=pending;pending=null;
-                if(snapshot==null){drainScheduled=false;return;}
-            }
-            write(snapshot);
-        }
     }
 
     private void write(Capture snapshot){
