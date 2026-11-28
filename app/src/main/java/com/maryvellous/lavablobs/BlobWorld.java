@@ -59,6 +59,32 @@ final class BlobWorld {
     // IDs are monotonic for one game, including deleted/merged blobs and saves.
     int nextBlobId=1;
     private ContactProbe contactProbe; // Optional passive observer.
+    // Local opt-in instrumentation: time batches, never individual vertices.
+    private boolean profileEnabled;
+    private int profileBucket;
+    private final long[][] profileNs=new long[5][9];
+    private final long[] profileTicks=new long[5],profilePairs=new long[5];
+    private static final String[] PROFILE_NAMES={"integrate","merge","pairs","membrane","contacts+probe","adhesions","walls+probe","finish","probe-boundaries+entry"};
+    private static final String[] PROFILE_BUCKETS={"0-4","5-7","8-10","11-15","16+"};
+    void setProfiling(boolean enabled){profileEnabled=enabled;}
+    private long profileStart(){return profileEnabled?System.nanoTime():0L;}
+    private long profileMark(long start,int phase){
+        if(!profileEnabled)return 0L;
+        long now=System.nanoTime();
+        profileNs[profileBucket][phase]+=now-start;
+        return now;
+    }
+    String physicsProfile(){
+        StringBuilder out=new StringBuilder("Solver stage wall times (ms/tick; probe observe included in contact/wall).\n");
+        for(int b=0;b<5;b++){
+            if(profileTicks[b]==0)continue;
+            out.append("blob=").append(PROFILE_BUCKETS[b]).append(" ticks=").append(profileTicks[b]);
+            for(int p=0;p<PROFILE_NAMES.length;p++)
+                out.append(String.format(java.util.Locale.US," %s=%.3f",PROFILE_NAMES[p],profileNs[b][p]/(1e6*profileTicks[b])));
+            out.append(String.format(java.util.Locale.US," candidates/tick=%.1f%n",(double)profilePairs[b]/profileTicks[b]));
+        }
+        return out.toString();
+    }
     Random random;
     final GameSpec spec;
     Vessel vessel;
@@ -225,7 +251,9 @@ final class BlobWorld {
     void tick(float dt) {
         if(gameOver)return;
         dt=clamp(dt,0f,.042f);
+        if(profileEnabled){int n=blobs.size();profileBucket=n<=4?0:n<=7?1:n<=10?2:n<=15?3:4;profileTicks[profileBucket]++;}
         for(int s=0;s<2;s++)step(dt*.5f);
+        long profile=profileStart();
         // No Y-threshold. Check real incoming-object clearance, repeatedly,
         // after giving the soft bodies time to rebound from any phone shake.
         checkClock+=dt;
@@ -235,14 +263,18 @@ final class BlobWorld {
             else blockedTime+=.18f;
         }
         if(blockedTime>=graceSeconds())gameOver=true;
+        profileMark(profile,8);
     }
 
     private void step(float dt) {
         if(dt<=0f)return;
+        long profile=profileStart();
         time+=dt;
         ensureBlobIds(); // Also supports test worlds that inject Blob instances directly.
         if(contactProbe!=null)contactProbe.beginStep();
+        profile=profileMark(profile,8);
         for(Blob b:blobs)b.integrate(dt,time);
+        profile=profileMark(profile,0);
 
         // Merge detection uses actual mesh boundaries. No spherical "sum of
         // radii" may trigger fusion across a visible gap.
@@ -267,19 +299,28 @@ final class BlobWorld {
         // Between integration/fusion and finish, constraint passes mutate only
         // membrane vertices, not the broad-phase centres, radii, tiers or list.
         // Reuse exactly the same ordered candidates for all five passes.
+        profile=profileMark(profile,1);
         collectProjectionPairs();
+        if(profileEnabled)profilePairs[profileBucket]+=projectionPairCount;
+        profile=profileMark(profile,2);
         for(int pass=0;pass<PASSES;pass++) {
             for(Blob b:blobs)b.solveMembrane();
+            profile=profileMark(profile,3);
             for(int pair=0;pair<projectionPairCount;pair++){
                 long indices=projectionPairs[pair];
                 projectContacts(blobs.get((int)(indices>>>32)),blobs.get((int)indices),pass==0);
             }
+            profile=profileMark(profile,4);
             solveAdhesions();
+            profile=profileMark(profile,5);
             for(Blob b:blobs)vessel.confine(b,contactProbe);
+            profile=profileMark(profile,6);
         }
         for(Blob b:blobs)b.finish(dt);
         updateAdhesions(dt);
+        profile=profileMark(profile,7);
         if(contactProbe!=null)contactProbe.finishStep(time,dt);
+        profileMark(profile,8);
     }
 
     private long[] projectionPairs=new long[64];
