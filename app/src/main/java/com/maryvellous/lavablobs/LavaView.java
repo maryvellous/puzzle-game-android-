@@ -540,7 +540,7 @@ public final class LavaView extends View {
         c.restore();
         float y=entryY(h),p=panelTop(h);
         boolean blocked=world.blockedTime>0&&!world.gameOver;
-        boolean valid=world.canLaunch(aimX);
+        boolean valid=!aiming||world.canLaunch(aimX);
         int danger=0xFFFFB0A0,entryInk=blocked||blockedFlash>0?danger:Palette.NEUTRAL_SURFACE;
         // Inlet mark follows the actual bottom segment, not the screen center.
         Vessel v=world.vessel;int edge=v.xs.length/2-1;

@@ -17,6 +17,9 @@ final class Vessel {
     private final float safeClearance;
     private final float[] edgeDx,edgeDy,edgeLengthSq,edgeMinX,edgeMaxX,edgeMinY,edgeMaxY;
     private final Closest closestScratch=new Closest();
+    private static final int EDGE_GROUP=8;
+    private final float[] groupMinX,groupMaxX,groupMinY,groupMaxY;
+    private final float[] innerLeft,innerRight;
 
     Vessel(int shape,float screenHeight) {
         this.shape=shape;
@@ -65,6 +68,31 @@ final class Vessel {
             edgeMinX[i]=Math.min(xs[i],xs[k]);edgeMaxX[i]=Math.max(xs[i],xs[k]);
             edgeMinY[i]=Math.min(ys[i],ys[k]);edgeMaxY[i]=Math.max(ys[i],ys[k]);
         }
+        if(shape>=14){
+            int groups=(n+EDGE_GROUP-1)/EDGE_GROUP;
+            groupMinX=new float[groups];groupMaxX=new float[groups];groupMinY=new float[groups];groupMaxY=new float[groups];
+            for(int g=0;g<groups;g++){
+                float lx=Float.POSITIVE_INFINITY,ly=lx,rx=Float.NEGATIVE_INFINITY,ry=rx;
+                for(int e=g*EDGE_GROUP;e<Math.min(n,(g+1)*EDGE_GROUP);e++){
+                    lx=Math.min(lx,edgeMinX[e]);rx=Math.max(rx,edgeMaxX[e]);
+                    ly=Math.min(ly,edgeMinY[e]);ry=Math.max(ry,edgeMaxY[e]);
+                }
+                groupMinX[g]=lx;groupMaxX[g]=rx;groupMinY[g]=ly;groupMaxY[g]=ry;
+            }
+            // A conservative interior box for each horizontal band. Include
+            // neighbouring segments within 0.8 units vertically; the margin
+            // guarantees that the exact wall query would be a no-op.
+            innerLeft=new float[segments];innerRight=new float[segments];
+            for(int band=0;band<segments;band++){
+                float lo=ys[band]-.82f,hi=ys[band+1]+.82f;
+                float left=Float.NEGATIVE_INFINITY,right=Float.POSITIVE_INFINITY;
+                for(int e=0;e<n;e++)if(edgeMaxY[e]>=lo&&edgeMinY[e]<=hi){
+                    if(e<segments)right=Math.min(right,edgeMinX[e]);
+                    else if(e>segments&&e<n-1)left=Math.max(left,edgeMaxX[e]);
+                }
+                innerLeft[band]=left+.82f;innerRight[band]=right-.82f;
+            }
+        }else{groupMinX=groupMaxX=groupMinY=groupMaxY=innerLeft=innerRight=null;}
         float maxSlope=0f;
         for(int i=0;i<xs.length-1;i++){
             float dy=Math.abs(ys[i+1]-ys[i]);
@@ -202,6 +230,14 @@ final class Vessel {
         Closest result=closestScratch;
         float d2Min=Float.MAX_VALUE;
         for(int i=0;i<xs.length;i++) {
+            // Skip groups only when their enclosing rectangle is already
+            // farther away than the best edge. Traversal/ties stay identical.
+            if(groupMinX!=null&&i%EDGE_GROUP==0){
+                int g=i/EDGE_GROUP;
+                float gx=x<groupMinX[g]?groupMinX[g]-x:(x>groupMaxX[g]?x-groupMaxX[g]:0f);
+                float gy=y<groupMinY[g]?groupMinY[g]-y:(y>groupMaxY[g]?y-groupMaxY[g]:0f);
+                if(gx*gx+gy*gy>d2Min+1e-3f){i=Math.min(xs.length,(g+1)*EDGE_GROUP)-1;continue;}
+            }
             // A segment's box gives a conservative lower bound; retain edge
             // traversal order, strict comparison and original projection math.
             float boxDx=x<edgeMinX[i]?edgeMinX[i]-x:(x>edgeMaxX[i]?x-edgeMaxX[i]:0f);
@@ -224,6 +260,14 @@ final class Vessel {
     }
 
     private boolean safelyInside(float x,float y) {
+        if(innerLeft!=null){
+            if(y<=top+.82f||y>=bottom-.82f)return false;
+            int band=Math.max(0,Math.min(segments-1,(int)((y-top)*segments/(bottom-top))));
+            // Guard rounding at band boundaries by checking actual y samples.
+            while(band>0&&y<ys[band])band--;
+            while(band<segments-1&&y>ys[band+1])band++;
+            return x>innerLeft[band]&&x<innerRight[band];
+        }
         if(y<=top+safeClearance||y>=bottom-safeClearance)return false;
         float position=(y-top)*segments/(bottom-top);
         int band=Math.min(segments-1,(int)position);

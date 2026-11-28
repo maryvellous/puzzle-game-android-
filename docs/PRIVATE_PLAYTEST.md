@@ -71,3 +71,7 @@ Classificare bug bloccanti, problemi UX, bilanciamento e preferenze personali. C
 Wordmark organico con campo di deformazione continuo e movimento lento, stessi font e quattro colori per tema; suggerimento di scorrimento Home che scompare al primo avanzamento verticale e resta disattivato. Contorni delle miniature bloccate più leggibili. HUD adattivo: console più alta sui display lunghi, scala visuale uniforme del recipiente e coordinate touch invertite nella stessa trasformazione. Nessuna modifica alle dimensioni nel mondo fisico, alla forma o alle regole.
 
 Raccordi reali dei dodici recipienti storia: fillet ellittici su entrambe le basi, 80 fasce anziché 24, stessa sagoma per collisioni e disegno. Ingresso piatto mantenuto per il lancio dal basso. Fixture legacy e Infinita conservate per equivalenza regressiva. Una partita storia salvata prima del nuovo profilo viene scartata per evitare membrane fuori sagoma; record e sblocchi non vengono azzerati.
+
+### Seconda rifinitura playtest
+
+Continua partita nella console Home, a tutta larghezza sopra i tre comandi; il pulsante è assente senza salvataggio. Campo di gioco leggermente meno ingrandito, con sei unità di spazio aggiuntive fra recipiente e prossimo blob. Contorno 162 segmenti immutato: broad phase a gruppi e corridoi interni conservativi per le nuove geometrie; fixture legacy immutate. Il controllo canLaunch per la linea di mira viene effettuato solo durante la mira. CI UI confronta tre scene dense dei livelli arrotondati con bde5213, incluse tracce audio, e misura tempi JVM (non FPS Android).

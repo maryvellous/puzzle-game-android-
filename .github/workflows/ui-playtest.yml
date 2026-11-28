@@ -21,6 +21,30 @@ jobs:
           gradle-version: '8.9'
       - run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"'
       - run: gradle --no-daemon :app:testUiPreviewUnitTest :app:assembleUiPreview
+      - name: Compare rounded vessel physics and audio trace with last playtest
+        run: |
+          set -euo pipefail
+          ref=bde5213b0949cec9319ec27991f6404d6c46d269
+          git fetch --no-tags --depth=1 origin "$ref"
+          pkg=app/src/main/java/com/maryvellous/lavablobs
+          mkdir -p build/rounded/{reference,old-classes,new-classes,old,new}
+          git archive "$ref" "$pkg" | tar -x -C build/rounded/reference
+          for variant in old new; do
+            source="$pkg"
+            if [[ "$variant" == old ]]; then source="build/rounded/reference/$pkg"; fi
+            javac -encoding UTF-8 -d "build/rounded/$variant-classes" \
+              "$source"/{Blob,BlobWorld,Vessel,GameSpec,ContactProbe,ContactTracker,PhysicsAudioEvents,AudioPolicy}.java \
+              "$source"/audio/*.java tools/audio_v2_java/RoundedSceneCli.java
+            java -cp "build/rounded/$variant-classes" com.maryvellous.lavablobs.RoundedSceneCli "build/rounded/$variant" | tee "build/rounded/$variant/timing.txt"
+          done
+          for shape in 0 1 2; do
+            cmp "build/rounded/old/dense-$shape-hashes.txt" "build/rounded/new/dense-$shape-hashes.txt"
+            for window in 0 1 2; do
+              cmp "build/rounded/old/dense-$shape-$window-events.csv" "build/rounded/new/dense-$shape-$window-events.csv"
+            done
+          done
+          echo 'Rounded vessel physics snapshots and acoustic events match previous playtest exactly.' >> "$GITHUB_STEP_SUMMARY"
+          cat build/rounded/{old,new}/timing.txt >> "$GITHUB_STEP_SUMMARY"
       - name: Verify installable isolated APK
         run: |
           apk=$(find app/build/outputs/apk/uiPreview -name '*.apk' -print -quit)

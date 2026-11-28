@@ -51,8 +51,9 @@ public final class HomeView extends View {
     private float scale(){return Math.min(getWidth()/W,getHeight()/620f);}
     private float offX(){return (getWidth()-W*scale())*.5f;}
     private float h(){return getHeight()/Math.max(.001f,scale());}
-    private float consoleTop(){return h()-94;}
-    private float top(){return saved==null?134:206;}
+    private float consoleTop(){return h()-(saved==null?94:166);}
+    private float top(){return 134;}
+    private float controlsTop(){return h()-94;}
     private float bottom(){return consoleTop()-38;}
     private float center(){return (top()+bottom())*.5f;}
     private float cardHeight(){return Math.min(192,Math.max(88,(bottom()-top())*.53f));}
@@ -68,13 +69,6 @@ public final class HomeView extends View {
         float t=ValueAnimator.areAnimatorsEnabled()?(System.nanoTime()-start)/1e9f:0;
         BlobTitle.drawHome(c,letter,paint,glyph,warped,theme,selectedTheme,t,55,79);
         textCentered(c,endless?"Scegli un recipiente":"Scegli un livello",210,122,15,theme.text,true);
-        if(saved!=null){
-            flat(c,22,138,398,196,23,Palette.NEUTRAL_SURFACE);
-            drawPreview(c,saved.spec.shape,29,143,83,191,false);
-            text(c,"Continua",93,161,20,theme.onSurface,true,240);
-            text(c,(saved.spec.endless?"Infinita":"Livello "+(saved.spec.id+1))+" · "+saved.points()+" punti",93,183,13,theme.onSurfaceMuted,false,265);
-            textCentered(c,"›",373,175,30,theme.onSurface,true);
-        }
         c.save();c.clipRect(0,top(),W,bottom());
         int f=focus();for(int i=0;i<specs().length;i++)if(i!=f&&Math.abs(i-position)<2.5f)drawCard(c,i);
         drawCard(c,f);c.restore();
@@ -111,7 +105,15 @@ public final class HomeView extends View {
         }
     }
     private void drawConsole(Canvas c){
-        float y=consoleTop();flat(c,0,y,W,h()+28,30,Palette.NEUTRAL_SURFACE);
+        float p=consoleTop(),y=controlsTop();
+        flat(c,0,p,W,h()+28,30,Palette.NEUTRAL_SURFACE);
+        if(saved!=null){
+            int fill=theme.forTier(4),ink=ConsoleUi.ink(fill);
+            flat(c,22,p+12,398,p+68,20,fill);
+            text(c,"Continua partita",38,p+35,19,ink,true,300);
+            text(c,(saved.spec.endless?"Infinita":"Livello "+(saved.spec.id+1))+" · "+saved.points()+" punti",38,p+55,12,ink,false,290);
+            textCentered(c,"›",372,p+46,28,ink,true);
+        }
         text(c,"Modalità",20,y+29,13,theme.onSurface,true,105);text(c,"infinita",20,y+48,13,theme.onSurface,true,105);
         flat(c,110,y+20,178,y+58,19,endless?theme.forTier(4):0xFFB8AFB8);
         paint.setColor(Palette.NEUTRAL_SURFACE);c.drawCircle(endless?159:129,y+39,15,paint);
@@ -149,8 +151,11 @@ public final class HomeView extends View {
                 if(dragging){int target=HomeCarousel.target(downPosition,position,downY-y,step(),specs().length);if(!endless&&target>HomeCarousel.nearest(downPosition,specs().length))dismissScrollHint();snap(target);return true;}
                 if(Math.abs(x-downX)>18||Math.abs(y-downY)>18)return true;
                 performClick();
-                if(y>=consoleTop()&&downY>=consoleTop()){if(x<190)switchMode();else if(x<331)showThemes();else showHelp();return true;}
-                if(saved!=null&&y>=138&&y<=196&&downY>=138&&downY<=196){resume.run();return true;}
+                if(y>=consoleTop()&&downY>=consoleTop()){
+                    if(saved!=null&&x>=22&&x<=398&&downX>=22&&downX<=398&&y>=consoleTop()+12&&y<=consoleTop()+68&&downY>=consoleTop()+12&&downY<=consoleTop()+68){resume.run();return true;}
+                    if(y>=controlsTop()&&downY>=controlsTop()){if(x<190)switchMode();else if(x<331)showThemes();else showHelp();}
+                    return true;
+                }
                 if(y>=top()&&y<=bottom()){
                     int i=focus();if(!hit(i,x,y)){for(int j=0;j<specs().length;j++)if(hit(j,x,y)){snap(j);break;}return true;}
                     if(locked(specs()[i]))Toast.makeText(getContext(),"Completa il livello precedente",Toast.LENGTH_SHORT).show();else listener.start(specs()[i]);
