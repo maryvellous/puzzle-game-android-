@@ -49,12 +49,15 @@ final class ContactTracker implements ContactProbe.Listener {
     }
 
     private final Listener listener;
+    private final boolean terminalOnly;
     private final Map<Long,State> active=new LinkedHashMap<>();
     private float previousTime=-1f;
 
-    ContactTracker(Listener listener) {
+    ContactTracker(Listener listener) {this(listener,false);}
+    /** The audio adapter already emits observations; only END/CANCELLED are needed. */
+    ContactTracker(Listener listener,boolean terminalOnly) {
         if(listener==null)throw new IllegalArgumentException("Missing tracker listener");
-        this.listener=listener;
+        this.listener=listener;this.terminalOnly=terminalOnly;
     }
 
     @Override public void onContactStep(float time,float dt,List<ContactProbe.Contact> contacts) {
@@ -71,13 +74,13 @@ final class ContactTracker implements ContactProbe.Listener {
                 state=new State(c);
                 active.put(key,state);
                 state.seen=true;
-                listener.onTransition(new Transition(Kind.BEGIN,state,time));
+                if(!terminalOnly)listener.onTransition(new Transition(Kind.BEGIN,state,time));
             } else {
                 state.last=c;
                 state.age+=dt;
                 state.missing=0f;
                 state.seen=true;
-                listener.onTransition(new Transition(Kind.UPDATE,state,time));
+                if(!terminalOnly)listener.onTransition(new Transition(Kind.UPDATE,state,time));
             }
         }
 
