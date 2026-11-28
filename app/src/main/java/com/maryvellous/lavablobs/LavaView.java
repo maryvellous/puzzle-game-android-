@@ -66,8 +66,8 @@ public final class LavaView extends View {
 
     private float aimX = W / 2;
     private final SimulationClock simulationClock=new SimulationClock();
-    private int perfFrames,perfSteps,perfSaveCount;
-    private long perfGapNs,perfWorstGapNs,perfPhysicsNs,perfCanvasNs,perfCpuNs;
+    private int perfFrames,perfSteps,perfSaveCount,perfSlowFrames,perfCatchupFrames,perfPeakBlobs;
+    private long perfGapNs,perfWorstGapNs,perfPhysicsNs,perfCanvasNs,perfCpuNs,perfWorstPhysicsNs,perfWorstCanvasNs;
     private long perfSaveNs,perfWorstSaveNs;
     private boolean aiming;
     private boolean draggingVolume;
@@ -261,19 +261,25 @@ public final class LavaView extends View {
         perfCanvasNs+=canvasNs;
         perfCpuNs+=cpuNs;
         perfSteps+=steps;
+        if(gapNs>25_000_000L)perfSlowFrames++;
+        if(steps>1)perfCatchupFrames++;
+        perfPeakBlobs=Math.max(perfPeakBlobs,world.blobs.size());
+        perfWorstPhysicsNs=Math.max(perfWorstPhysicsNs,physicsNs);
+        perfWorstCanvasNs=Math.max(perfWorstCanvasNs,canvasNs);
         if(perfFrames<PERF_REPORT_FRAMES)return;
         double fps=perfGapNs==0?0:perfFrames*1e9/(double)perfGapNs;
         double simRate=perfGapNs==0?0:perfSteps*SimulationClock.STEP*1e9/perfGapNs;
         Log.d("LavaPerf",String.format(Locale.US,
-                "fps=%.1f worstGap=%.1fms simRate=%.2f physics=%.2fms canvas=%.2fms cpu=%.2fms saves=%d saveAvg=%.1fms saveMax=%.1fms blobs=%d",
+                "fps=%.1f worstGap=%.1fms simRate=%.2f physics=%.2fms canvas=%.2fms cpu=%.2fms saves=%d saveAvg=%.1fms saveMax=%.1fms blobs=%d peakBlobs=%d gapsOver25ms=%d catchupFrames=%d physicsMax=%.2fms canvasMax=%.2fms",
                 fps,perfWorstGapNs/1e6,simRate,
                 perfPhysicsNs/(1e6*perfFrames),perfCanvasNs/(1e6*perfFrames),
                 perfCpuNs/(1e6*perfFrames),perfSaveCount,
                 perfSaveCount==0?0:perfSaveNs/(1e6*perfSaveCount),
-                perfWorstSaveNs/1e6,world.blobs.size()));
-        perfFrames=perfSteps=perfSaveCount=0;
+                perfWorstSaveNs/1e6,world.blobs.size(),perfPeakBlobs,perfSlowFrames,perfCatchupFrames,
+                perfWorstPhysicsNs/1e6,perfWorstCanvasNs/1e6));
+        perfFrames=perfSteps=perfSaveCount=perfSlowFrames=perfCatchupFrames=perfPeakBlobs=0;
         perfGapNs=perfWorstGapNs=perfPhysicsNs=perfCanvasNs=perfCpuNs=0L;
-        perfSaveNs=perfWorstSaveNs=0L;
+        perfSaveNs=perfWorstSaveNs=perfWorstPhysicsNs=perfWorstCanvasNs=0L;
     }
 
     private void drawBackground(Canvas canvas, float h) {
