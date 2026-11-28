@@ -45,6 +45,30 @@ jobs:
           done
           echo 'Rounded vessel physics snapshots and acoustic events match previous playtest exactly.' >> "$GITHUB_STEP_SUMMARY"
           cat build/rounded/{old,new}/timing.txt >> "$GITHUB_STEP_SUMMARY"
+      - name: Compare recovery matrix against instrumented pre-optimization baseline
+        run: |
+          set -euo pipefail
+          ref=2c3f6776a5693a0ec37e060884b22a72d1cc0a5f
+          git fetch --no-tags --depth=1 origin "$ref"
+          pkg=app/src/main/java/com/maryvellous/lavablobs
+          mkdir -p build/recovery/{reference,old-classes,new-classes,old,new}
+          git archive "$ref" "$pkg" | tar -x -C build/recovery/reference
+          for variant in old new; do
+            source="$pkg"
+            if [[ "$variant" == old ]]; then source="build/recovery/reference/$pkg"; fi
+            javac -encoding UTF-8 -d "build/recovery/$variant-classes" \
+              "$source"/{Blob,BlobWorld,Vessel,GameSpec,ContactProbe,ContactTracker,PhysicsAudioEvents,AudioPolicy}.java \
+              "$source"/audio/*.java tools/audio_v2_java/PerformanceRecoveryCli.java
+            java -cp "build/recovery/$variant-classes" com.maryvellous.lavablobs.PerformanceRecoveryCli "build/recovery/$variant" | tee "build/recovery/$variant/timing.txt"
+          done
+          cmp build/recovery/{old,new}/hashes.txt
+          echo 'Recovery matrix state/audio hashes match exactly.' >> "$GITHUB_STEP_SUMMARY"
+          grep '^PERF ' build/recovery/{old,new}/timing.txt >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: recovery-comparison-${{ github.sha }}
+          path: build/recovery/*/*.txt
+          if-no-files-found: error
       - name: Verify installable isolated APK
         run: |
           apk=$(find app/build/outputs/apk/uiPreview -name '*.apk' -print -quit)
