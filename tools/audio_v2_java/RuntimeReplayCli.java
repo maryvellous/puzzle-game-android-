@@ -37,12 +37,12 @@ public final class RuntimeReplayCli {
         for(float x:pcm)energy+=(double)x*x;
         double rms=Math.sqrt(energy/pcm.length);
         return String.format(Locale.ROOT,
-                "%s,%d,%d,%.7f,%.7f,%.7f,%d,%d,%d,%d,%d,%d,%d,%d,%d,%.9f,%.9f,%.9f,%d",
+                "%s,%d,%d,%.7f,%.7f,%.7f,%d,%d,%d,%d,%d,%d,%d,%d,%d,%.9f,%.9f,%.9f,%d,%d,%d",
                 label,e.peakVoices(),e.peakShortVoices(),e.peakDry(),e.peakOutput(),
                 e.minimumLimiterGain(),e.limitedFrames(),e.renderedFrames(),
                 e.fusionsStarted(),e.fusionsCompleted(),e.rejectedShortVoices(),
                 e.aggregateCandidates(),e.aggregateGroups(),e.aggregateCollapsed(),e.aggregateRejected(),
-                e.peakGainStep(),e.peakSampleStep(),rms,e.mixLatencyFrames());
+                e.peakGainStep(),e.peakSampleStep(),rms,e.mixLatencyFrames(),e.allocatedVoices(),e.reusedVoices());
     }
     public static void main(String[] args)throws Exception{
         if(args.length!=3)throw new IllegalArgumentException("Usage: RuntimeReplayCli decodedWavDir trace outputDir");
@@ -57,7 +57,7 @@ public final class RuntimeReplayCli {
         if(events.isEmpty())throw new IOException("Empty trace");
         int frames=(int)Math.ceil((events.get(events.size()-1).time-events.get(0).time+3)*RATE/AudioReplay.BLOCK)*AudioReplay.BLOCK;
         long expected=events.stream().filter(e->e.type==AudioEvent.Type.MERGE).count();
-        StringBuilder report=new StringBuilder("mode,peak_voices,peak_secondary,peak_dry,peak_output,min_limiter_gain,limited_frames,rendered_frames,fusions_started,fusions_completed,rejected_short,candidates,groups,collapsed,rejected_clusters,peak_gain_step,peak_sample_step,rms,mix_latency_frames\n");
+        StringBuilder report=new StringBuilder("mode,peak_voices,peak_secondary,peak_dry,peak_output,min_limiter_gain,limited_frames,rendered_frames,fusions_started,fusions_completed,rejected_short,candidates,groups,collapsed,rejected_clusters,peak_gain_step,peak_sample_step,rms,mix_latency_frames,voice_objects_allocated,voice_pool_hits\n");
         StringBuilder stemReport=new StringBuilder("mode,family,dry_peak,dry_rms,export_gain\n");
         for(MaterialAudioEngine.MixProfile profile:MaterialAudioEngine.MixProfile.values()){
           for(boolean aggregated:new boolean[]{false,true}){
