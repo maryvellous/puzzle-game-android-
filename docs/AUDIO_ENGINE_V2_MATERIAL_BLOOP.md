@@ -1,10 +1,10 @@
 # Lava Blobs — Audio: la materia diventa suono
-**Specifica canonica vigente · 27 novembre 2026**
+**Specifica canonica vigente · 28 novembre 2026**
 
 > «Un sistema in cui il comportamento della materia diventa suono.»
 
 ## Stato
-App main 1.1.0, Audio V2.3, preview approvata dall'utente cfb03c9, promossa con acf6d2b; [CI main verde](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46060029269). Primo stadio di sviluppo concluso. Ultima release pubblicata 1.0.11; pubblicazione della 1.1.0 separata. Fase 2: ridurre la lieve frittura percepita sotto stress mediante aggregazione di eventi simili. [Piano aggregazione](AUDIO_AGGREGATION_PLAN.md) e [audit](TECHNICAL_DEBT_AUDIT.md) sono proposte di lavoro, non funzionalità già presenti. Non serve migrazione aggiuntiva dei salvataggi.
+Baseline approvata dall'utente: Aggregation Preview [CI #238](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46094635920), sorgente [43aca8e](https://github.com/maryvellous/puzzle-game-android-/tree/baseline/late-game-approved-2026-11-28). Feedback: più fluido, nessun frittino percepito durante il collaudo. Il consolidamento adotta REFINED + aggregazione in tutte le build; gli altri profili mantenuti sono controlli offline. Non è una misura strumentale di underrun. Main e distribuzione richiedono promozione separata. Vedi [roadmap](TECHNICAL_ROADMAP.md).
 
 ## Grammatica approvata
 | Evento | Risposta |
@@ -22,10 +22,11 @@ Fusioni riconoscibili per completezza e ricchezza, non necessariamente più fort
 ## Architettura attuale
 - BlobWorld/Vessel: solver soft-body 24 nodi, cinque passaggi; non modificare fisica per produrre audio.
 - ContactProbe: osservazione passiva, aggregazione per coppia/sottopasso; velocità relative, pressione proxy, moto bulk. Vetro aggregato per blob/lato con isteresi. ContactTracker gestisce ciclo di contatto e cancellazioni.
-- V2GameSound: coda di comandi verso thread audio, AudioTrack PCM mono 44.1 kHz, blocchi da 384 frame. AndroidBloopDecoder decodifica materiali fuori UI. Main e preview condividono il motore.
-- MaterialAudioEngine/BloopMaterialBank: gating, voci finite, mix condiviso; 24 voci corte, fusioni complete. Limiter condiviso .87, rilascio 150 ms; non attribuire proprietà di priorità al limiter che non possiede.
-- Slider 0–100% quadratico dopo limiter, rampa 8 ms, mute/ripristino e preferenza locale. Musica futura separata.
-- La fase 2 dovrà aggregare dopo gating, prima dell'emissione, mantenendo materiali e fusioni distinti; il piano specifica i gate. Nessun algoritmo di clustering è ancora approvato nel dettaglio.
+- PhysicsAudioEvents/AudioEventQueue: eventi immutabili timestamped, FIFO preallocata 8192 con riserva 1024 per controlli, nessuna espulsione di eventi ammessi; overflow di controllo invalida la sessione.
+- AudioSession/AudioBlockScheduler/AudioTimeline: generazioni per reset e lifecycle, scheduling a offset campione; budget 512 dispatch per blocco, lead nominale 384 frame. V2GameSound è l'unico owner di AudioTrack PCM16 mono 44.1 kHz, blocchi da 384 frame. Decoder Android fuori UI.
+- MaterialAudioEngine.forGameplay: gating fisico, AcousticAggregator dopo gating, PcmMixer e PeakLimiter; 24 voci corte, fusioni complete senza voice stealing, 64 voci riciclabili. Cluster GEL/WALL (12 ms) e SQUISH (30 ms), rapporto rate <= 1.12, massimo 32 gruppi × 64 contributi, ordine deterministico. LAUNCH/POP/fusioni non aggregati. Cancellazione squish pendenti su rimozione/fusione.
+- REFINED: interpolazione lineare, envelope 0.5/1.5 ms, limiter .87 con 132 frame (~3 ms) lookahead e rilascio 150 ms; slider quadratico 0–100% a valle, rampa 8 ms, preferenza locale. Campioni originali immutati; il cubico non è stato adottato.
+- Debug principale e preview diagnostica usano la stessa factory del runtime release; solo la preview mostra banner e registra trace locale. Offline usa lo stesso scheduler e core, decoder desktop diverso. Confronti bypass/APPROVED rimangono per regressioni, non opzioni di gioco. Musica futura separata.
 
 ## Regressioni da non reintrodurre
 Il playtest V2.0 ha bocciato un ronzio acuto persistente (~576 Hz rilevato nel filmato) da loop della coda eccitato da micro-movimenti. V2.1 ha eliminato i loop: [CI 45279301704](https://github.com/maryvellous/puzzle-game-android-/actions/runs/45279301704) scena ferma 1303 osservazioni, 0 squish/impatti, PCM zero; stessa scena agitata 9 squish/8 impatti. V2.2 ha alzato non-fusioni 3x, valutazioni 3,5/4/2/4/4,5 (fisica/timbro/bilanciamento/pulizia/sincronia). V2.3 ha distinto vetro/gel, ripristinato swoosh e aggiunto slider. L'utente l'ha approvata. Queste misure e feedback sono storici, non parametri da ritarare automaticamente.
