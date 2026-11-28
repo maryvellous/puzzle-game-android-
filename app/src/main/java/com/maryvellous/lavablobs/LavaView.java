@@ -148,6 +148,7 @@ public final class LavaView extends View {
         theme=new ThemeStore(context).current();
         perfLogging=(context.getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE)!=0;
         world=new BlobWorld(new Random(),spec);
+        world.setProfiling(perfLogging);
         gameSession=new GameSessionController(world,spec,progress,session,SystemClock.uptimeMillis());
         if(resume!=null) {
             try {
@@ -627,7 +628,7 @@ public final class LavaView extends View {
     private void copyFrameProfile(){
         android.content.ClipboardManager clipboard=(android.content.ClipboardManager)getContext().getSystemService(Context.CLIPBOARD_SERVICE);
         if(clipboard==null)return;
-        String report="Lava Blob "+BuildConfig.VERSION_NAME+" | livello="+spec.id+" | shape="+spec.shape+" | "+getWidth()+"x"+getHeight()+"\n"+frameProfile.report();
+        String report="Lava Blob "+BuildConfig.VERSION_NAME+" | livello="+spec.id+" | shape="+spec.shape+" | "+getWidth()+"x"+getHeight()+" | device="+android.os.Build.MODEL+" | drops="+world.dropCount+"\n"+frameProfile.report()+world.physicsProfile();
         clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Lava Blob performance",report));
         android.widget.Toast.makeText(getContext(),"Dati prestazioni copiati",android.widget.Toast.LENGTH_SHORT).show();
     }
@@ -641,8 +642,8 @@ public final class LavaView extends View {
                 .setTitle("Ricominciare la partita?").setMessage("La partita in corso verrà sostituita.")
                 .setNegativeButton("Annulla",null).setPositiveButton("Ricomincia",(d,w)->{dismissSheet();restart();}).show();
         });
-        ConsoleUi.action(body,"Torna alla Home",theme.forTier(5),onHome);
         if(perfLogging)ConsoleUi.action(body,"Copia dati prestazioni",theme.forTier(2),this::copyFrameProfile);
+        ConsoleUi.action(body,"Torna alla Home",theme.forTier(5),onHome);
         showSheet("Pausa",body);
     }
     private void openExtras(){
