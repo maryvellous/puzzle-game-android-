@@ -109,7 +109,7 @@ public final class LavaView extends View {
             Runnable onHome,GameSave session,GameSave.Snapshot resume) {
         super(context);
         this.spec=spec;this.onHome=onHome;
-        // Approved V2.3 audio in every gameplay build.
+        // Approved refined + aggregated audio in every gameplay build.
         audio=new V2GameSound(context);
         theme=new ThemeStore(context).current();
         perfLogging=(context.getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE)!=0;
