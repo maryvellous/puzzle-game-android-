@@ -35,7 +35,7 @@ final class PcmMixer {
     private void start(VoiceFamily family,float[] sound,float volume,float rate,boolean fusion){
         PcmVoice v=free.pollLast();
         if(v==null){v=new PcmVoice();allocatedVoices++;}else reusedVoices++;
-        v.start(sound,volume,rate,fusion,profile!=MixProfile.APPROVED,family,profile==MixProfile.CUBIC);
+        v.start(sound,volume,rate,fusion,profile!=MixProfile.APPROVED,family);
         voices.add(v);
     }
     private void recycle(PcmVoice v){
