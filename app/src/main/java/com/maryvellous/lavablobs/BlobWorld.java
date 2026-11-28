@@ -380,9 +380,9 @@ final class BlobWorld {
         if(contactBoundsA.separated(contactBoundsB,tolerance+.01f))return false;
         for(int i=0;i<Blob.NODES;i++) {
             if(!contactBoundsB.cannotTouch(a.px[i],a.py[i],tolerance+.01f)&&
-                    (pointInside(b,a.px[i],a.py[i])||closestEdge(b,a.px[i],a.py[i]).distance<tolerance)) return true;
+                    (pointInside(b,a.px[i],a.py[i])||closestEdge(b,a.px[i],a.py[i],tolerance).distance<tolerance)) return true;
             if(!contactBoundsA.cannotTouch(b.px[i],b.py[i],tolerance+.01f)&&
-                    (pointInside(a,b.px[i],b.py[i])||closestEdge(a,b.px[i],b.py[i]).distance<tolerance)) return true;
+                    (pointInside(a,b.px[i],b.py[i])||closestEdge(a,b.px[i],b.py[i],tolerance).distance<tolerance)) return true;
         }
         return false;
     }
@@ -419,9 +419,10 @@ final class BlobWorld {
     // Only valid during projectContacts: links cannot disappear inside a pair.
     private int pairAdhesionCount;
 
-    private Edge closestEdge(Blob polygon,float x,float y) {
+    private Edge closestEdge(Blob polygon,float x,float y,float cutoff) {
         Edge found=edgeScratch;
         float minSq=Float.MAX_VALUE;
+        float cutoffSq=cutoff*cutoff;
         for(int j=0;j<Blob.NODES;j++) {
             int k=(j+1)%Blob.NODES;
             float ax=polygon.px[j],ay=polygon.py[j];
@@ -432,7 +433,7 @@ final class BlobWorld {
             float boxDx=x<minX?minX-x:(x>maxX?x-maxX:0f);
             float minY=ay<by?ay:by,maxY=ay>by?ay:by;
             float boxDy=y<minY?minY-y:(y>maxY?y-maxY:0f);
-            if(boxDx*boxDx+boxDy*boxDy>minSq+1e-3f)continue;
+            if(boxDx*boxDx+boxDy*boxDy>Math.min(minSq,cutoffSq)+1e-3f)continue;
             float dx=bx-ax,dy=by-ay;
             float len2=dx*dx+dy*dy;
             float t=len2<1e-6f?0f:clamp(((x-ax)*dx+(y-ay)*dy)/len2,0f,1f);
@@ -511,8 +512,11 @@ final class BlobWorld {
         // A point outside the expanded target box can neither be inside the
         // polygon nor within contact distance of any of its edges.
         if(targetBounds.cannotTouch(x,y))return false;
-        Edge edge=closestEdge(target,x,y);
+        // Exterior points cannot create a contact beyond SKIN. Limit the
+        // search by that distance, while interior points retain the complete
+        // nearest-edge search. The old traversal and strict tie-break remain.
         boolean inside=!targetBounds.cannotTouch(x,y,.01f)&&pointInside(target,x,y);
+        Edge edge=closestEdge(target,x,y,inside?Float.POSITIVE_INFINITY:SKIN);
         if(!inside&&edge.distance>=SKIN)return false;
 
         int j=edge.start,k=(j+1)%Blob.NODES;
