@@ -7,7 +7,11 @@
 **Ramo di lavoro attuale:** `refactor/technical-debt-roadmap`, ultimo commit applicativo `29624f4a4e0079ebd6a565e8667c92d7011c1a3a` (logo Home, CI/visione da confermare); ultimo APK verificato da `96d4493fe66fe06dd16aab72e590a1ee4b200ac4`. [UI Preview 4](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46147627037) e [CI completa](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46147627030) entrambe verdi. [Artefatto APK](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46147627037/artifacts/15264287233). Home/HUD/12 recipienti storia implementati e in collaudo, non approvati per merge. Priorità immediata: collaudare la nuova ricostruzione del logo in forme morbide (non testo deformato; originale non trovato nella storia consultata); verificare spaziatura e diagnosticare rallentamento 8–10 blob sul telefono. Requisiti, feedback e passaggio di sessione in [PRIVATE_PLAYTEST.md](PRIVATE_PLAYTEST.md).
 
 ## Priorità operativa — fluidità Android
-Report reale del 28 novembre (shape 14): 43.2 FPS con 8–10 blob, 25.3 FPS con 11–15; fisica dominante nel tempo UI. [Piano di recupero prestazioni](PERFORMANCE_RECOVERY_PLAN.md): baseline, obiettivi, profilazione per fase, ottimizzazioni conservative, checkpoint e gate dispositivo. Priorità P0; implementazione non avviata. Logo da approvare; tutorial, musica e bilanciamento sospesi fino alla verifica di fluidità.
+Report reale del 28 novembre (shape 14): 43.2 FPS con 8–10 blob, 25.3 FPS con 11–15; fisica dominante nel tempo UI. [Piano di recupero prestazioni](PERFORMANCE_RECOVERY_PLAN.md): baseline, obiettivi, profilazione per fase, ottimizzazioni conservative, checkpoint e gate dispositivo. Priorità P0; F0–F2 implementazione iniziale in collaudo, F3 non avviata. Registro e risultati JVM nel piano; collaudo Android ancora aperto. Logo da approvare; tutorial, musica e bilanciamento sospesi fino alla verifica di fluidità.
+
+## Interventi di recupero prestazioni
+- Diagnostica per fasi, finestre recenti e percentili; ricerca ray-crossing pareti e nearest edge conservativo. CI #20 e #25: stati/eventi identici, miglioramenti JVM documentati nel piano.
+- Checkpoint: snapshot immutabile e worker seriale latest-wins; test concorrenza/barriere aggiunti. Verificare su Android, inclusa finestra di durabilità al process kill. CI finale #31/#287 da confermare.
 
 ## Interventi conclusi
 | Area | Risultato |
