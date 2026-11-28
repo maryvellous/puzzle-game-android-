@@ -359,6 +359,8 @@ final class BlobWorld {
     // temporary result avoids thousands of short-lived objects per frame.
     private final Edge edgeScratch=new Edge();
     private final Bounds contactBoundsA=new Bounds(),contactBoundsB=new Bounds();
+    // Only valid during projectContacts: links cannot disappear inside a pair.
+    private int pairAdhesionCount;
 
     private Edge closestEdge(Blob polygon,float x,float y) {
         Edge found=edgeScratch;
@@ -405,6 +407,7 @@ final class BlobWorld {
         // vertices. These bounds remain conservative throughout this pair.
         contactBoundsA.set(a);contactBoundsB.set(b);
         if(contactBoundsA.separated(contactBoundsB,SKIN+.01f))return;
+        pairAdhesionCount=-1;
         boolean touched=false;
         for(int i=0;i<Blob.NODES;i++) {
             if(pushPointFromPolygon(a,i,b,contactBoundsA,contactBoundsB,createAdhesion))touched=true;
@@ -495,14 +498,19 @@ final class BlobWorld {
     }
 
     private void addAdhesion(Blob a,Blob b,int ai,int bi) {
-        int pairCount=0;
-        for(Adhesion link:adhesions) {
-            if((link.a==a&&link.b==b)||(link.a==b&&link.b==a)) {
-                pairCount++;
-                if(pairCount>=2)return; // avoid making a rigid glue seam
+        // Both projection directions belong to the same unordered pair.
+        // Count lazily once rather than scanning every link for each vertex.
+        if(pairAdhesionCount<0){
+            pairAdhesionCount=0;
+            for(Adhesion link:adhesions){
+                if((link.a==a&&link.b==b)||(link.a==b&&link.b==a)){
+                    if(++pairAdhesionCount>=2)break;
+                }
             }
         }
+        if(pairAdhesionCount>=2)return;
         adhesions.add(new Adhesion(a,b,ai,bi));
+        pairAdhesionCount++;
     }
 
     private void solveAdhesions() {
