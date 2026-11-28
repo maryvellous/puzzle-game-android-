@@ -61,7 +61,8 @@ public final class RuntimeReplayCli {
         StringBuilder stemReport=new StringBuilder("mode,family,dry_peak,dry_rms,export_gain\n");
         for(MaterialAudioEngine.MixProfile profile:MaterialAudioEngine.MixProfile.values()){
           for(boolean aggregated:new boolean[]{false,true}){
-            MaterialAudioEngine e=new MaterialAudioEngine(bank,launch,aggregated,profile);
+            MaterialAudioEngine e=aggregated&&profile==MaterialAudioEngine.MixProfile.REFINED?
+                    MaterialAudioEngine.forGameplay(bank,launch):new MaterialAudioEngine(bank,launch,aggregated,profile);
             String label=profile.name().toLowerCase(Locale.ROOT)+(aggregated?"-cluster":"-bypass");
             float[][] stems=profile!=MaterialAudioEngine.MixProfile.APPROVED?e.captureDryStems(frames):null;
             float[] pcm=AudioReplay.render(e,events,frames);
