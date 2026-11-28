@@ -1,5 +1,7 @@
 # Report 02 — Audit del debito tecnico
-**27 novembre 2026 · main 1.1.0 / Audio V2.3 · Analisi statica del codice**
+**Documento storico · audit del 27 novembre 2026 · main 1.1.0 / Audio V2.3**
+
+> Non è l'inventario corrente del debito: interventi, risultati, limiti e prossimi gate sono in [TECHNICAL_ROADMAP.md](TECHNICAL_ROADMAP.md).
 
 Baseline: [acf6d2b](https://github.com/maryvellous/puzzle-game-android-/commit/acf6d2b39c197584cb810c92a1d7275c8eb42f5a), preview approvata cfb03c9; [CI main 46060029269](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46060029269) success. La segnalazione di lieve frittura in stress è reale (feedback utente), la causa non è ancora dimostrata. Audit mirato alle aree runtime audio, fisica/UI, pipeline test e build; nessuna profilazione locale/telefono e nessun intervento di runtime in questo passaggio. Priorità P0 = prerequisito affidabilità fase 2; P1 = alto impatto; P2 = manutenzione successiva. Non sono difetti tutti già osservati.
 
