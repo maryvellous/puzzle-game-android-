@@ -4,12 +4,12 @@ package com.maryvellous.lavablobs.audio;
  * Refined playback fades only the first 0.5 ms and last 1.5 ms of output,
  * including the fractional end of resampled clips. Source PCM is untouched. */
 final class PcmVoice {
-    final float[] sound;
-    final boolean fusion;
-    final MaterialAudioEngine.VoiceFamily family;
-    private final float volume,rate;
-    private final boolean declick,cubic;
-    private final int totalFrames,attack,release;
+    private float[] sound;
+    boolean fusion;
+    MaterialAudioEngine.VoiceFamily family;
+    private float volume,rate;
+    private boolean declick,cubic;
+    private int totalFrames,attack,release;
     private double position;
     private int frame;
     PcmVoice(float[] sound,float volume,float rate,boolean fusion,boolean declick){
@@ -19,12 +19,18 @@ final class PcmVoice {
         this(sound,volume,rate,fusion,declick,family,false);
     }
     PcmVoice(float[] sound,float volume,float rate,boolean fusion,boolean declick,MaterialAudioEngine.VoiceFamily family,boolean cubic){
+        start(sound,volume,rate,fusion,declick,family,cubic);
+    }
+    PcmVoice(){}
+    void start(float[] sound,float volume,float rate,boolean fusion,boolean declick,MaterialAudioEngine.VoiceFamily family,boolean cubic){
         this.sound=sound;this.volume=volume;this.rate=rate;this.fusion=fusion;this.declick=declick;this.family=family;this.cubic=cubic;
+        position=0;frame=0;
         totalFrames=(int)Math.ceil(sound.length/(double)rate);
         attack=Math.max(1,Math.min(totalFrames/2,Math.round(BloopMaterialBank.SAMPLE_RATE*.0005f)));
         release=Math.max(1,Math.min(totalFrames/2,Math.round(BloopMaterialBank.SAMPLE_RATE*.0015f)));
     }
-    boolean finished(){return position>=sound.length;}
+    void release(){sound=null;family=null;position=0;frame=0;}
+    boolean finished(){return sound==null||position>=sound.length;}
     float sample(){
         if(finished())return 0f;
         int at=(int)position,next=Math.min(at+1,sound.length-1);
