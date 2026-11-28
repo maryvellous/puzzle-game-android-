@@ -67,7 +67,7 @@ public final class LavaView extends View {
     private float screenY(float y,float h){return GameConsoleLayout.toScreenY(y,world.bottom(),visualScale(h),h);}
     private float worldX(float x,float h){return GameConsoleLayout.toWorldX(x,visualScale(h));}
     private float worldY(float y,float h){return GameConsoleLayout.toWorldY(y,world.bottom(),visualScale(h),h);}
-    private float entryY(float h){return panelTop(h)-30f;}
+    private float entryY(float h){return GameConsoleLayout.entryY(h);}
     private boolean paused(){return modal!=null||lifecyclePaused;}
     private final GameSessionController gameSession;
     private final BlobWorld world;
@@ -85,6 +85,7 @@ public final class LavaView extends View {
     private Shader cachedBackgroundShader;
     private float cachedShaderHeight = -1f;
     private final boolean perfLogging;
+    private final FrameProfile frameProfile=new FrameProfile();
     private final float[] xx = new float[Blob.NODES];
     private final float[] yy = new float[Blob.NODES];
     private final ArrayList<Wave> waves = new ArrayList<>();
@@ -188,6 +189,7 @@ public final class LavaView extends View {
             perfSaveNs+=spent;
             perfWorstSaveNs=Math.max(perfWorstSaveNs,spent);
             perfSaveCount++;
+            if(!paused()&&!world.gameOver)frameProfile.save(world.blobs.size(),spent);
         }
     }
 
@@ -288,7 +290,10 @@ public final class LavaView extends View {
 
         canvas.restore();
         long canvasNs=System.nanoTime()-canvasStart;
-        recordPerformance(gapNs,physicsNs,canvasNs,System.nanoTime()-now,steps);
+        long frameNs=System.nanoTime()-now;
+        if(perfLogging&&!paused()&&!world.gameOver&&gapNs>0)
+            frameProfile.frame(world.blobs.size(),gapNs,physicsNs,canvasNs,frameNs,steps);
+        recordPerformance(gapNs,physicsNs,canvasNs,frameNs,steps);
         postInvalidateOnAnimation();
     }
 
@@ -619,6 +624,13 @@ public final class LavaView extends View {
         LinearLayout body=ConsoleUi.column(getContext());volume(body,music?"Musica":"Effetti sonori",music?musicVolume:audio.volumePercent(),music);
         showSheet(music?"Musica":"Suoni",body);
     }
+    private void copyFrameProfile(){
+        android.content.ClipboardManager clipboard=(android.content.ClipboardManager)getContext().getSystemService(Context.CLIPBOARD_SERVICE);
+        if(clipboard==null)return;
+        String report="Lava Blob "+BuildConfig.VERSION_NAME+" | livello="+spec.id+" | shape="+spec.shape+" | "+getWidth()+"x"+getHeight()+"\n"+frameProfile.report();
+        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Lava Blob performance",report));
+        android.widget.Toast.makeText(getContext(),"Dati prestazioni copiati",android.widget.Toast.LENGTH_SHORT).show();
+    }
     private void openPause(){
         LinearLayout body=ConsoleUi.column(getContext());
         volume(body,"Effetti sonori",audio.volumePercent(),false);volume(body,"Musica",musicVolume,true);
@@ -630,6 +642,7 @@ public final class LavaView extends View {
                 .setNegativeButton("Annulla",null).setPositiveButton("Ricomincia",(d,w)->{dismissSheet();restart();}).show();
         });
         ConsoleUi.action(body,"Torna alla Home",theme.forTier(5),onHome);
+        if(perfLogging)ConsoleUi.action(body,"Copia dati prestazioni",theme.forTier(2),this::copyFrameProfile);
         showSheet("Pausa",body);
     }
     private void openExtras(){

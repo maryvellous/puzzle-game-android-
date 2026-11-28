@@ -18,6 +18,12 @@ public class GameConsoleLayoutTest {
             assertTrue(GameConsoleLayout.panelY(h,184)<h-18);
         }
     }
+    @Test public void launcherHasBreathingRoomOnAllScreens(){
+        for(float h:new float[]{780,850,880,930,1100,1400}){
+            assertEquals(22f,GameConsoleLayout.entryY(h)-24f-GameConsoleLayout.visualBottom(h),.001f);
+            assertEquals(18f,GameConsoleLayout.panelTop(h)-GameConsoleLayout.entryY(h)-24f,.001f);
+        }
+    }
     @Test public void tallConsoleUsesMoreSpaceAndKeepsOrder(){
         assertTrue(GameConsoleLayout.panelHeight(900)>GameConsoleLayout.panelHeight(780));
         assertTrue(GameConsoleLayout.panelY(900,103)<GameConsoleLayout.panelY(900,150));

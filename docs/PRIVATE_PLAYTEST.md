@@ -75,3 +75,7 @@ Raccordi reali dei dodici recipienti storia: fillet ellittici su entrambe le bas
 ### Seconda rifinitura playtest
 
 Continua partita nella console Home, a tutta larghezza sopra i tre comandi; il pulsante è assente senza salvataggio. Campo di gioco leggermente meno ingrandito, con sei unità di spazio aggiuntive fra recipiente e prossimo blob. Contorno 162 segmenti immutato: broad phase a gruppi e corridoi interni conservativi per le nuove geometrie; fixture legacy immutate. Il controllo canLaunch per la linea di mira viene effettuato solo durante la mira. CI UI confronta tre scene dense dei livelli arrotondati con bde5213, incluse tracce audio, e misura tempi JVM (non FPS Android).
+
+### Revisione dopo UI Preview 3
+
+Distanza di 22 unità virtuali tra recipiente e barra di lancio, 18 tra barra e console, senza ulteriore riduzione intenzionale della scala sui telefoni alti. Geometrie e solver invariati rispetto a b063794. Nelle build debug/anteprima il menu Pausa offre Copia dati prestazioni: intervalli frame, passi simulati, tempi UI/fisica/disegno, salvataggi per fasce di densità (0–4, 5–7, 8–10, 11–15, 16+). Misure locali su richiesta, nessun invio automatico; non equivalgono a tempi GPU. Segnalato rallentamento con 8–10 blob sul telefono, causa ancora da isolare. Non sostituire con altre ottimizzazioni non misurate.
