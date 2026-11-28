@@ -419,6 +419,9 @@ final class BlobWorld {
     // Only valid during projectContacts: links cannot disappear inside a pair.
     private int pairAdhesionCount;
 
+    private Edge closestEdge(Blob polygon,float x,float y){
+        return closestEdge(polygon,x,y,Float.POSITIVE_INFINITY);
+    }
     private Edge closestEdge(Blob polygon,float x,float y,float cutoff) {
         Edge found=edgeScratch;
         float minSq=Float.MAX_VALUE;
