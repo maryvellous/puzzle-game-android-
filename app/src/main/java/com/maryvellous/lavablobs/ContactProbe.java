@@ -2,6 +2,8 @@ package com.maryvellous.lavablobs;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.ArrayDeque;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,7 +46,7 @@ final class ContactProbe {
         final float bulkMotion;
         final int projectionSamples; // Includes repeat observations across solver passes.
 
-        Contact(Accumulator a, float time, float dt) {
+        Contact(Accumulator a, float time, float dt, BodyMetrics first, BodyMetrics second) {
             blobA=a.a.id;
             blobB=a.b.id;
             this.time=time;
@@ -69,9 +71,9 @@ final class ContactProbe {
             // Area loss is a global membrane proxy; depth is local. Neither is
             // an exact contact force in this position-based solver.
             compression=Math.max(a.localCompression,
-                    Math.max(areaLoss(a.a),areaLoss(a.b)));
+                    Math.max(first.areaLoss,second.areaLoss));
             projectionSamples=a.samples;
-            bulkMotion=Math.max(bodySpeed(a.a),bodySpeed(a.b));
+            bulkMotion=Math.max(first.bodySpeed,second.bodySpeed);
         }
 
         private static float bodySpeed(Blob b) {
@@ -85,6 +87,35 @@ final class ContactProbe {
             return Blob.clamp((expected-Math.abs(blob.area()))/expected,0f,1f);
         }
     }
+
+    /** Lazily measured after Blob.finish, valid only within finishStep.
+     * Recycle storage, never retain a blob across substeps. */
+    private static final class BodyMetrics {
+        float areaLoss,bodySpeed;
+        void measure(Blob blob){
+            areaLoss=Contact.areaLoss(blob);
+            bodySpeed=Contact.bodySpeed(blob);
+        }
+    }
+    private final IdentityHashMap<Blob,BodyMetrics> bodyMetrics=new IdentityHashMap<>();
+    private final ArrayDeque<BodyMetrics> freeMetrics=new ArrayDeque<>();
+    private long measuredBodies,contactMetricRequests;
+    private BodyMetrics metrics(Blob blob){
+        contactMetricRequests++;
+        BodyMetrics m=bodyMetrics.get(blob);
+        if(m==null){
+            m=freeMetrics.pollLast();
+            if(m==null)m=new BodyMetrics();
+            m.measure(blob);bodyMetrics.put(blob,m);measuredBodies++;
+        }
+        return m;
+    }
+    private void clearMetrics(){
+        for(BodyMetrics m:bodyMetrics.values())if(freeMetrics.size()<128)freeMetrics.addLast(m);
+        bodyMetrics.clear();
+    }
+    long measuredBodies(){return measuredBodies;}
+    long contactMetricRequests(){return contactMetricRequests;}
 
     private static final class Accumulator {
         final Blob a,b;
@@ -186,8 +217,10 @@ final class ContactProbe {
 
     void finishStep(float time,float dt) {
         List<Contact> result=new ArrayList<>(contacts.size());
-        for(Accumulator a:contacts.values())
-            result.add(new Contact(a,time,dt));
+        try {
+            for(Accumulator a:contacts.values())
+                result.add(new Contact(a,time,dt,metrics(a.a),metrics(a.b)));
+        } finally {clearMetrics();}
         contacts.clear();
         listener.onContactStep(time,dt,Collections.unmodifiableList(result));
         finishWalls(time);
@@ -198,7 +231,8 @@ final class ContactProbe {
     void popped(int blobId,float time,float radius) {listener.onPop(blobId,time,radius);}
     void popped(int blobId,float time) {listener.onPop(blobId,time);}
     void reset() {
-        contacts.clear();wallStep.clear();wallStates.clear();
+        contacts.clear();wallStep.clear();wallStates.clear();clearMetrics();
+        measuredBodies=contactMetricRequests=0;
         listener.onReset();
     }
 }
