@@ -10,7 +10,7 @@ Puzzle game *cozy* con blob morbidi che si deformano, collidono e si fondono den
 - **Specifica vigente:** [la materia diventa suono](docs/AUDIO_ENGINE_V2_MATERIAL_BLOOP.md). Un solo percorso di gameplay: eventi fisici → scheduler → aggregazione dopo gating → mixer PCM refined → AudioTrack.
 - **Preview diagnostica:** package separato `com.maryvellous.lavablobs.audioaggregation`, stesso motore della build normale; banner e trace locale solo nella preview. I vecchi profili bypass e approved sono controlli offline; l'esperimento cubico e la variante APK bypass sono ritirati.
 - **Stato tecnico e risultati:** [TECHNICAL_ROADMAP.md](docs/TECHNICAL_ROADMAP.md). I report superati restano nella storia Git.
-- **Prossimo lavoro di prodotto:** progettazione integrata UI/UX e level design (Home, contenitori, HUD, onboarding), poi [collaudo e distribuzione privata](docs/PRIVATE_PLAYTEST.md). Non è previsto rimettere mano a solver o timbro senza un difetto riproducibile.
+- **Anteprima prodotto attuale:** `uiPreview` (`com.maryvellous.lavablobs.uipreview`), Home a carosello verticale e console, HUD Console, dodici recipienti storia arrotondati. [Stato operativo e passaggio di sessione](docs/PRIVATE_PLAYTEST.md). Logo Home ancora da correggere, fluidità da diagnosticare, nessun merge autorizzato.
 
 ## Gameplay e UX attuali
 
@@ -19,7 +19,7 @@ Puzzle game *cozy* con blob morbidi che si deformano, collidono e si fondono den
 - **Lanci:** rilascio rapido nel recipiente oppure pulsante **TRASCINA** con anteprima e annullamento sul vassoio. **SCUOTI** usa gli impulsi fisici; lo scuotimento via accelerometro funziona in primo piano.
 - **POP:** solo in modalità infinita, disponibile ogni 2.000 punti (soglia provvisoria); rimuove un blob dopo selezione corretta. Il Game Over verifica l'ingresso disponibile, con conto alla rovescia.
 - **Punteggio:** fusioni a partire da 10 punti, fattore 1,6 con arrotondamento; drop tier 1–5 con probabilità 45/28/16/8/3%.
-- **Aspetto:** titolo elastico, tre palette, contenitori irregolari, UI morbida. La Home gestisce ripresa della partita, selezione livelli/temi e copia dei dati.
+- **Aspetto:** tre palette, recipienti irregolari, UI morbida. Home con carosello, Continua nella console, temi in popup e aiuto. Il titolo attuale è testo deformato, da sostituire recuperando il logo composto da blob.
 - **Salvataggi e privacy:** partita e progressi persistono **localmente** sul telefono, senza account, backend né telemetria remota. **COPIA DATI PARTITE** esporta manualmente JSON delle ultime 50 partite; `activeSeconds` esclude periodi di inattività prolungata.
 
 ## Audio della versione 1.1.0

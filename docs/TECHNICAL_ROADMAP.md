@@ -1,10 +1,10 @@
 # Stato tecnico e passaggio alla fase di prodotto
-**28 novembre 2026 · consolidamento verificato**
+**28 novembre 2026 · consolidamento verificato, anteprima prodotto in collaudo**
 
 ## Stato
 [PR #27](https://github.com/maryvellous/puzzle-game-android-/pull/27), non ancora integrata in main. Sorgente verificata: [5569e3c](https://github.com/maryvellous/puzzle-game-android-/commit/5569e3cebe4fe1c7d77b7db50cdd6b560b26b02a), [CI #253](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46097012021), merge CI 07d52d59b89dc767cc647ab56239a7c0f6b9c1cd. Baseline percettiva [43aca8e](https://github.com/maryvellous/puzzle-game-android-/tree/baseline/late-game-approved-2026-11-28), CI #238: maggiore fluidità e nessun frittino percepito durante la prova. Non è una misura strumentale FPS/underrun. Nessuna distribuzione eseguita.
 
-Prossimo lavoro: [quattro filoni UI/UX e level design integrato](PRIVATE_PLAYTEST.md). Fisica e audio consolidati; niente tuning speculativo.
+**Ramo di lavoro attuale:** `refactor/technical-debt-roadmap`, ultimo commit applicativo `96d4493fe66fe06dd16aab72e590a1ee4b200ac4`. [UI Preview 4](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46147627037) e [CI completa](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46147627030) entrambe verdi. [Artefatto APK](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46147627037/artifacts/15264287233). Home/HUD/12 recipienti storia implementati e in collaudo, non approvati per merge. Priorità immediata: recuperare il logo composto da blob (non testo deformato); verificare spaziatura e diagnosticare rallentamento 8–10 blob sul telefono. Requisiti, feedback e passaggio di sessione in [PRIVATE_PLAYTEST.md](PRIVATE_PLAYTEST.md).
 
 ## Interventi conclusi
 | Area | Risultato |
@@ -23,6 +23,8 @@ Prossimo lavoro: [quattro filoni UI/UX e level design integrato](PRIVATE_PLAYTES
 - [Fixture densa #253](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46097012021/artifacts/15243438320) · [Replay #253](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46097012021/artifacts/15243846383) · [Preview diagnostica #253](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46097012021/artifacts/15243766942).
 - Il riferimento storico f14cf96 serve alla verifica degli stati e dei trace densi; 43aca8e al confronto del PCM. Non modificare i gate conservativi per ottenere una CI verde. Se una forma/obiettivo cambia intenzionalmente, aggiornare scenario ed evidenza esplicitamente.
 
+- CI UI #5: equivalenza stati/tracce sui tre recipienti arrotondati rispetto a bde5213; p99 JVM peggiora in due scene, migliora in una. Non dimostrata accelerazione generalizzata. UI Preview 3 rallenta con 8–10 blob secondo il collaudo dell'autrice. Causa sconosciuta; #4 con diagnostica ancora da provare sul telefono.
+
 ## Limiti residui e gate
 - I test non certificano prestazioni GPU, latenza reale o underrun Android. Correggere regressioni riproducibili, non ottimizzare per principio.
 - Coda finita: osservazioni possono essere respinte; overflow autorevole invalida la sessione, eventi startup contati ma non riprodotti; errore device terminale senza recovery automatica. Non promettere assenza assoluta di perdite o GC.
@@ -30,6 +32,7 @@ Prossimo lavoro: [quattro filoni UI/UX e level design integrato](PRIVATE_PLAYTES
 - Prima della consegna: approvazione prodotto, smoke test pacchetto normale, versione crescente, verifica firma e distribuzione esplicitamente autorizzata. Secret reali non ancora verificati. Main invariata.
 
 ## Diagnostica su regressione
+Nelle build debug/`uiPreview`, menu Pausa → Copia dati prestazioni: `FrameProfile` aggrega tempi per numero di blob. Chiedere export dopo aver riprodotto il rallentamento; separare tempo fisica/tick, Canvas CPU, intervalli frame, UI e salvataggi. Nessuna telemetria remota; non misura il tempo GPU.
 LavaPerf e LavaV2Audio: frame gap, tick, canvas CPU submission, p99 dispatch/render/write, coda, underruns, limiter e voci. I p99 a bucket sono stime; write include pacing device. Preview: cache audio-trace-v1.csv e audio-trace-v1.meta (massimo 30 s/32768 eventi per generazione), export locale via run-as del package .audioaggregation; non telemetria, non output PCM. Consultare [specifica audio](AUDIO_ENGINE_V2_MATERIAL_BLOOP.md).
 
 ## Storia

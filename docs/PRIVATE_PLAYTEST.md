@@ -1,36 +1,36 @@
 # Progettazione UI/UX, level design e collaudo privato
+**Aggiornamento 28 novembre 2026 — passaggio di sessione.**
 
-**Obiettivo:** completare il gioco e consegnare una build Android a tre tester scelti dall'autrice. Non è un lancio pubblico.
+Obiettivo: consegnare una build Android collaudata a tre tester scelti dall'autrice, senza pubblicazione pubblica.
 
-## Quattro filoni di progettazione
+## Stato operativo e prossimo intervento
 
-| Filone | Ambito | Punto di partenza |
-|---|---|---|
-| Home | Identità, navigazione, ripresa, selezione livelli/modalità, temi e progressi; rendere chiara la scelta della partita. | HomeView, MainActivity, ProgressStore |
-| Forme dei contenitori | Silhouette, riconoscibilità, spazio utile, imboccatura, concavità e difficoltà; progettare insieme forma e comportamento dei livelli. | Vessel, GameSpec |
-| HUD di gioco | Punteggio, obiettivi e avanzamento, prossimo blob, controlli di lancio/drag, shake, POP, volume, game over e risultati; gerarchia e leggibilità senza ostacolare il campo. | LavaView, GameSessionController |
-| Tutorial/onboarding | Prima esperienza, apprendimento graduale delle meccaniche, feedback contestuali, introduzione di forme, obiettivi e controlli. | Da progettare a partire dal gioco reale |
+Ramo `refactor/technical-debt-roadmap`, [PR #27](https://github.com/maryvellous/puzzle-game-android-/pull/27) aperta, non integrata. Ultimo commit applicativo `96d4493fe66fe06dd16aab72e590a1ee4b200ac4`. [UI Preview 4, test e build verdi](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46147627037) · [APK (ZIP Actions)](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46147627037/artifacts/15264287233) · [regressione completa verde](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46147627030). Non confondere la build verificata con il collaudo sul telefono: l'ultimo feedback ricevuto riguarda UI Preview 3.
 
-Il level design non è una fase isolata: forme e difficoltà, obiettivi e HUD, progressione e onboarding si definiscono insieme. I quattro filoni sono una suddivisione del lavoro, non un ordine di esecuzione vincolante. Valori di GameSpec (12 livelli e 3 endless) provvisori; verificare progressione e bilanciamento con partite reali. Le decisioni estetiche e di gameplay sono ancora da prendere.
+**Priorità 1 — correggere il logo Home (richiesta esplicita, non ancora implementata).** L'autrice ha chiarito che il titolo precedente era composto da blob, non da caratteri di font deformati. La versione attuale `BlobTitle.drawHome` usa `getTextPath` e `PathMeasure`: è proprio l'approccio rifiutato. Il risultato appare storto e non percepibilmente animato. Cercare il titolo originale nella storia Git, nelle vecchie implementazioni e nelle eventuali risorse disponibili prima di disegnarne uno nuovo. Non dichiarare di averlo recuperato se non è stato trovato. Ripristinare l'identità materiale: lettere costruite da forme/blob morbidi, leggibili anche da ferme, non wordart. Usare 3–4 colori della palette attiva per il logo e un altro per lo sfondo, animazione lenta ma visibile, deformazione lieve e senza rotture. Rispettare riduzione animazioni di sistema; verificare le tre palette e più frame della sequenza. Nessuna approvazione di un nuovo logo è implicita. Dopo la correzione, compilare e consegnare APK di anteprima, non main.
 
-Preservare solver e audio #238/#253; se le geometrie o gli obiettivi cambiano intenzionalmente, aggiornare e motivare le fixture, mantenendo il riferimento fisico approvato. Provare proporzioni schermo diverse, leggibilità e dimensioni touch. Musica eventuale: scelta di prodotto distinta.
+**Priorità 2 — collaudo di fluidità e spaziatura.** UI Preview 3: l'autrice apprezza moltissimo il gioco, ma riferisce rallentamento già con 8–10 blob e respiro verticale ancora insufficiente. In `96d4493` sono stati implementati 22 unità virtuali tra recipiente e lanciatore, 18 tra lanciatore e console, mantenendo la scala se possibile; non ancora verificati dall'autrice. In pausa, nelle build debug/preview, `Copia dati prestazioni` esporta misure locali per fasce 0–4 / 5–7 / 8–10 / 11–15 / 16+: intervalli frame, passi simulati, fisica/tick, Canvas CPU, tempo UI e salvataggi. Far giocare fino al rallentamento, copiare e analizzare il report prima di ulteriori ottimizzazioni; non attribuire automaticamente il problema all'anteprima o alle geometrie. Nessun invio automatico.
 
-## Audit UI/UX — proposte da discutere (28 novembre)
+**Gate:** nessun merge in main prima dell'OK esplicito dell'autrice dopo il collaudo. La build attuale è isolata (`com.maryvellous.lavablobs.uipreview`), non sovrascrive il gioco principale. Per aggiornare la preview verificare compatibilità della firma; non imporre disinstallazioni che cancellino i dati. La nuova geometria ha invalidato le partite storia salvate prima della revisione dei raccordi, non record/sblocchi.
 
-Base: sorgente b73e97e, filmato playtest #238 (HUD/vasetto); Home e altre forme valutate dal codice, non da screenshot o test utente. Nessuna scelta grafica o di gameplay ancora approvata. Identità da preservare: materia elastica, colori esatti delle tre palette, fondo scuro, vetro neutro, titolo deformabile, UI morbida, feedback fisico/sonoro. Rendere la materia protagonista, evitare decorazioni estranee.
+## Decisioni di prodotto e stato dei quattro filoni
 
-| Filone | Evidenza attuale | Direzione proposta |
-|---|---|---|
-| Home | HomeView: griglia 6 livelli/pagina con swipe orizzontale e scroll verticale; miniature da Vessel, testi piccoli; temi e copia dati nel flusso principale. | Collezione di recipienti con silhouette grandi, progressi espliciti, azione primaria Continua/prossimo livello, modalità infinita riconoscibile, impostazioni/export separati, navigazione verticale prevedibile. |
-| Forme | GameSpec: 12 livelli/11 forme, Gola stretta e Clessidra stesso shape 3; Vessel usa stesso poligono per grafica e collisioni. Geometrie campionate e altezze nominali fisse ma adattabili allo spazio. | Archetipi fisici (regolare, pancia, strettoia, asimmetria, concavità), progressione di comportamenti; misurare capacità, min width, spazio lancio inferiore, frequenza blocco, difficulty e obiettivi. Niente collider invisibili, no cambi solver impliciti. |
-| HUD | LavaView: wordmark e grandi contatori in alto, obiettivo statico e extra n/m; riavvio su ACTION_DOWN, tap anche su parti informative può avviare mira/lancio, esito con sole azioni Riprova/Home. Ghost/linea non esplicitano sempre validità, countdown testuale. | Header compatto, obiettivo/progresso e extra leggibili, campo protagonista; vero menu pausa e conferma restart, hitbox separate, ghost coerente con canLaunch e ingresso inferiore, feedback blocco vicino all'ingresso, Prossimo livello. Volume completo in pausa, mute rapido se utile. Non aumentare capacità del recipiente per ragioni puramente estetiche. |
-| Onboarding | Istruzione iniziale sul lancio, etichette PROSSIMO/TRASCINA/SCUOTI, messaggi per blocco/POP; nessun tutorial strutturato rilevato nel flusso Home/MainActivity/LavaView. | Primo vasetto come tutorial giocabile, suggerimenti a evento: lancio dal basso, fusione di pari taglia, shake, obiettivo, recupero ingresso; POP solo in endless. Salta/ripeti, aiuto contestuale, riconoscere azioni reali, niente tutorial che blocchi o sovrascriva una partita. |
+Il level design è integrato nei quattro filoni, non una fase isolata.
 
-Priorità proposta: correggere azioni accidentali e feedback di lancio/HUD; definire archetipi e progressione prima di fissare schede/miniature Home e contenuti onboarding; esplorazione visiva in parallelo. Verificare leggibilità, contrasto e dimensioni touch su più schermi; Canvas richiede valutazione di accessibilità semantica, non solo palette. Misurare con tre tester: primo lancio, prima fusione, comprensione shake, obiettivi, recupero ingresso, passaggio livello; osservazione spontanea senza spiegazioni preventive. Proposte, non task di implementazione autorizzati.
+| Filone | Stato attuale e decisioni |
+|---|---|
+| Home | Implementata: carosello verticale con snap animato, suggerimento «Scorri in basso per gli altri livelli» che scompare dopo il primo avanzamento, console bianca fissa, switch Infinita, Temi (popup dismissibile toccando fuori), aiuto, esportazione dati. Continua partita a tutta larghezza nella console, sopra i tre comandi, solo con salvataggio. Miniature con geometrie effettive. Logo da correggere come sopra. |
+| Forme | 12 livelli storia, profili 14–25, raccordi ellittici reali su entrambe le basi, 80 fasce/162 segmenti; disegno e collisioni condividono il contorno. Tratto d'ingresso piatto funzionale. Fixture 0–13 e tre recipienti Infinita conservati. Ciambella rinviata su richiesta: non introdurre ostacoli interni ora. Punteggi/obiettivi invariati e provvisori; da bilanciare con playtest. |
+| HUD | Console scelta dall'autrice. [Mockup definitivo](mockups/console.html). Superficie bianca neutra indipendente dal tema; pulsanti con colori intermedi (mai colore 1); prossimo blob adiacente all'ingresso, indicatore chiaro e countdown; punteggio/obiettivi; Scuoti e Extra o POP sopra la scala delle nove taglie, senza numeri, contorni o target evidenziato. Pausa effettiva e conferma riavvio, aiuto, risultato e prossimo livello; suoni regolabili, volume musica predisposto ma nessuna traccia musicale. Adattamento visivo con trasformazione touch inversa, senza alterare capacità fisica. |
+| Tutorial/onboarding | Aiuto sintetico già implementato: «Unisci abbastanza blob per raggiungere l'obiettivo prima che finisca lo spazio», scala completa e comandi. Suggerimento Home presente. Tutorial contestuale giocabile del primo vasetto ancora da progettare, con skip/ripeti, eventi reali e POP solo Infinita. Non introdurlo incidentalmente durante il fix logo. |
 
-## HUD — riferimento definitivo
+## Evidenze e limiti
 
-[Console interattiva](mockups/console.html): layout scelto dall'autrice. Superficie neutra invariabile, pulsanti nei colori intermedi delle palette (mai colore 1), legenda delle nove taglie base senza contorni, numeri o target evidenziato. Ordine dall'alto: recipiente, prossimo blob ancorato al bordo inferiore con indicatore ingresso, punteggio/obiettivi, comandi Scuoti e Extra (oppure POP in Infinita), scala taglie in fondo. Recipiente traslato verso l'alto di 6 px nel mockup, senza ridimensionamento; calibrare l'equivalente in coordinate Android. Ingresso bloccato ben evidente con countdown; suoni e musica indipendenti, pannello ? con scala e spiegazione breve. Il prototipo contiene scenari illustrativi e non implementa fisica, musica o gameplay. Le forme sono ancora concept, non approvate come geometrie fisiche. Layout di riferimento per futura implementazione, non codice Android.
+- Baseline audio/fisica approvata `43aca8e` (#238), consolidamento `5569e3c` (#253).
+- `1a7d454`: mockup Console scelto. `a3bc41a` / `0d9679d`: nuove Home, HUD e forme. `03bf694`: suggerimento, wordmark deformato (respinto) e layout adattivo. `bde5213`: raccordi arrotondati. `b063794`: Continua nella console, spaziatura intermedia, ricerca pareti a gruppi e corridoi conservativi; controllo ingresso per la mira solo se attiva.
+- [CI UI #5](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46105070804): stati e trace audio delle tre scene dense arrotondate identici a `bde5213`. Prestazioni JVM contrastanti (p99 vecchio → nuovo in ms: 4,908→6,570; 4,935→6,446; 5,824→5,400). Nessun miglioramento generale provato, nessun benchmark Android.
+- `96d4493`: maggiore respiro verticale e diagnostica dispositivo. Build e regressione verdi, APK sopra. Titolo ancora non corretto, problemi di fluidità ancora aperti.
+- L'ultima revisione del solver resta quella di `b063794`; non modificare fisica, motore audio, capacità o scoring per un fix estetico. Preservare confronto bit-per-bit e gate di CI.
 
 ## Regressione audio e lifecycle
 
@@ -58,24 +58,3 @@ Lasciare giocare senza spiegare tutte le meccaniche in anticipo; raccogliere imp
 - Eventuale esportazione manuale dei dati partita (JSON locale), solo con consenso; nessuna raccolta automatica.
 
 Classificare bug bloccanti, problemi UX, bilanciamento e preferenze personali. Correggere prima i difetti riproducibili; tenere separati feedback e idee nuove.
-
-## Anteprima UI e geometrie
-
-- Home: carosello verticale con snap animato, console fissa, selezione temi in popup e aiuto. Partita salvata resta raggiungibile; esportazione dati nell'aiuto.
-- HUD: console fissa neutra, prossimo blob subito sotto il recipiente, avviso bloccato con countdown, punteggio/obiettivi, Scuoti e Extra/POP sopra la scala senza numeri. Pausa reale, aiuto, dettagli extra e risultato con prossimo livello. Suoni regolabili; volume musica salvato ma colonna sonora non inclusa.
-- Dodici recipienti storia: profili arrotondati 14–25; sagoma e contorno fisico coincidono. Geometrie precedenti conservate per test e Infinita. Ciambella rinviata. Obiettivi numerici ancora provvisori da valutare nei playtest.
-- Build isolata `uiPreview` (package `com.maryvellous.lavablobs.uipreview`), firmata debug; non sostituisce l'app installata. Main non va integrato prima del collaudo dell'autrice. Le vecchie partite storia in corso non vengono ripristinate su geometrie incompatibili; i progressi restano conservati nell'app originale.
-
-### Rifinitura dopo il primo playtest UI
-
-Wordmark organico con campo di deformazione continuo e movimento lento, stessi font e quattro colori per tema; suggerimento di scorrimento Home che scompare al primo avanzamento verticale e resta disattivato. Contorni delle miniature bloccate più leggibili. HUD adattivo: console più alta sui display lunghi, scala visuale uniforme del recipiente e coordinate touch invertite nella stessa trasformazione. Nessuna modifica alle dimensioni nel mondo fisico, alla forma o alle regole.
-
-Raccordi reali dei dodici recipienti storia: fillet ellittici su entrambe le basi, 80 fasce anziché 24, stessa sagoma per collisioni e disegno. Ingresso piatto mantenuto per il lancio dal basso. Fixture legacy e Infinita conservate per equivalenza regressiva. Una partita storia salvata prima del nuovo profilo viene scartata per evitare membrane fuori sagoma; record e sblocchi non vengono azzerati.
-
-### Seconda rifinitura playtest
-
-Continua partita nella console Home, a tutta larghezza sopra i tre comandi; il pulsante è assente senza salvataggio. Campo di gioco leggermente meno ingrandito, con sei unità di spazio aggiuntive fra recipiente e prossimo blob. Contorno 162 segmenti immutato: broad phase a gruppi e corridoi interni conservativi per le nuove geometrie; fixture legacy immutate. Il controllo canLaunch per la linea di mira viene effettuato solo durante la mira. CI UI confronta tre scene dense dei livelli arrotondati con bde5213, incluse tracce audio, e misura tempi JVM (non FPS Android).
-
-### Revisione dopo UI Preview 3
-
-Distanza di 22 unità virtuali tra recipiente e barra di lancio, 18 tra barra e console, senza ulteriore riduzione intenzionale della scala sui telefoni alti. Geometrie e solver invariati rispetto a b063794. Nelle build debug/anteprima il menu Pausa offre Copia dati prestazioni: intervalli frame, passi simulati, tempi UI/fisica/disegno, salvataggi per fasce di densità (0–4, 5–7, 8–10, 11–15, 16+). Misure locali su richiesta, nessun invio automatico; non equivalgono a tempi GPU. Segnalato rallentamento con 8–10 blob sul telefono, causa ancora da isolare. Non sostituire con altre ottimizzazioni non misurate.
