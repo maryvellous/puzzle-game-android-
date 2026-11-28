@@ -68,14 +68,16 @@ jobs:
         run: |
           set -euo pipefail
           reference=f14cf960a780cdadb803e67b43f61c86e709a91d
-          git fetch --no-tags --depth=1 origin "$reference"
+          previous=6ada1c2fa7b87b8c3c21220ebb34e6de5dc9b43b
+          git fetch --no-tags --depth=1 origin "$reference" "$previous"
           root=build/dense-scene
           pkg=app/src/main/java/com/maryvellous/lavablobs
-          mkdir -p "$root/reference" "$root/reference-classes" "$root/candidate-classes" "$root/results/reference" "$root/results/candidate"
+          mkdir -p "$root/reference" "$root/previous" "$root/reference-classes" "$root/previous-classes" "$root/candidate-classes" "$root/results/reference" "$root/results/previous" "$root/results/candidate"
           git archive "$reference" "$pkg" | tar -x -C "$root/reference"
-          for version in reference candidate; do
+          git archive "$previous" "$pkg" | tar -x -C "$root/previous"
+          for version in reference previous candidate; do
             source="$pkg"
-            if [[ "$version" == reference ]]; then source="$root/reference/$pkg"; fi
+            if [[ "$version" != candidate ]]; then source="$root/$version/$pkg"; fi
             javac -encoding UTF-8 -d "$root/$version-classes" \
               "$source"/{Blob,BlobWorld,Vessel,GameSpec,ContactProbe,ContactTracker,PhysicsAudioEvents,AudioPolicy}.java \
               "$source"/audio/*.java tools/audio_v2_java/DenseSceneCli.java
@@ -89,7 +91,7 @@ jobs:
             done
           done
           echo 'Dense fixture state hashes and event traces match across all three vessel shapes.' >> "$GITHUB_STEP_SUMMARY"
-          cat "$root/results/"{reference,candidate}/timing.txt >> "$GITHUB_STEP_SUMMARY"
+          cat "$root/results/"{reference,previous,candidate}/timing.txt >> "$GITHUB_STEP_SUMMARY"
       - name: Upload dense scene regression and timing data
         uses: actions/upload-artifact@v4
         with:
