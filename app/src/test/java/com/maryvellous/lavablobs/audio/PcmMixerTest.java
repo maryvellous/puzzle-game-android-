@@ -14,11 +14,11 @@ public class PcmMixerTest {
     @Test public void recyclingResetsFractionalPlaybackAndEnvelope(){
         float[] a=clip();
         PcmVoice reused=new PcmVoice();
-        reused.start(a,.8f,1.23f,false,true,WALL,true);
+        reused.start(a,.8f,1.23f,false,true,WALL);
         for(int i=0;i<97;i++)reused.sample();
         reused.release();
         assertTrue(reused.finished());assertEquals(0f,reused.sample(),0f);
-        reused.start(a,.48f,.7f,true,true,FUSION,false);
+        reused.start(a,.48f,.7f,true,true,FUSION);
         PcmVoice fresh=new PcmVoice(a,.48f,.7f,true,true,FUSION,false);
         while(!fresh.finished())assertEquals(fresh.sample(),reused.sample(),0f);
         assertTrue(reused.finished());assertTrue(reused.fusion);
