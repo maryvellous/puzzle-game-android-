@@ -51,8 +51,22 @@ public final class LavaView extends View {
     private int uiAction;
     private float touchX,touchY;
     private static final int UI_NONE=0,UI_SOUND=1,UI_MUSIC=2,UI_HELP=3,UI_PAUSE=4,UI_SHAKE=5,UI_EXTRA=6,UI_RETRY=7,UI_HOME=8,UI_NEXT=9;
-    private float panelTop(float h){return h-204f;}
-    private float visualDy(float h){return h-264f-world.bottom();}
+    private float panelTop(float h){return GameConsoleLayout.panelTop(h);}
+    private float panelY(float h,float y){return GameConsoleLayout.panelY(h,y);}
+    private Vessel layoutVessel;
+    private float layoutWidth;
+    private float visualScale(float h){
+        if(layoutVessel!=world.vessel){
+            layoutVessel=world.vessel;float width=0;
+            for(float x:layoutVessel.xs)width=Math.max(width,2*Math.abs(x-210));
+            layoutWidth=width;
+        }
+        return GameConsoleLayout.vesselScale(h,layoutWidth,world.bottom()-world.vessel.top);
+    }
+    private float screenX(float x,float h){return GameConsoleLayout.toScreenX(x,visualScale(h));}
+    private float screenY(float y,float h){return GameConsoleLayout.toScreenY(y,world.bottom(),visualScale(h),h);}
+    private float worldX(float x,float h){return GameConsoleLayout.toWorldX(x,visualScale(h));}
+    private float worldY(float y,float h){return GameConsoleLayout.toWorldY(y,world.bottom(),visualScale(h),h);}
     private float entryY(float h){return panelTop(h)-30f;}
     private boolean paused(){return modal!=null||lifecyclePaused;}
     private final GameSessionController gameSession;
@@ -245,7 +259,9 @@ public final class LavaView extends View {
         // Cosmetic whole-vessel wobble. The physical vessel and all collider
         // positions remain untouched; internal floating particles are unchanged.
         canvas.save();
-        canvas.translate(0,visualDy(h));
+        canvas.translate(210f,GameConsoleLayout.visualBottom(h));
+        canvas.scale(visualScale(h),visualScale(h));
+        canvas.translate(-210f,-world.bottom());
         if(shakeAge<.40f) {
             float fade=1f-shakeAge/.40f;
             canvas.translate((float)Math.sin(shakeAge*64f)*5.5f*fade,
@@ -511,6 +527,8 @@ public final class LavaView extends View {
     /** Bubbly HUD: quiet ivory header, colourful floating counters, spacious play. */
     private void drawHUD(Canvas c,float h) {
         int ink=theme.onSurface,muted=theme.onSurfaceMuted;
+        float headerOffset=Math.max(0,Math.min(14,(h-780)*.12f));
+        c.save();c.translate(0,headerOffset);
         String place=spec.endless?"INFINITA":spec.trial?"PROVA":"LIVELLO "+(spec.id+1);
         label(c,place,75,36,14,theme.text,true);
         bigNumber(c,spec.name.replace("Infinita · ",""),75,58,14,theme.text,132);
@@ -518,20 +536,21 @@ public final class LavaView extends View {
         iconButton(c,239,40,theme.forTier(5),"♫");
         iconButton(c,302,40,theme.forTier(4),"?");
         iconButton(c,365,40,theme.forTier(6),"Ⅱ");
-        float dy=visualDy(h),y=entryY(h),p=panelTop(h);
+        c.restore();
+        float y=entryY(h),p=panelTop(h);
         boolean blocked=world.blockedTime>0&&!world.gameOver;
         boolean valid=world.canLaunch(aimX);
         int danger=0xFFFFB0A0,entryInk=blocked||blockedFlash>0?danger:Palette.NEUTRAL_SURFACE;
         // Inlet mark follows the actual bottom segment, not the screen center.
         Vessel v=world.vessel;int edge=v.xs.length/2-1;
         line.setStrokeWidth(blocked?7:4);line.setStrokeCap(Paint.Cap.ROUND);line.setColor(entryInk);
-        c.drawLine(v.xs[edge+1]+3,v.bottom+dy,v.xs[edge]-3,v.bottom+dy,line);
+        c.drawLine(screenX(v.xs[edge+1]+3,h),screenY(v.bottom,h),screenX(v.xs[edge]-3,h),screenY(v.bottom,h),line);
         line.setStrokeCap(Paint.Cap.BUTT);
         if(aiming){
             line.setColor(Palette.alpha(valid?theme.forTier(4):danger,200));line.setStrokeWidth(2f);
             line.setPathEffect(new android.graphics.DashPathEffect(new float[]{7,11},0));
-            c.drawLine(aimX,v.bottom+dy-8,aimX,v.top+dy+10,line);line.setPathEffect(null);
-            if(valid&&draggingFromTray&&dragY<y-25)drawNextBubble(c,dragX,Math.max(v.top+dy+12,dragY),.76f);
+            c.drawLine(screenX(aimX,h),screenY(v.bottom,h)-8,screenX(aimX,h),screenY(v.top,h)+10,line);line.setPathEffect(null);
+            if(valid&&draggingFromTray&&dragY<y-25)drawNextBubble(c,dragX,Math.max(screenY(v.top,h)+12,dragY),.76f);
         }
         int launchFill=theme.forTier(6);
         hudPanel(c,24,y-24,396,y+24,22,blocked?0xFF702F36:launchFill);
@@ -539,30 +558,30 @@ public final class LavaView extends View {
         drawNextBubble(c,210,y,Math.min(1f,18f/(Blob.RADII[world.nextTier]*.76f)));
         label(c,blocked?"INGRESSO BLOCCATO":blockedFlash>0?"INGRESSO OCCUPATO":"PROSSIMO",110,y+4,blocked?13:12,launchInk,true);
         label(c,blocked?(int)Math.ceil(world.remainingSeconds())+" s":"TRASCINA",310,y+5,blocked?21:12,launchInk,true);
-        if(eraseMode)label(c,"TOCCA IL BLOB DA FAR SCOPPIARE",210,v.top+dy-10,13,theme.text,true);
+        if(eraseMode)label(c,"TOCCA IL BLOB DA FAR SCOPPIARE",210,screenY(v.top,h)-10,13,theme.text,true);
         hudPanel(c,0,p,W,h+28,30,Palette.NEUTRAL_SURFACE);
-        label(c,"PUNTI",100,p+23,12,muted,true);
-        bigNumber(c,Long.toString(world.score),100,p+56,29,ink,174);
-        label(c,spec.endless?"RECORD":spec.trial?"LANCI":"OBIETTIVO",306,p+23,12,muted,true);
+        label(c,"PUNTI",100,panelY(h,23),12,muted,true);
+        bigNumber(c,Long.toString(world.score),100,panelY(h,56),29,ink,174);
+        label(c,spec.endless?"RECORD":spec.trial?"LANCI":"OBIETTIVO",306,panelY(h,23),12,muted,true);
         String goal=spec.endless?Long.toString(Math.max(best,world.score)):spec.trial?Integer.toString(world.dropCount):Integer.toString(spec.minScore);
-        bigNumber(c,goal,306,p+56,24,ink,174);
+        bigNumber(c,goal,306,panelY(h,56),24,ink,174);
         if(!spec.endless&&!spec.trial){
-            hudPanel(c,23,p+69,397,p+75,3,0xFFC7BBC5);
+            hudPanel(c,23,panelY(h,69),397,panelY(h,75),3,0xFFC7BBC5);
             float fill=374f*Math.min(1f,(float)world.score/spec.minScore);
-            if(fill>0)hudPanel(c,23,p+69,23+fill,p+75,3,theme.forTier(4));
-            label(c,"Extra "+spec.extras(world.score,world.maxTierReached,world.mergeCount)+"/"+spec.totalExtras(),210,p+94,12,muted,true);
-        }else label(c,spec.endless?"Fusioni "+world.mergeCount:"Fusioni "+world.mergeCount,210,p+92,12,muted,false);
+            if(fill>0)hudPanel(c,23,panelY(h,69),23+fill,panelY(h,75),3,theme.forTier(4));
+            label(c,"Extra "+spec.extras(world.score,world.maxTierReached,world.mergeCount)+"/"+spec.totalExtras(),210,panelY(h,94),12,muted,true);
+        }else label(c,spec.endless?"Fusioni "+world.mergeCount:"Fusioni "+world.mergeCount,210,panelY(h,92),12,muted,false);
         int shake=theme.forTier(3),extra=spec.endless?theme.forTier(4):theme.forTier(5);
-        hudPanel(c,22,p+103,204,p+150,17,shake);
-        label(c,"≈   Scuoti",113,p+132,17,ConsoleUi.ink(shake),true);
+        hudPanel(c,22,panelY(h,103),204,panelY(h,150),17,shake);
+        label(c,"≈   Scuoti",113,panelY(h,132),17,ConsoleUi.ink(shake),true);
         if(spec.endless&&world.eraseCount==0)extra=0xFFC8BFC6;
-        hudPanel(c,216,p+103,398,p+150,17,extra);
-        if(eraseMode){line.setColor(ink);line.setStrokeWidth(2);c.drawRoundRect(216,p+103,398,p+150,17,17,line);}
-        label(c,spec.endless?"POP  ×"+world.eraseCount:"Extra",307,p+132,17,ConsoleUi.ink(extra),true);
-        label(c,"Taglie",42,p+166,10,muted,true);
+        hudPanel(c,216,panelY(h,103),398,panelY(h,150),17,extra);
+        if(eraseMode){line.setColor(ink);line.setStrokeWidth(2);c.drawRoundRect(216,panelY(h,103),398,panelY(h,150),17,17,line);}
+        label(c,spec.endless?"POP  ×"+world.eraseCount:"Extra",307,panelY(h,132),17,ConsoleUi.ink(extra),true);
+        label(c,"Taglie",42,panelY(h,166),10,muted,true);
         for(int i=0;i<9;i++){
             paint.setShader(null);paint.setStyle(Paint.Style.FILL);paint.setColor(theme.forTier(i));
-            c.drawCircle(31+44.75f*i,p+184,5.5f+i*1.38f,paint);
+            c.drawCircle(31+44.75f*i,panelY(h,184),5.5f+i*1.38f,paint);
         }
     }
     private void iconButton(Canvas c,float x,float y,int color,String label){
@@ -723,14 +742,15 @@ public final class LavaView extends View {
             if(y>=t+223&&y<=t+273){if(x>=47&&x<=203)return UI_RETRY;if(x>=217&&x<=373)return UI_HOME;}
             return UI_NONE;
         }
-        if(y>=15&&y<=65){
+        float headerOffset=Math.max(0,Math.min(14,(h-780)*.12f));
+        if(y>=15+headerOffset&&y<=65+headerOffset){
             if(x>=151&&x<=201)return UI_SOUND;
             if(x>=214&&x<=264)return UI_MUSIC;
             if(x>=277&&x<=327)return UI_HELP;
             if(x>=340&&x<=390)return UI_PAUSE;
         }
         float p=panelTop(h);
-        if(y>=p+103&&y<=p+150){if(x>=22&&x<=204)return UI_SHAKE;if(x>=216&&x<=398)return UI_EXTRA;}
+        if(y>=panelY(h,103)&&y<=panelY(h,150)){if(x>=22&&x<=204)return UI_SHAKE;if(x>=216&&x<=398)return UI_EXTRA;}
         return UI_NONE;
     }
     private void doAction(int a){
@@ -752,9 +772,10 @@ public final class LavaView extends View {
     }
     @Override public boolean onTouchEvent(MotionEvent event){
         if(getWidth()==0||getHeight()==0||paused())return false;
-        float sc=scale(),h=getHeight()/sc,dy=visualDy(h);
+        float sc=scale(),h=getHeight()/sc;
         float x=(event.getX()-offsetX())/sc,y=event.getY()/sc;
-        boolean inVessel=y>=world.vessel.top+dy-5&&y<=world.bottom()+dy+5&&x>=BlobWorld.LEFT&&x<=BlobWorld.RIGHT;
+        float wx=worldX(x,h),wy=worldY(y,h);
+        boolean inVessel=wy>=world.vessel.top-5&&wy<=world.bottom()+5&&wx>=BlobWorld.LEFT&&wx<=BlobWorld.RIGHT;
         switch(event.getActionMasked()){
             case MotionEvent.ACTION_DOWN:
                 gameSession.action(SystemClock.uptimeMillis());activePointerId=event.getPointerId(0);
@@ -765,14 +786,14 @@ public final class LavaView extends View {
                 boolean tray=x>=24&&x<=396&&Math.abs(y-entryY(h))<=24;
                 if(tray||inVessel){
                     aiming=true;draggingFromTray=tray;dragX=x;dragY=y;
-                    aimX=BlobWorld.clamp(tray?210:x,49,371);invalidate();
+                    aimX=BlobWorld.clamp(tray?210:wx,49,371);invalidate();
                 }
                 return true;
             case MotionEvent.ACTION_MOVE:
                 if(aiming){
                     int pointer=event.findPointerIndex(activePointerId);if(pointer>=0){
                         dragX=(event.getX(pointer)-offsetX())/sc;dragY=event.getY(pointer)/sc;
-                        aimX=BlobWorld.clamp(dragX,49,371);gameSession.action(SystemClock.uptimeMillis());invalidate();
+                        aimX=BlobWorld.clamp(worldX(dragX,h),49,371);gameSession.action(SystemClock.uptimeMillis());invalidate();
                     }
                 }return true;
             case MotionEvent.ACTION_POINTER_UP:
@@ -785,14 +806,14 @@ public final class LavaView extends View {
                 if(a!=UI_NONE){if(a==actionAt(x,y,h)&&Math.abs(y-touchY)<25)doAction(a);invalidate();return true;}
                 if(world.gameOver)return true;
                 if(eraseMode){
-                    if(inVessel&&Math.abs(y-touchY)<20&&Math.abs(x-touchX)<20&&world.eraseAt(x,y-dy)){
+                    if(inVessel&&Math.abs(y-touchY)<20&&Math.abs(x-touchX)<20&&world.eraseAt(wx,wy)){
                         pops.add(new PopFx(world.lastPoppedX,world.lastPoppedY,world.lastPoppedRadius,world.lastPoppedTier));
                         performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);popPress=1;eraseMode=false;saveCheckpoint();
                     }
                     invalidate();return true;
                 }
                 if(aiming&&inVessel){
-                    aimX=BlobWorld.clamp(x,49,371);
+                    aimX=BlobWorld.clamp(wx,49,371);
                     if(world.launch(aimX)){performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);saveCheckpoint();}
                     else blockedFlash=.9f;
                 }

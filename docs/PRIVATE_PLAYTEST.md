@@ -65,3 +65,7 @@ Classificare bug bloccanti, problemi UX, bilanciamento e preferenze personali. C
 - HUD: console fissa neutra, prossimo blob subito sotto il recipiente, avviso bloccato con countdown, punteggio/obiettivi, Scuoti e Extra/POP sopra la scala senza numeri. Pausa reale, aiuto, dettagli extra e risultato con prossimo livello. Suoni regolabili; volume musica salvato ma colonna sonora non inclusa.
 - Dodici recipienti storia: profili arrotondati 14–25; sagoma e contorno fisico coincidono. Geometrie precedenti conservate per test e Infinita. Ciambella rinviata. Obiettivi numerici ancora provvisori da valutare nei playtest.
 - Build isolata `uiPreview` (package `com.maryvellous.lavablobs.uipreview`), firmata debug; non sostituisce l'app installata. Main non va integrato prima del collaudo dell'autrice. Le vecchie partite storia in corso non vengono ripristinate su geometrie incompatibili; i progressi restano conservati nell'app originale.
+
+### Rifinitura dopo il primo playtest UI
+
+Wordmark organico con campo di deformazione continuo e movimento lento, stessi font e quattro colori per tema; suggerimento di scorrimento Home che scompare al primo avanzamento verticale e resta disattivato. Contorni delle miniature bloccate più leggibili. HUD adattivo: console più alta sui display lunghi, scala visuale uniforme del recipiente e coordinate touch invertite nella stessa trasformazione. Nessuna modifica alle dimensioni nel mondo fisico, alla forma o alle regole.

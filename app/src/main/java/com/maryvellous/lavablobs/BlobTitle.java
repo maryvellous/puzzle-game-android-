@@ -12,23 +12,45 @@ import android.graphics.Typeface;
  */
 final class BlobTitle {
     private BlobTitle() {}
-    // Transform complete vector glyphs, never resample their individual contours.
     static int backing(int index){return index==0?8:index==1?5:8;}
-    static void drawHome(Canvas c,Paint letters,Paint paint,Path glyph,Palette.Theme theme,int index,float t,float size,float baseline){
+    /**
+     * Organic wordmark: retain the original typeface and contours, but use
+     * a smooth displacement field in glyph coordinates, not tangent-based
+     * offsets along contours. All closed paths remain closed and counters
+     * use the same field as their surrounding outline.
+     */
+    static void drawHome(Canvas c,Paint letters,Paint paint,Path glyph,Path warped,
+            Palette.Theme theme,int index,float t,float size,float baseline){
         Paint.Align align=letters.getTextAlign();
         letters.setTextAlign(Paint.Align.LEFT);
-        letters.setTypeface(Typeface.create("sans-serif-black",Typeface.BOLD));letters.setTextSize(size);
+        letters.setTypeface(Typeface.create("sans-serif-black",Typeface.BOLD));
+        letters.setTextSize(size);
         String word="Lava Blob";float x=(420-letters.measureText(word))*.5f;
         int[] colors=index==0?new int[]{1,2,4,6}:index==1?new int[]{2,3,4,6}:new int[]{0,1,6,7};
+        float unit=size/58f;
+        float[] pos=new float[2];
+        PathMeasure measure=new PathMeasure();
         for(int i=0;i<word.length();i++){
             String ch=word.substring(i,i+1);float advance=letters.measureText(ch);
             if(!ch.equals(" ")){
                 glyph.reset();letters.getTextPath(ch,0,1,x,baseline,glyph);
-                float wave=(float)Math.sin(t*.85f+i*.7f);
-                c.save();c.translate(0,wave*.8f);
-                c.scale(1f+wave*.012f,1f-wave*.015f,x+advance*.5f,baseline-size*.42f);
+                warped.reset();warped.setFillType(glyph.getFillType());measure.setPath(glyph,true);
+                do{
+                    float len=measure.getLength();if(len<=0)continue;
+                    int steps=Math.max(16,(int)Math.ceil(len/(1.15f*unit)));
+                    // Sample [0,length), then close exactly to the first point.
+                    for(int j=0;j<steps;j++){
+                        if(!measure.getPosTan(len*j/steps,pos,null))continue;
+                        float u=(pos[0]-x)/unit,v=(pos[1]-baseline)/unit;
+                        float dx=unit*(float)(2.8*Math.sin(v*.092+i*.83)+.8*Math.sin(u*.075+v*.06+t*.62));
+                        float dy=unit*(float)(2.6*Math.sin(u*.13+i*.9)+.65*Math.sin(v*.1+t*.72+i));
+                        if(j==0)warped.moveTo(pos[0]+dx,pos[1]+dy);
+                        else warped.lineTo(pos[0]+dx,pos[1]+dy);
+                    }
+                    warped.close();
+                }while(measure.nextContour());
                 paint.setShader(null);paint.setStyle(Paint.Style.FILL);paint.setColor(theme.forTier(colors[i%4]));
-                c.drawPath(glyph,paint);c.restore();
+                c.drawPath(warped,paint);
             }x+=advance;
         }
         letters.setTextAlign(align);

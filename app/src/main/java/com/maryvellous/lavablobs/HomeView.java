@@ -26,7 +26,11 @@ public final class HomeView extends View {
     private Palette.Theme theme;
     private int selectedTheme;
     private final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG),letter=new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Path path=new Path(),glyph=new Path();
+    private final Path path=new Path(),glyph=new Path(),warped=new Path();
+    private final android.content.SharedPreferences uiPreferences;
+    private boolean showScrollHint;
+    private float hintAlpha=1f;
+    private ValueAnimator hintAnimator;
     private final HashMap<Integer,Vessel> miniatures=new HashMap<>();
     private final long start=System.nanoTime();
     private boolean endless,dragging,carouselGesture;
@@ -36,7 +40,10 @@ public final class HomeView extends View {
     private int pointer=MotionEvent.INVALID_POINTER_ID;
     HomeView(Context context,ProgressStore progress,Listener listener,Runnable resume,GameSave gameSave){
         super(context);this.progress=progress;this.listener=listener;this.resume=resume;
+        uiPreferences=context.getSharedPreferences("lava_blobs",Context.MODE_PRIVATE);
+        showScrollHint=!uiPreferences.getBoolean("home_carousel_swiped_v1",false);
         saved=gameSave.peek();themeStore=new ThemeStore(context);selectedTheme=themeStore.selection();theme=themeStore.current();
+        if(!showScrollHint)hintAlpha=0;
         storyPosition=progress.highestUnlocked();endless=saved!=null&&saved.spec.endless;
         if(endless)for(int i=0;i<GameSpec.ENDLESS.length;i++)if(GameSpec.ENDLESS[i].id==saved.spec.id)endlessPosition=i;
         position=endless?endlessPosition:storyPosition;setLayerType(View.LAYER_TYPE_HARDWARE,null);
@@ -59,7 +66,7 @@ public final class HomeView extends View {
         c.drawColor(Palette.BACKGROUND_TOP);c.save();c.translate(offX(),0);c.scale(scale(),scale());
         flat(c,22,22,398,99,32,theme.forTier(BlobTitle.backing(selectedTheme)));
         float t=ValueAnimator.areAnimatorsEnabled()?(System.nanoTime()-start)/1e9f:0;
-        BlobTitle.drawHome(c,letter,paint,glyph,theme,selectedTheme,t,55,79);
+        BlobTitle.drawHome(c,letter,paint,glyph,warped,theme,selectedTheme,t,55,79);
         textCentered(c,endless?"Scegli un recipiente":"Scegli un livello",210,122,15,theme.text,true);
         if(saved!=null){
             flat(c,22,138,398,196,23,Palette.NEUTRAL_SURFACE);
@@ -71,6 +78,15 @@ public final class HomeView extends View {
         c.save();c.clipRect(0,top(),W,bottom());
         int f=focus();for(int i=0;i<specs().length;i++)if(i!=f&&Math.abs(i-position)<2.5f)drawCard(c,i);
         drawCard(c,f);c.restore();
+        if(!endless&&hintAlpha>.01f){
+            float gap=center()-cardHeight()*.5f-top();
+            if(f==0&&gap>=41){
+                float y=top()+gap*.46f;
+                int color=Palette.alpha(theme.text,Math.round(235*hintAlpha));
+                textCentered(c,"Scorri in basso per gli altri livelli",210,y,13,color,false);
+                textCentered(c,"↓",210,y+21,19,color,true);
+            }
+        }
         textCentered(c,"‹",70,consoleTop()-13,24,theme.text,true);
         textCentered(c,(f+1)+" / "+specs().length,210,consoleTop()-15,13,theme.text,true);
         textCentered(c,"›",350,consoleTop()-13,24,theme.text,true);
@@ -103,6 +119,13 @@ public final class HomeView extends View {
         flat(c,196,y+16,324,y+68,23,colors);textCentered(c,"Temi",260,y+49,18,ConsoleUi.ink(colors),true);
         flat(c,339,y+16,397,y+68,24,help);textCentered(c,"?",368,y+51,24,ConsoleUi.ink(help),true);
     }
+    private void dismissScrollHint(){
+        if(!showScrollHint)return;showScrollHint=false;
+        uiPreferences.edit().putBoolean("home_carousel_swiped_v1",true).apply();
+        if(!ValueAnimator.areAnimatorsEnabled()){hintAlpha=0;return;}
+        hintAnimator=ValueAnimator.ofFloat(hintAlpha,0);hintAnimator.setDuration(180);
+        hintAnimator.addUpdateListener(a->{hintAlpha=(float)a.getAnimatedValue();invalidate();});hintAnimator.start();
+    }
     private void stopAnimation(){if(animator!=null){animator.cancel();animator=null;}}
     private void snap(int n){
         stopAnimation();int dest=HomeCarousel.nearest(n,specs().length);
@@ -118,12 +141,12 @@ public final class HomeView extends View {
             case MotionEvent.ACTION_DOWN:pointer=e.getPointerId(0);downX=x;downY=y;dragging=false;carouselGesture=y>=top()&&y<=bottom();if(carouselGesture)stopAnimation();downPosition=position;return true;
             case MotionEvent.ACTION_MOVE:{int p=e.findPointerIndex(pointer);if(p<0)return true;y=e.getY(p)/scale();
                 if(carouselGesture&&Math.abs(y-downY)>7)dragging=true;
-                if(dragging){position=HomeCarousel.clamp(downPosition+(downY-y)/step(),specs().length);invalidate();}return true;}
+                if(dragging){position=HomeCarousel.clamp(downPosition+(downY-y)/step(),specs().length);if(!endless&&position>downPosition+.08f)dismissScrollHint();invalidate();}return true;}
             case MotionEvent.ACTION_POINTER_UP:if(e.getPointerId(e.getActionIndex())==pointer){pointer=MotionEvent.INVALID_POINTER_ID;if(carouselGesture)snap(focus());}return true;
             case MotionEvent.ACTION_CANCEL:pointer=MotionEvent.INVALID_POINTER_ID;if(carouselGesture)snap(focus());return true;
             case MotionEvent.ACTION_UP:
                 if(pointer==MotionEvent.INVALID_POINTER_ID)return true;pointer=MotionEvent.INVALID_POINTER_ID;
-                if(dragging){snap(HomeCarousel.target(downPosition,position,downY-y,step(),specs().length));return true;}
+                if(dragging){int target=HomeCarousel.target(downPosition,position,downY-y,step(),specs().length);if(!endless&&target>HomeCarousel.nearest(downPosition,specs().length))dismissScrollHint();snap(target);return true;}
                 if(Math.abs(x-downX)>18||Math.abs(y-downY)>18)return true;
                 performClick();
                 if(y>=consoleTop()&&downY>=consoleTop()){if(x<190)switchMode();else if(x<331)showThemes();else showHelp();return true;}
@@ -154,7 +177,7 @@ public final class HomeView extends View {
         ConsoleUi.action(body,"Copia dati partite",theme.forTier(5),progress::copyReport);
         modal=ConsoleUi.sheet(getContext(),"Come si gioca",body);modal.setOnDismissListener(d->modal=null);modal.show();
     }
-    @Override protected void onDetachedFromWindow(){stopAnimation();if(modal!=null)modal.dismiss();super.onDetachedFromWindow();}
+    @Override protected void onDetachedFromWindow(){stopAnimation();if(hintAnimator!=null)hintAnimator.cancel();if(modal!=null)modal.dismiss();super.onDetachedFromWindow();}
     private Vessel miniature(int shape) {
         Vessel v=miniatures.get(shape);
         if(v==null){v=new Vessel(shape,850f);miniatures.put(shape,v);}
@@ -197,7 +220,7 @@ public final class HomeView extends View {
         c.restore();
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeWidth(1.7f);
-        paint.setColor(Palette.alpha(theme.onSurfaceMuted,locked?125:205));
+        paint.setColor(locked?Palette.alpha(Palette.VESSEL_OUTLINE,165):Palette.alpha(theme.onSurfaceMuted,205));
         c.drawPath(path,paint);
         paint.setStyle(Paint.Style.FILL);
         c.restore();
