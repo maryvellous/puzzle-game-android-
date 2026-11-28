@@ -1,5 +1,7 @@
 # Report 01 — Aggregazione acustica delle interazioni
-**27 novembre 2026 · Proposta tecnica, non ancora implementata · Baseline 1.1.0 / Audio V2.3**
+**Documento storico · proposta del 27 novembre 2026**
+
+> Superato come piano operativo: aggregazione adottata nella baseline #238. Per lo stato vigente consultare [specifica audio](AUDIO_ENGINE_V2_MATERIAL_BLOOP.md) e [roadmap](TECHNICAL_ROADMAP.md). Il resto descrive la situazione e le proposte dell'audit originario.
 
 ## 1. Obiettivo e perimetro
 Il primo stadio è concluso: l'utente ha approvato V2.3 su telefono e main è stato promosso con DSP identico alla preview. La [CI main](https://github.com/maryvellous/puzzle-game-android-/actions/runs/46060029269) è verde. Durante stress test l'utente sente una lieve frittura quando molte collisioni coincidono. Non abbiamo registrazione, profilo del dispositivo né misure di gain reduction per attribuirla con certezza. L'obiettivo della fase 2 è fare suonare la materia nel suo insieme, senza appiattire il suono di una singola interazione. Nessuna riscrittura della fisica, dei campioni o del mix approvato; nessun intervento su salvataggi o pubblicazione.
