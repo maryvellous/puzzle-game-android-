@@ -23,28 +23,25 @@ final class CheckpointWriter<T> {
             if(!drainScheduled){drainScheduled=true;executor.execute(this::drain);}
         }
     }
+    // Worker-owned; reported at the next barrier if no later write succeeds.
+    private RuntimeException lastFailure;
     private void drain(){
-        try{
-            while(true){
-                T next;
-                synchronized(lock){
-                    next=pending;pending=null;
-                    if(next==null){drainScheduled=false;return;}
-                }
-                write.accept(next);
-            }
-        }catch(RuntimeException failure){
+        while(true){
+            T next;
             synchronized(lock){
-                drainScheduled=false;
-                if(pending!=null){drainScheduled=true;executor.execute(this::drain);}
+                next=pending;pending=null;
+                if(next==null){drainScheduled=false;return;}
             }
-            throw failure;
+            try{write.accept(next);lastFailure=null;}
+            catch(RuntimeException failure){lastFailure=failure;}
         }
     }
     /** Only the owner thread submits; no new offers while awaiting a barrier. */
-    Future<?> barrier(){synchronized(lock){return executor.submit(()->{});}}
+    Future<?> barrier(){
+        synchronized(lock){return executor.submit(()->{if(lastFailure!=null)throw lastFailure;});}
+    }
     /** Drop queued writes but let an in-flight atomic write finish before clear. */
     Future<?> discardAndRun(Runnable action){
-        synchronized(lock){pending=null;return executor.submit(action);}
+        synchronized(lock){pending=null;return executor.submit(()->{action.run();lastFailure=null;});}
     }
 }
