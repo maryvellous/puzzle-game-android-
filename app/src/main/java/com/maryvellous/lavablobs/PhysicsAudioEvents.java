@@ -17,7 +17,7 @@ final class PhysicsAudioEvents implements ContactProbe.Listener {
     private final Runnable reset;
     PhysicsAudioEvents(Consumer<AudioEvent> sink,IntSupplier generation,LongSupplier clock,Runnable reset){
         this.sink=sink;this.generation=generation;this.clock=clock;this.reset=reset;
-        tracker=new ContactTracker(this::transition);
+        tracker=new ContactTracker(this::transition,true);
     }
     private void emit(AudioEvent.Type type,float time,int a,int b,float normal,float slip,
                       float compression,float radiusA,float radiusB,float dt,float bulkMotion){
