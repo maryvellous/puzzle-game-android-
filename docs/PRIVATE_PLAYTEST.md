@@ -28,6 +28,10 @@ Base: sorgente b73e97e, filmato playtest #238 (HUD/vasetto); Home e altre forme 
 
 Priorità proposta: correggere azioni accidentali e feedback di lancio/HUD; definire archetipi e progressione prima di fissare schede/miniature Home e contenuti onboarding; esplorazione visiva in parallelo. Verificare leggibilità, contrasto e dimensioni touch su più schermi; Canvas richiede valutazione di accessibilità semantica, non solo palette. Misurare con tre tester: primo lancio, prima fusione, comprensione shake, obiettivi, recupero ingresso, passaggio livello; osservazione spontanea senza spiegazioni preventive. Proposte, non task di implementazione autorizzati.
 
+## HUD — riferimento definitivo
+
+[Console interattiva](mockups/console.html): layout scelto dall'autrice. Superficie neutra invariabile, pulsanti nei colori intermedi delle palette (mai colore 1), legenda delle nove taglie base senza contorni, numeri o target evidenziato. Ordine dall'alto: recipiente, prossimo blob ancorato al bordo inferiore con indicatore ingresso, punteggio/obiettivi, comandi Scuoti e Extra (oppure POP in Infinita), scala taglie in fondo. Recipiente traslato verso l'alto di 6 px nel mockup, senza ridimensionamento; calibrare l'equivalente in coordinate Android. Ingresso bloccato ben evidente con countdown; suoni e musica indipendenti, pannello ? con scala e spiegazione breve. Il prototipo contiene scenari illustrativi e non implementa fisica, musica o gameplay. Le forme sono ancora concept, non approvate come geometrie fisiche. Layout di riferimento per futura implementazione, non codice Android.
+
 ## Regressione audio e lifecycle
 
 - Preview .audioaggregation: banner AUDIO · REFINED CLUSTER · PRONTO; build normale senza banner.
