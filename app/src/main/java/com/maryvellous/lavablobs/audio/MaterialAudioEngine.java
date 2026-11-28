@@ -56,7 +56,7 @@ public final class MaterialAudioEngine {
     private final float[][] gelImpacts=new float[BloopMaterialBank.SOURCE_COUNT][];
     private int wallIndex;
     private final Map<Long,Pair> pairs=new HashMap<>();
-    public enum MixProfile { APPROVED, REFINED, CUBIC }
+    public enum MixProfile { APPROVED, REFINED }
     public enum VoiceFamily { FUSION, GEL, WALL, SQUISH, LAUNCH, POP }
     private final PcmMixer mixer;
     private final AcousticAggregator aggregator;
@@ -67,11 +67,16 @@ public final class MaterialAudioEngine {
     /** Perceptual control after the limiter. */
     public void setOutputVolumePercent(int percent){mixer.setOutputVolumePercent(percent);}
 
+    /** Single gameplay configuration; historical controls are for offline tests only. */
+    public static MaterialAudioEngine forGameplay(BloopMaterialBank bank,float[] releaseSwoosh){
+        return new MaterialAudioEngine(bank,releaseSwoosh,true,MixProfile.REFINED);
+    }
+
     public MaterialAudioEngine(BloopMaterialBank bank) {this(bank,null);}
 
     public MaterialAudioEngine(BloopMaterialBank bank,float[] releaseSwoosh) {this(bank,releaseSwoosh,false);}
 
-    /** Aggregation is experimental; default construction preserves V2.3. */
+    /** Historical reference constructor for regression tests and offline tools. */
     public MaterialAudioEngine(BloopMaterialBank bank,float[] releaseSwoosh,boolean aggregation) {
         this(bank,releaseSwoosh,aggregation,MixProfile.APPROVED);
     }
