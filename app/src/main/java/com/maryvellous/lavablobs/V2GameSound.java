@@ -268,6 +268,7 @@ final class V2GameSound implements GameSound, ContactProbe.Listener {
                             " limitedFrames="+engine.limitedFrames()+" renderedFrames="+engine.renderedFrames()+
                             " peakGainStep="+engine.peakGainStep()+" peakSampleStep="+engine.peakSampleStep()+
                             " mixLatencyFrames="+engine.mixLatencyFrames()+
+                            " voiceObjectsAllocated="+engine.allocatedVoices()+" voicePoolHits="+engine.reusedVoices()+
                             " peakVoices="+engine.peakVoices()+" peakSecondary="+engine.peakShortVoices()+
                             " clusterCandidates="+engine.aggregateCandidates()+" groups="+engine.aggregateGroups()+
                             " collapsed="+engine.aggregateCollapsed()+" rejectedClusters="+engine.aggregateRejected()+
