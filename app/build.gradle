@@ -15,6 +15,8 @@ android {
         versionCode 18
         versionName '1.1.0'
         buildConfigField 'boolean', 'AUDIO_DIAGNOSTICS', 'false'
+        def revision = System.getenv('GITHUB_SHA') ?: 'local'
+        buildConfigField 'String', 'BUILD_REVISION', '"' + revision + '"'
         manifestPlaceholders = [appLabel: 'Lava Blob']
     }
 
