@@ -70,4 +70,23 @@ public class AcousticAggregationTest {
         agg.cancelBlob(2);agg.flushDue(10000);
         assertEquals(1,agg.cancelled());assertEquals(0,agg.emitted());
     }
+    @Test public void groupPoolSurvivesCapacityFlushCancellationAndReset(){
+        List<Float> emitted=new ArrayList<>();
+        AcousticAggregator agg=new AcousticAggregator((clip,gain,rate)->{emitted.add(gain);return true;});
+        float[] sound={.2f};
+        for(int round=0;round<3;round++){
+            // 64 contributions per group, 32 active groups; force oldest flush.
+            for(int i=0;i<64*33;i++)
+                assertTrue(agg.offer(AcousticAggregator.Family.SQUISH,0,i+1,9000,sound,.2f,1f));
+            assertEquals(1,agg.emitted());
+            agg.cancelBlob(9000);
+            assertEquals(64*32,agg.cancelled());
+            agg.flushDue(2000);assertEquals(1,agg.emitted());
+            // A recycled group must not inherit previous gain/rate or cancellation.
+            agg.offer(AcousticAggregator.Family.WALL,2000,sound,.3f,.7f);
+            agg.flushDue(3000);assertEquals(2,agg.emitted());
+            assertEquals(.3f,emitted.get(emitted.size()-1),0f);
+            agg.reset();assertEquals(0,agg.candidates());
+        }
+    }
 }
