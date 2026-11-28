@@ -112,6 +112,7 @@ public final class MainActivity extends Activity implements SensorEventListener 
             game.saveCheckpoint();
             game.pauseClock();
             game.pauseAudio();
+            session.flush(); // Preserve the latest checkpoint before backgrounding.
         }
         stopSensor();
         super.onPause();
