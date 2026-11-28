@@ -9,7 +9,7 @@ import java.util.*;
 /** Deterministic full-vessel fixture, compiled against both reference and candidate.
  * Timings exclude snapshot hashing, CSV writing and warmup. Never an Android benchmark. */
 public final class DenseSceneCli {
-    private static final int FRAMES=180, WARMUP=2, RUNS=3;
+    private static final int WINDOWS=6, WINDOW_FRAMES=30, FRAMES=WINDOWS*WINDOW_FRAMES, WARMUP=2, RUNS=3;
     private static void state(DataOutputStream out,BlobWorld w)throws IOException{
         out.writeInt(w.blobs.size());out.writeLong(w.score);
         out.writeInt(w.mergeCount);out.writeInt(w.nextTier);out.writeInt(w.nextBlobId);
@@ -26,8 +26,8 @@ public final class DenseSceneCli {
             out.writeInt(a.a.id);out.writeInt(a.b.id);out.writeInt(a.ai);out.writeInt(a.bi);out.writeFloat(a.age);
         }
     }
-    private static BlobWorld scene(int shape,List<AudioEvent> events){
-        BlobWorld w=new BlobWorld(new Random(90031+shape),GameSpec.ENDLESS[shape]);
+    private static BlobWorld scene(int shape,int window,List<AudioEvent> events){
+        BlobWorld w=new BlobWorld(new Random(90031+shape+31L*window),GameSpec.ENDLESS[shape]);
         w.setHeight(850f);w.disableLegacyImpactCollection();
         w.setContactProbe(new PhysicsAudioEvents(events::add,()->1,()->0,()->{}));
         for(int row=0;row<7;row++)for(int col=0;col<6;col++){
@@ -42,36 +42,42 @@ public final class DenseSceneCli {
     private static double ms(long n){return n/1e6;}
     private static void run(int shape,Path output)throws Exception{
         long[] times=new long[FRAMES*RUNS];int at=0;
-        String stateHash=null,traceHash=null;int eventsCount=0,minBlobs=99,maxBlobs=0;
+        String stateHash=null,traceHash=null;int eventsCount=0,minBlobs=99,maxBlobs=0,denseFrames=0;
         for(int r=-WARMUP;r<RUNS;r++){
-            List<AudioEvent> events=new ArrayList<>();
-            BlobWorld w=scene(shape,events);
-            maxBlobs=Math.max(maxBlobs,w.blobs.size());
-            MessageDigest states=MessageDigest.getInstance("SHA-256");
+            MessageDigest states=MessageDigest.getInstance("SHA-256"),traces=MessageDigest.getInstance("SHA-256");
+            int runEvents=0,runDense=0;
             try(DataOutputStream snapshots=new DataOutputStream(new DigestOutputStream(OutputStream.nullOutputStream(),states))){
-                for(int frame=0;frame<FRAMES;frame++){
-                    long start=System.nanoTime();
-                    if(frame%30==0)w.shake((frame%60==0?5f:-5f),-3f,4f);
-                    w.tick(1f/60f);
-                    long elapsed=System.nanoTime()-start;
-                    if(r>=0)times[at++]=elapsed;
-                    state(snapshots,w);
-                    minBlobs=Math.min(minBlobs,w.blobs.size());maxBlobs=Math.max(maxBlobs,w.blobs.size());
+                for(int window=0;window<WINDOWS;window++){
+                    List<AudioEvent> events=new ArrayList<>();
+                    BlobWorld w=scene(shape,window,events);
+                    maxBlobs=Math.max(maxBlobs,w.blobs.size());
+                    for(int frame=0;frame<WINDOW_FRAMES;frame++){
+                        long start=System.nanoTime();
+                        if(frame==0)w.shake((window%2==0?5f:-5f),-3f,4f);
+                        w.tick(1f/60f);
+                        long elapsed=System.nanoTime()-start;
+                        if(r>=0)times[at++]=elapsed;
+                        state(snapshots,w);
+                        minBlobs=Math.min(minBlobs,w.blobs.size());maxBlobs=Math.max(maxBlobs,w.blobs.size());
+                        if(w.blobs.size()>=20)runDense++;
+                    }
+                    StringWriter trace=new StringWriter();AudioTrace.write(trace,events);
+                    byte[] traceBytes=trace.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                    traces.update(traceBytes);runEvents+=events.size();
+                    if(r==RUNS-1)Files.write(output.resolve("dense-"+shape+"-"+window+"-events.csv"),traceBytes);
                 }
             }
-            String sh=hex(states.digest());
-            StringWriter trace=new StringWriter();AudioTrace.write(trace,events);
-            String th=hex(MessageDigest.getInstance("SHA-256").digest(trace.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+            String sh=hex(states.digest()),th=hex(traces.digest());
             if(stateHash!=null&&(!stateHash.equals(sh)||!traceHash.equals(th)))throw new IllegalStateException("Nondeterministic scene");
-            stateHash=sh;traceHash=th;eventsCount=events.size();
-            if(r==RUNS-1)Files.writeString(output.resolve("dense-"+shape+"-events.csv"),trace.toString());
+            stateHash=sh;traceHash=th;eventsCount=runEvents;denseFrames=runDense;
         }
-        if(maxBlobs!=42||minBlobs<12||eventsCount<100)throw new IllegalStateException("Fixture not sufficiently dense");
+        if(maxBlobs!=42||denseFrames<60||eventsCount<100)
+            throw new IllegalStateException("Fixture not sufficiently dense: blobs="+minBlobs+".."+maxBlobs+" denseFrames="+denseFrames+" events="+eventsCount);
         Arrays.sort(times);
         double avg=0;for(long n:times)avg+=ms(n);avg/=times.length;
         Files.writeString(output.resolve("dense-"+shape+"-hashes.txt"),stateHash+"\n"+traceHash+"\n");
-        System.out.printf(Locale.ROOT,"DENSE shape=%d frames=%d blobs=%d..%d events=%d mean_ms=%.3f p50_ms=%.3f p95_ms=%.3f p99_ms=%.3f max_ms=%.3f state=%s trace=%s%n",
-            shape,times.length,minBlobs,maxBlobs,eventsCount,avg,ms(times[times.length/2]),ms(times[(int)Math.ceil(times.length*.95)-1]),ms(times[(int)Math.ceil(times.length*.99)-1]),ms(times[times.length-1]),stateHash,traceHash);
+        System.out.printf(Locale.ROOT,"DENSE shape=%d frames=%d blobs=%d..%d denseFrames=%d events=%d mean_ms=%.3f p50_ms=%.3f p95_ms=%.3f p99_ms=%.3f max_ms=%.3f state=%s trace=%s%n",
+            shape,times.length,minBlobs,maxBlobs,denseFrames,eventsCount,avg,ms(times[times.length/2]),ms(times[(int)Math.ceil(times.length*.95)-1]),ms(times[(int)Math.ceil(times.length*.99)-1]),ms(times[times.length-1]),stateHash,traceHash);
     }
     public static void main(String[] args)throws Exception{
         if(args.length!=1)throw new IllegalArgumentException("Usage: DenseSceneCli outputDir");
