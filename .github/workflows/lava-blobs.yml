@@ -68,7 +68,7 @@ jobs:
         run: |
           set -euo pipefail
           reference=f14cf960a780cdadb803e67b43f61c86e709a91d
-          previous=6ada1c2fa7b87b8c3c21220ebb34e6de5dc9b43b
+          previous=43aca8e1927457621d292508ed9b1ba5dc428cf2
           git fetch --no-tags --depth=1 origin "$reference" "$previous"
           root=build/dense-scene
           pkg=app/src/main/java/com/maryvellous/lavablobs
@@ -138,6 +138,22 @@ jobs:
           java -cp build/runtime-replay/classes com.maryvellous.lavablobs.audio.RuntimeReplayCli \
             build/runtime-replay/decoded app/build/audio_v2/runtime_events_v1.csv build/runtime-replay/results
           cp app/build/audio_v2/runtime_events_v1.csv build/runtime-replay/results/
+          # Compile the exact phone-approved source and its replay tool separately.
+          approved=43aca8e1927457621d292508ed9b1ba5dc428cf2
+          git archive "$approved" tools/audio_v2_java/RuntimeReplayCli.java | tar -x -C build/dense-scene/previous
+          mkdir -p build/runtime-replay/approved-classes build/runtime-replay/approved-results
+          javac -encoding UTF-8 -d build/runtime-replay/approved-classes \
+            build/dense-scene/previous/app/src/main/java/com/maryvellous/lavablobs/audio/*.java \
+            build/dense-scene/previous/tools/audio_v2_java/RuntimeReplayCli.java
+          java -cp build/runtime-replay/approved-classes com.maryvellous.lavablobs.audio.RuntimeReplayCli \
+            build/runtime-replay/decoded app/build/audio_v2/runtime_events_v1.csv build/runtime-replay/approved-results
+          for file in build/runtime-replay/results/*.wav; do
+            cmp "$file" "build/runtime-replay/approved-results/$(basename "$file")"
+          done
+          for dir in build/runtime-replay/results/*-dry-stems; do
+            diff -r "$dir" "build/runtime-replay/approved-results/$(basename "$dir")"
+          done
+          echo 'Gameplay mix and retained comparison WAVs match phone-approved #238 byte for byte.' >> "$GITHUB_STEP_SUMMARY"
           echo 'Runtime replay (desktop decode, shared event adapter/scheduler/DSP):' >> "$GITHUB_STEP_SUMMARY"
           cat build/runtime-replay/results/metrics.csv >> "$GITHUB_STEP_SUMMARY"
       - name: Upload versioned runtime replay metrics and listening comparison
