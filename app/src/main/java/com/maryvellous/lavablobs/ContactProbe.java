@@ -118,10 +118,11 @@ final class ContactProbe {
     long contactMetricRequests(){return contactMetricRequests;}
 
     private static final class Accumulator {
-        final Blob a,b;
+        Blob a,b;
         float x,y,nx,ny,peakApproach,slide,localCompression;
         int samples;
-        Accumulator(Blob first, Blob second) {
+        void start(Blob first, Blob second) {
+            x=y=nx=ny=peakApproach=slide=localCompression=0f;samples=0;
             if(first.id<second.id) { a=first; b=second; }
             else { a=second; b=first; }
         }
@@ -130,6 +131,17 @@ final class ContactProbe {
     private final Listener listener;
     // LinkedHashMap keeps contact order deterministic for offline traces.
     private final Map<Long,Accumulator> contacts=new LinkedHashMap<>();
+    private final ArrayDeque<Accumulator> freeAccumulators=new ArrayDeque<>();
+    private long lastPairKey;
+    private Accumulator lastPair;
+    private void clearContacts(){
+        lastPair=null;lastPairKey=0;
+        for(Accumulator a:contacts.values()){
+            a.a=a.b=null;
+            if(freeAccumulators.size()<512)freeAccumulators.addLast(a);
+        }
+        contacts.clear();
+    }
 
     ContactProbe(Listener listener) {
         if(listener==null)throw new IllegalArgumentException("Missing probe listener");
@@ -151,7 +163,7 @@ final class ContactProbe {
     }
     private final Map<Long,WallContact> wallStep=new LinkedHashMap<>();
     private final Map<Long,WallState> wallStates=new LinkedHashMap<>();
-    void beginStep() {contacts.clear();wallStep.clear();}
+    void beginStep() {clearContacts();wallStep.clear();}
 
     void observeWall(Blob b,int side,float nx,float ny) {
         float vx=0f,vy=0f;
@@ -188,11 +200,15 @@ final class ContactProbe {
         if(source.id<=0||target.id<=0||source.id==target.id)
             throw new IllegalStateException("Contact requires distinct registered blob IDs");
         long key=BlobWorld.pairKey(source.id,target.id);
-        Accumulator a=contacts.get(key);
+        // Projections for a pair are consecutive, including reversed directions.
+        // Avoid a boxed Long lookup on every membrane vertex.
+        Accumulator a=lastPair!=null&&lastPairKey==key?lastPair:contacts.get(key);
         if(a==null) {
-            a=new Accumulator(source,target);
-            contacts.put(key,a);
+            a=freeAccumulators.pollLast();
+            if(a==null)a=new Accumulator();
+            a.start(source,target);contacts.put(key,a);
         }
+        lastPair=a;lastPairKey=key;
         int next=(edgeNode+1)%Blob.NODES;
         float tvx=target.vx[edgeNode]*(1f-t)+target.vx[next]*t;
         float tvy=target.vy[edgeNode]*(1f-t)+target.vy[next]*t;
@@ -221,7 +237,7 @@ final class ContactProbe {
             for(Accumulator a:contacts.values())
                 result.add(new Contact(a,time,dt,metrics(a.a),metrics(a.b)));
         } finally {clearMetrics();}
-        contacts.clear();
+        clearContacts();
         listener.onContactStep(time,dt,Collections.unmodifiableList(result));
         finishWalls(time);
     }
@@ -231,7 +247,7 @@ final class ContactProbe {
     void popped(int blobId,float time,float radius) {listener.onPop(blobId,time,radius);}
     void popped(int blobId,float time) {listener.onPop(blobId,time);}
     void reset() {
-        contacts.clear();wallStep.clear();wallStates.clear();clearMetrics();
+        clearContacts();wallStep.clear();wallStates.clear();clearMetrics();
         measuredBodies=contactMetricRequests=0;
         listener.onReset();
     }
