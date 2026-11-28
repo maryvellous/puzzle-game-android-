@@ -77,18 +77,24 @@ public final class MainActivity extends Activity implements SensorEventListener 
     private void startNew(GameSpec spec) {
         if(game!=null){game.leave();game=null;}
         session.clear();
-        game=new LavaView(this,spec,progress,this::showHome,session,null);
+        game=new LavaView(this,spec,progress,this::showHome,()->nextLevel(spec),session,null);
         display(game);
         game.saveCheckpoint();
         shakeDetector.reset();
         startSensor();
     }
 
+    private void nextLevel(GameSpec spec) {
+        if(!spec.endless&&!spec.trial&&spec.id+1<GameSpec.LEVELS.length)
+            startNew(GameSpec.LEVELS[spec.id+1]);
+        else showHome();
+    }
+
     private void resume() {
         GameSave.Snapshot active=session.peek();
         if(active==null){showHome();return;}
         if(game!=null){game.leave();game=null;}
-        game=new LavaView(this,active.spec,progress,this::showHome,session,active);
+        game=new LavaView(this,active.spec,progress,this::showHome,()->nextLevel(active.spec),session,active);
         display(game);
         shakeDetector.reset();
         startSensor();
@@ -128,7 +134,7 @@ public final class MainActivity extends Activity implements SensorEventListener 
     }
     @Override public void onAccuracyChanged(Sensor sensor,int accuracy){}
     @Override public void onBackPressed(){
-        if(game!=null)showHome();
+        if(game!=null){if(!game.closeOpenSheet())showHome();}
         else super.onBackPressed();
     }
 }

@@ -1,6 +1,11 @@
 package com.maryvellous.lavablobs;
 
 import android.content.Context;
+import android.app.AlertDialog;
+import android.widget.LinearLayout;
+import android.widget.SeekBar;
+import android.widget.TextView;
+import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -38,6 +43,18 @@ public final class LavaView extends View {
     private final Palette.Theme theme;
     private final GameSpec spec;
     private final Runnable onHome;
+    private final Runnable onNext;
+    private AlertDialog modal;
+    private boolean lifecyclePaused;
+    private final SharedPreferences uiPreferences;
+    private int musicVolume;
+    private int uiAction;
+    private float touchX,touchY;
+    private static final int UI_NONE=0,UI_SOUND=1,UI_MUSIC=2,UI_HELP=3,UI_PAUSE=4,UI_SHAKE=5,UI_EXTRA=6,UI_RETRY=7,UI_HOME=8,UI_NEXT=9;
+    private float panelTop(float h){return h-204f;}
+    private float visualDy(float h){return h-264f-world.bottom();}
+    private float entryY(float h){return panelTop(h)-30f;}
+    private boolean paused(){return modal!=null||lifecyclePaused;}
     private final GameSessionController gameSession;
     private final BlobWorld world;
     private final GameSound audio;
@@ -106,9 +123,11 @@ public final class LavaView extends View {
     }
 
     LavaView(Context context, GameSpec spec, ProgressStore progress,
-            Runnable onHome,GameSave session,GameSave.Snapshot resume) {
+            Runnable onHome,Runnable onNext,GameSave session,GameSave.Snapshot resume) {
         super(context);
-        this.spec=spec;this.onHome=onHome;
+        this.spec=spec;this.onHome=onHome;this.onNext=onNext;
+        uiPreferences=context.getSharedPreferences("lava_blobs",Context.MODE_PRIVATE);
+        musicVolume=uiPreferences.getInt("music_volume",70);
         // Approved refined + aggregated audio in every gameplay build.
         audio=new V2GameSound(context);
         theme=new ThemeStore(context).current();
@@ -139,10 +158,12 @@ public final class LavaView extends View {
     }
 
     /** Preserve game without counting a pause as a completed playtest. */
-    void leave() { saveCheckpoint(); audio.release(); }
-    void releaseAudio(){audio.release();}
-    void pauseAudio(){audio.pause();}
-    void resumeAudio(){audio.resume();}
+    void leave() { lifecyclePaused=true;dismissSheet();saveCheckpoint();audio.release(); }
+    void releaseAudio(){lifecyclePaused=true;dismissSheet();audio.release();}
+    void pauseAudio(){lifecyclePaused=true;audio.pause();simulationClock.reset();}
+    void resumeAudio(){lifecyclePaused=false;if(modal==null)audio.resume();simulationClock.reset();invalidate();}
+    private void dismissSheet(){if(modal!=null)modal.dismiss();}
+    boolean closeOpenSheet(){if(modal==null)return false;modal.dismiss();return true;}
 
     void saveCheckpoint() {
         if(world.gameOver){gameSession.checkpoint(aimX,eraseMode);return;}
@@ -158,6 +179,7 @@ public final class LavaView extends View {
 
     /** Called by the activity's sensor listener on the UI thread. */
     void shake(float sensorX, float sensorY, float sensorZ) {
+        if(paused()||world.gameOver)return;
         gameSession.action(SystemClock.uptimeMillis());
         world.shake(sensorX, sensorY, sensorZ);
         invalidate();
@@ -181,15 +203,16 @@ public final class LavaView extends View {
         float h = getHeight() / scale;
         world.setHeight(h);
         long now = System.nanoTime();
-        float elapsed=simulationClock.beginFrame(now);
+        if(paused())simulationClock.reset();
+        float elapsed=paused()?0f:simulationClock.beginFrame(now);
         long gapNs=simulationClock.gapNs();
         // Active playtime excludes long in-foreground idle periods without
         // changing the simulation timer, particles or game-over countdown.
-        gameSession.accountFrame(elapsed,SystemClock.uptimeMillis());
+        if(!paused())gameSession.accountFrame(elapsed,SystemClock.uptimeMillis());
         // Fixed-size physics steps keep membrane stiffness independent of FPS.
         // Bound catch-up work: never try to simulate unlimited missed frames.
         long physicsStart=System.nanoTime();
-        int steps=simulationClock.advance(world);
+        int steps=paused()?0:simulationClock.advance(world);
         long physicsNs=System.nanoTime()-physicsStart;
         advanceEffects(elapsed);
         if(world.score!=lastAnimatedScore){
@@ -211,7 +234,7 @@ public final class LavaView extends View {
         }
         if (world.score > best) best=world.score;
         gameSession.finalizeIfNeeded();
-        if(gameSession.checkpointDue())saveCheckpoint();
+        if(!paused()&&gameSession.checkpointDue())saveCheckpoint();
         long canvasStart=System.nanoTime();
         Canvas canvas = raw;
         canvas.save();
@@ -222,6 +245,7 @@ public final class LavaView extends View {
         // Cosmetic whole-vessel wobble. The physical vessel and all collider
         // positions remain untouched; internal floating particles are unchanged.
         canvas.save();
+        canvas.translate(0,visualDy(h));
         if(shakeAge<.40f) {
             float fade=1f-shakeAge/.40f;
             canvas.translate((float)Math.sin(shakeAge*64f)*5.5f*fade,
@@ -243,7 +267,7 @@ public final class LavaView extends View {
         drawHUD(canvas,h);
         String diagnostic=audio.diagnosticStatus();
         if(diagnostic!=null)
-            label(canvas,diagnostic,210f,123f,11f,theme.text,false);
+            label(canvas,diagnostic,210f,100f,10f,theme.text,false);
         if(world.gameOver)drawGameOver(canvas,h);
 
         canvas.restore();
@@ -486,165 +510,117 @@ public final class LavaView extends View {
 
     /** Bubbly HUD: quiet ivory header, colourful floating counters, spacious play. */
     private void drawHUD(Canvas c,float h) {
-        // Ivory is shared by every theme and keeps the changing title readable.
-        hudPanel(c,18,19,402,103,35,Palette.NEUTRAL_SURFACE);
-        BlobTitle.draw(c,letters,paint,titleGlyph,titleWarped,theme,
-                (System.nanoTime()-titleStart)/1_000_000_000f,34f,66f);
-        String location=spec.endless?"Modalità infinita":
-                spec.trial?spec.name:"Livello "+(spec.id+1)+" · "+spec.name;
-        label(c,location,210,90,11,theme.onSurfaceMuted,false);
-
-        // Two round floating header actions, not more outlined rectangles.
-        bubbleButton(c,53,60,23,theme.secondary,0);
-        bubbleButton(c,367,60,23,theme.tertiary,0);
-        label(c,"↻",53,69,26,contrastInk(theme.secondary),true);
-        label(c,"⌂",367,69,25,contrastInk(theme.tertiary),true);
-
-        // Score bubbles bounce lightly when the number changes.
-        float bounce=scorePulse>0?
-                (float)Math.sin((.33f-scorePulse)/.33f*Math.PI)*.045f:0f;
-        c.save();c.scale(1f+bounce,1f+bounce,112,143);
-        bubbleCounter(c,28,109,197,174,theme.forTier(0));
-        label(c,"PUNTI",112,132,11,contrastInk(theme.forTier(0)),true);
-        bigNumber(c,Long.toString(world.score),112,159,26,contrastInk(theme.forTier(0)),145f);
-        c.restore();
-
-        int goalFill=theme.tertiary;
-        bubbleCounter(c,224,109,392,174,goalFill);
-        String heading=spec.endless?"RECORD":spec.trial?"DROP":"OBIETTIVO";
-        String figure=spec.endless?Long.toString(Math.max(best,world.score)):
-                spec.trial?Integer.toString(world.dropCount):
-                Integer.toString(spec.minScore);
-        label(c,heading,308,132,11,contrastInk(goalFill),true);
-        bigNumber(c,figure,308,159,26,contrastInk(goalFill),143f);
-
-        if(!spec.endless&&!spec.trial)
-            label(c,"EXTRA "+spec.extras(world.score,world.maxTierReached,
-                    world.mergeCount)+"/"+spec.totalExtras(),
-                    308,194,10.5f,theme.text,true);
-        drawSoundToggle(c);
-
-        if(world.blockedTime>.5f&&!world.gameOver) {
-            label(c,"INGRESSO BLOCCATO · "+(int)Math.ceil(world.remainingSeconds())+"s",
-                    210,212,11,theme.caution,true);
-            if(spec.endless&&world.eraseCount>0)
-                label(c,"Usa POP per liberare spazio",210,229,10.5f,theme.text,false);
-        }
-        if(eraseMode)
-            label(c,"TOCCA IL BLOB DA FAR SCOPPIARE",210,228,11f,theme.caution,true);
-        else if(world.dropCount==0&&!aiming&&!spec.trial)
-            label(c,"TOCCA IL VASO O TRASCINA LA BOLLA",210,218,10f,theme.text,false);
-
-        if(aiming) {
-            line.setColor(Palette.alpha(theme.secondary,150));
-            line.setStrokeWidth(1.4f);
-            line.setPathEffect(new android.graphics.DashPathEffect(new float[]{7,11},0f));
-            c.drawLine(aimX,world.bottom()-8,aimX,world.vessel.top+10,line);
-            line.setPathEffect(null);
-        }
-
-        float centerY=h-70f;
-        float nextX=spec.endless?210f:276f;
-        float shakeX=spec.endless?77f:118f;
-        // Small central next-blob bubble replaces the old broad tray.
-        bubbleButton(c,nextX,centerY,43,Palette.NEUTRAL_SURFACE,0f);
-        float previewScale=Math.min(1.04f,30f/(Blob.RADII[world.nextTier]*.76f));
-        drawNextBubble(c,nextX,centerY-4f,previewScale);
-        // The tray stays visible as a cancel target while a ghost follows
-        // the fingertip into the vessel.
-        if(draggingFromTray&&dragY<centerY-50f) {
-            float ghostScale=Math.min(1f,32f/(Blob.RADII[world.nextTier]*.76f));
-            drawNextBubble(c,dragX,Math.max(world.vessel.top+12f,dragY),ghostScale);
-        }
-        label(c,"PROSSIMO",nextX,centerY-53f,10.5f,theme.text,true);
-        label(c,"TRASCINA",nextX,h-13,10.5f,theme.text,true);
-
-        int shakeFill=theme.secondary;
-        bubbleButton(c,shakeX,centerY,43,shakeFill,shakePress);
-        int shakeInk=contrastInk(shakeFill);
-        label(c,"≈",shakeX,centerY-6,27,shakeInk,true);
-        label(c,"SCUOTI",shakeX,centerY+20,14,shakeInk,true);
-
-        // POP does not even render in levels or trials.
-        if(spec.endless) {
-            boolean available=world.eraseCount>0;
-            int popFill=available?(eraseMode?theme.tertiary:theme.primary):
-                    Palette.NEUTRAL_SURFACE;
-            int popInk=available?contrastInk(popFill):theme.onSurfaceMuted;
-            bubbleButton(c,343,centerY,43,popFill,popPress);
-            label(c,"POP",343,centerY+11,23,popInk,true);
-            label(c,available?"×"+world.eraseCount:"0",343,centerY-16,12,popInk,true);
-        }
-
-        if(blockedFlash>0f&&world.blockedTime<=.5f)
-            label(c,"QUESTO INGRESSO È OCCUPATO",210,
-                    Math.min(245f,world.vessel.top-8f),11,theme.caution,true);
-    }
-
-    /** Independent effects toggle; a separate music switch can be added later. */
-    private void drawSoundToggle(Canvas c) {
-        if(audio.supportsVolumeSlider()){drawVolumeSlider(c);return;}
-        final float x=365f,y=205f;
-        boolean enabled=audio.effectsEnabled();
-        int fill=enabled?theme.secondary:Palette.NEUTRAL_SURFACE;
-        int ink=enabled?contrastInk(fill):theme.onSurfaceMuted;
-        bubbleButton(c,x,y,21f,fill,0f);
-        speakerPath.reset();
-        speakerPath.moveTo(x-11,y-5);
-        speakerPath.lineTo(x-6,y-5);
-        speakerPath.lineTo(x+1,y-11);
-        speakerPath.lineTo(x+1,y+11);
-        speakerPath.lineTo(x-6,y+5);
-        speakerPath.lineTo(x-11,y+5);
-        speakerPath.close();
-        paint.setShader(null);
-        paint.setStyle(Paint.Style.FILL);
-        paint.setColor(ink);
-        c.drawPath(speakerPath,paint);
-        line.setColor(ink);
-        line.setStrokeWidth(2.2f);
-        line.setStrokeCap(Paint.Cap.ROUND);
-        if(enabled) {
-            c.drawArc(x-3,y-10,x+15,y+10,-62,124,false,line);
-        } else {
-            c.drawLine(x+6,y-9,x+17,y+9,line);
-        }
+        int ink=theme.onSurface,muted=theme.onSurfaceMuted;
+        String place=spec.endless?"INFINITA":spec.trial?"PROVA":"LIVELLO "+(spec.id+1);
+        label(c,place,75,36,14,theme.text,true);
+        bigNumber(c,spec.name.replace("Infinita · ",""),75,58,14,theme.text,132);
+        iconButton(c,176,40,theme.forTier(2),audio.effectsEnabled()?"♪":"×");
+        iconButton(c,239,40,theme.forTier(5),"♫");
+        iconButton(c,302,40,theme.forTier(4),"?");
+        iconButton(c,365,40,theme.forTier(6),"Ⅱ");
+        float dy=visualDy(h),y=entryY(h),p=panelTop(h);
+        boolean blocked=world.blockedTime>0&&!world.gameOver;
+        boolean valid=world.canLaunch(aimX);
+        int danger=0xFFFFB0A0,entryInk=blocked||blockedFlash>0?danger:Palette.NEUTRAL_SURFACE;
+        // Inlet mark follows the actual bottom segment, not the screen center.
+        Vessel v=world.vessel;int edge=v.xs.length/2-1;
+        line.setStrokeWidth(blocked?7:4);line.setStrokeCap(Paint.Cap.ROUND);line.setColor(entryInk);
+        c.drawLine(v.xs[edge+1]+3,v.bottom+dy,v.xs[edge]-3,v.bottom+dy,line);
         line.setStrokeCap(Paint.Cap.BUTT);
-        label(c,enabled?"SUONI":"MUTO",x,y+36,10,theme.text,true);
+        if(aiming){
+            line.setColor(Palette.alpha(valid?theme.forTier(4):danger,200));line.setStrokeWidth(2f);
+            line.setPathEffect(new android.graphics.DashPathEffect(new float[]{7,11},0));
+            c.drawLine(aimX,v.bottom+dy-8,aimX,v.top+dy+10,line);line.setPathEffect(null);
+            if(valid&&draggingFromTray&&dragY<y-25)drawNextBubble(c,dragX,Math.max(v.top+dy+12,dragY),.76f);
+        }
+        int launchFill=theme.forTier(6);
+        hudPanel(c,24,y-24,396,y+24,22,blocked?0xFF702F36:launchFill);
+        int launchInk=blocked?0xFFFFFFFF:ConsoleUi.ink(launchFill);
+        drawNextBubble(c,210,y,Math.min(1f,18f/(Blob.RADII[world.nextTier]*.76f)));
+        label(c,blocked?"INGRESSO BLOCCATO":blockedFlash>0?"INGRESSO OCCUPATO":"PROSSIMO",110,y+4,blocked?13:12,launchInk,true);
+        label(c,blocked?(int)Math.ceil(world.remainingSeconds())+" s":"TRASCINA",310,y+5,blocked?21:12,launchInk,true);
+        if(eraseMode)label(c,"TOCCA IL BLOB DA FAR SCOPPIARE",210,v.top+dy-10,13,theme.text,true);
+        hudPanel(c,0,p,W,h+28,30,Palette.NEUTRAL_SURFACE);
+        label(c,"PUNTI",100,p+23,12,muted,true);
+        bigNumber(c,Long.toString(world.score),100,p+56,29,ink,174);
+        label(c,spec.endless?"RECORD":spec.trial?"LANCI":"OBIETTIVO",306,p+23,12,muted,true);
+        String goal=spec.endless?Long.toString(Math.max(best,world.score)):spec.trial?Integer.toString(world.dropCount):Integer.toString(spec.minScore);
+        bigNumber(c,goal,306,p+56,24,ink,174);
+        if(!spec.endless&&!spec.trial){
+            hudPanel(c,23,p+69,397,p+75,3,0xFFC7BBC5);
+            float fill=374f*Math.min(1f,(float)world.score/spec.minScore);
+            if(fill>0)hudPanel(c,23,p+69,23+fill,p+75,3,theme.forTier(4));
+            label(c,"Extra "+spec.extras(world.score,world.maxTierReached,world.mergeCount)+"/"+spec.totalExtras(),210,p+94,12,muted,true);
+        }else label(c,spec.endless?"Fusioni "+world.mergeCount:"Fusioni "+world.mergeCount,210,p+92,12,muted,false);
+        int shake=theme.forTier(3),extra=spec.endless?theme.forTier(4):theme.forTier(5);
+        hudPanel(c,22,p+103,204,p+150,17,shake);
+        label(c,"≈   Scuoti",113,p+132,17,ConsoleUi.ink(shake),true);
+        if(spec.endless&&world.eraseCount==0)extra=0xFFC8BFC6;
+        hudPanel(c,216,p+103,398,p+150,17,extra);
+        if(eraseMode){line.setColor(ink);line.setStrokeWidth(2);c.drawRoundRect(216,p+103,398,p+150,17,17,line);}
+        label(c,spec.endless?"POP  ×"+world.eraseCount:"Extra",307,p+132,17,ConsoleUi.ink(extra),true);
+        label(c,"Taglie",42,p+166,10,muted,true);
+        for(int i=0;i<9;i++){
+            paint.setShader(null);paint.setStyle(Paint.Style.FILL);paint.setColor(theme.forTier(i));
+            c.drawCircle(31+44.75f*i,p+184,5.5f+i*1.38f,paint);
+        }
     }
-
-    private void drawVolumeSlider(Canvas c){
-        int value=audio.volumePercent();
-        float x=38f,y=VOLUME_Y;
-        paint.setShader(null);
-        paint.setStyle(Paint.Style.FILL);
-        paint.setColor(theme.secondary);
-        c.drawCircle(x,y,14f,paint);
-        int ink=contrastInk(theme.secondary);
-        speakerPath.reset();
-        speakerPath.moveTo(x-8,y-3);speakerPath.lineTo(x-4,y-3);
-        speakerPath.lineTo(x+1,y-7);speakerPath.lineTo(x+1,y+7);
-        speakerPath.lineTo(x-4,y+3);speakerPath.lineTo(x-8,y+3);
-        speakerPath.close();paint.setColor(ink);c.drawPath(speakerPath,paint);
-        line.setColor(ink);line.setStrokeWidth(1.6f);line.setStrokeCap(Paint.Cap.ROUND);
-        if(value==0)c.drawLine(x+4,y-5,x+9,y+5,line);
-        else c.drawArc(x-2,y-7,x+10,y+7,-60,120,false,line);
-        line.setStrokeWidth(5f);line.setColor(Palette.NEUTRAL_SURFACE);
-        c.drawLine(VOLUME_LEFT,y,VOLUME_RIGHT,y,line);
-        float thumb=VOLUME_LEFT+(VOLUME_RIGHT-VOLUME_LEFT)*value/100f;
-        line.setColor(theme.secondary);c.drawLine(VOLUME_LEFT,y,thumb,y,line);
-        paint.setColor(theme.secondary);c.drawCircle(thumb,y,8f,paint);
-        paint.setColor(ink);c.drawCircle(thumb,y,3f,paint);
-        line.setStrokeCap(Paint.Cap.BUTT);
-        label(c,value+"%",174f,y+4f,11f,theme.text,true);
+    private void iconButton(Canvas c,float x,float y,int color,String label){
+        hudPanel(c,x-25,y-25,x+25,y+25,25,color);
+        label(c,label,x,y+8,23,ConsoleUi.ink(color),true);
     }
-
-    private void updateVolumeFromX(float x){
-        audio.setVolumePercent(Math.round(100f*BlobWorld.clamp(
-                (x-VOLUME_LEFT)/(VOLUME_RIGHT-VOLUME_LEFT),0f,1f)));
-        invalidate();
+    private void showSheet(String title,LinearLayout body){
+        if(modal!=null||world.gameOver)return;
+        aiming=false;draggingFromTray=false;activePointerId=MotionEvent.INVALID_POINTER_ID;uiAction=UI_NONE;
+        saveCheckpoint();simulationClock.reset();audio.pause();
+        modal=ConsoleUi.sheet(getContext(),title,body);
+        modal.setOnDismissListener(dialog->{modal=null;simulationClock.reset();if(!lifecyclePaused)audio.resume();invalidate();});
+        modal.show();invalidate();
     }
-
+    private void openHelp(){
+        LinearLayout body=ConsoleUi.column(getContext());ConsoleUi.help(body,theme,spec.endless);showSheet("Come si gioca",body);
+    }
+    private void volume(LinearLayout body,String title,int initial,boolean music){
+        TextView value=ConsoleUi.text(getContext(),title+" · "+initial+"%",16);body.addView(value);
+        SeekBar seek=new SeekBar(getContext());seek.setMax(100);seek.setProgress(initial);body.addView(seek);
+        seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+            @Override public void onProgressChanged(SeekBar bar,int n,boolean user){
+                value.setText(title+" · "+n+"%");
+                if(music){musicVolume=n;uiPreferences.edit().putInt("music_volume",n).apply();}
+                else audio.setVolumePercent(n);
+                invalidate();
+            }
+            @Override public void onStartTrackingTouch(SeekBar bar){}
+            @Override public void onStopTrackingTouch(SeekBar bar){}
+        });
+        if(music)body.addView(ConsoleUi.text(getContext(),"Volume predisposto per la colonna sonora, non ancora inclusa.",13));
+    }
+    private void openVolume(boolean music){
+        LinearLayout body=ConsoleUi.column(getContext());volume(body,music?"Musica":"Effetti sonori",music?musicVolume:audio.volumePercent(),music);
+        showSheet(music?"Musica":"Suoni",body);
+    }
+    private void openPause(){
+        LinearLayout body=ConsoleUi.column(getContext());
+        volume(body,"Effetti sonori",audio.volumePercent(),false);volume(body,"Musica",musicVolume,true);
+        ConsoleUi.action(body,"Riprendi",theme.forTier(4),()->dismissSheet());
+        ConsoleUi.action(body,"Ricomincia",theme.forTier(3),()->{
+            if(modal==null)return;
+            new AlertDialog.Builder(getContext(),android.R.style.Theme_Material_Light_Dialog_Alert)
+                .setTitle("Ricominciare la partita?").setMessage("La partita in corso verrà sostituita.")
+                .setNegativeButton("Annulla",null).setPositiveButton("Ricomincia",(d,w)->{dismissSheet();restart();}).show();
+        });
+        ConsoleUi.action(body,"Torna alla Home",theme.forTier(5),onHome);
+        showSheet("Pausa",body);
+    }
+    private void openExtras(){
+        LinearLayout body=ConsoleUi.column(getContext());
+        body.addView(ConsoleUi.text(getContext(),"Obiettivo: "+spec.minScore+" punti",17));
+        int mask=spec.extrasMask(world.score,world.maxTierReached,world.mergeCount);
+        body.addView(ConsoleUi.text(getContext(),((mask&1)!=0?"✓  ":"○  ")+spec.extraScore+" punti",15));
+        body.addView(ConsoleUi.text(getContext(),((mask&2)!=0?"✓  ":"○  ")+"Taglia "+spec.goalTier,15));
+        if(spec.mergeGoal>0)body.addView(ConsoleUi.text(getContext(),((mask&4)!=0?"✓  ":"○  ")+spec.mergeGoal+" fusioni",15));
+        showSheet("Obiettivi extra",body);
+    }
     private void bubbleCounter(Canvas c,float l,float t,float r,float b,int fill) {
         paint.setShader(null);
         paint.setStyle(Paint.Style.FILL);
@@ -704,25 +680,19 @@ public final class LavaView extends View {
         c.drawCircle(x,y,r,line);
     }
 
-    private void drawGameOver(Canvas c,float h) {
-        float top=h*.35f,bottom=h*.72f;
-        hudPanel(c,34,top,386,bottom,26,Palette.alpha(theme.surfaceRaised,246));
-        boolean won=spec.passed(world.score);
-        String title=spec.trial?"PROVA CONCLUSA":spec.endless?"PARTITA FINITA":
-                won?"LIVELLO SUPERATO":"RIPROVA";
-        label(c,title,210,top+57,21,theme.onSurface,true);
-        label(c,world.score+" punti  ·  "+world.dropCount+" drop",
-                210,top+99,17,theme.onSurfaceMuted,false);
-        if(!spec.endless&&!spec.trial)
-            label(c,"Extra "+spec.extras(world.score,world.maxTierReached,
-                    world.mergeCount)+"/"+spec.totalExtras(),
-                    210,top+125,13,theme.onSurfaceMuted,false);
-
-        float buttonsTop=h*.585f,buttonsBottom=h*.664f;
-        hudPanel(c,55,buttonsTop,198,buttonsBottom,15,theme.primary);
-        hudPanel(c,221,buttonsTop,365,buttonsBottom,15,theme.surface);
-        label(c,"RIPROVA",127,h*.633f,13,theme.onPrimary,true);
-        label(c,"HOME",293,h*.633f,13,theme.onSurface,true);
+    private boolean nextAvailable(){return !spec.endless&&!spec.trial&&spec.passed(world.score)&&spec.id+1<GameSpec.LEVELS.length;}
+    private void drawGameOver(Canvas c,float h){
+        c.drawColor(0x99000000);float t=h*.30f;
+        hudPanel(c,25,t,395,t+288,30,Palette.NEUTRAL_SURFACE);
+        String heading=spec.trial?"PROVA CONCLUSA":spec.endless?"PARTITA FINITA":spec.passed(world.score)?"LIVELLO SUPERATO":"RIPROVA";
+        label(c,heading,210,t+45,22,theme.onSurface,true);
+        bigNumber(c,world.score+" punti",210,t+91,32,theme.onSurface,320);
+        label(c,world.mergeCount+" fusioni · "+world.dropCount+" lanci",210,t+119,14,theme.onSurfaceMuted,false);
+        if(!spec.endless&&!spec.trial)label(c,"Extra "+spec.extras(world.score,world.maxTierReached,world.mergeCount)+"/"+spec.totalExtras(),210,t+144,14,theme.onSurfaceMuted,true);
+        int retry=theme.forTier(3),home=theme.forTier(5),next=theme.forTier(4);
+        if(nextAvailable()){hudPanel(c,47,t+160,373,t+211,18,next);label(c,"Prossimo livello",210,t+192,17,ConsoleUi.ink(next),true);}
+        hudPanel(c,47,t+223,203,t+273,17,retry);label(c,"Riprova",125,t+254,16,ConsoleUi.ink(retry),true);
+        hudPanel(c,217,t+223,373,t+273,17,home);label(c,"Home",295,t+254,16,ConsoleUi.ink(home),true);
     }
 
     private void label(Canvas c, String value, float x, float y, float size,
@@ -746,146 +716,91 @@ public final class LavaView extends View {
         return Color.rgb(red, green, blue);
     }
 
-    @Override public boolean onTouchEvent(MotionEvent event) {
-        if(getWidth()==0||getHeight()==0)return false;
-        final float sc=scale();
-        final float h=getHeight()/sc;
-        final int action=event.getActionMasked();
-        float x=(event.getX()-offsetX())/sc;
-        float y=event.getY()/sc;
-        final float centerY=h-70f;
-        final float nextX=spec.endless?210f:276f;
-
-        switch(action){
-            case MotionEvent.ACTION_DOWN:
-                gameSession.action(SystemClock.uptimeMillis());
-                activePointerId=event.getPointerId(0);
-                if(audio.supportsVolumeSlider()&&Math.abs(y-VOLUME_Y)<=18f){
-                    if(x>=20f&&x<57f){
-                        audio.setEffectsEnabled(!audio.effectsEnabled());
-                        announceForAccessibility("Volume "+audio.volumePercent()+" per cento");
-                        invalidate();return true;
-                    }
-                    if(x>=57f&&x<=190f){
-                        draggingVolume=true;aiming=false;draggingFromTray=false;
-                        updateVolumeFromX(x);return true;
-                    }
-                }
-                if(!audio.supportsVolumeSlider()&&hitBubble(x,y,365f,205f,27f)){
-                    boolean enabled=!audio.effectsEnabled();
-                    audio.setEffectsEnabled(enabled);
-                    performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
-                    announceForAccessibility(enabled?"Effetti sonori attivati":"Effetti sonori disattivati");
-                    invalidate();
-                    return true;
-                }
-                if(world.gameOver){
-                    if(y>h*.57f&&y<h*.70f){
-                        if(x>=209)onHome.run();else restart();
-                    }
-                    return true;
-                }
-                if(y>26f&&y<98f&&x>337f){onHome.run();return true;}
-                if(y>26f&&y<98f&&x<82f){restart();return true;}
-                float shakeX=spec.endless?77f:118f;
-                if(hitBubble(x,y,shakeX,centerY,51f)){
-                    world.shake(8f,-5f,8f);
-                    shakeAge=0f;shakeStep=0;shakePress=1f;
-                    performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
-                    saveCheckpoint();
-                    invalidate();return true;
-                }
-                if(spec.endless&&hitBubble(x,y,343f,centerY,51f)){
-                    if(world.eraseCount>0){
-                        eraseMode=!eraseMode;
-                        popPress=1f;
-                    }
-                    invalidate();return true;
-                }
-                if(eraseMode){
-                    if(y<centerY-50f&&world.eraseAt(x,y)){
-                        pops.add(new PopFx(world.lastPoppedX,world.lastPoppedY,
-                                world.lastPoppedRadius,world.lastPoppedTier));
-                        performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
-                        popPress=1f;
-                        eraseMode=false;
-                        saveCheckpoint();
-                    }
-                    invalidate();return true;
-                }
-                if(hitBubble(x,y,nextX,centerY,49f)){
-                    // Begin a real tray drag, not a tap-to-launch.
-                    aiming=true;
-                    draggingFromTray=true;
-                    dragX=x;dragY=y;
-                    aimX=BlobWorld.clamp(x,49f,371f);
-                    invalidate();return true;
-                }
-                if(y>=centerY-50f)return true;
-                // Preserve the existing fast touch/slide/release launch.
-                aiming=true;draggingFromTray=false;
-                aimX=BlobWorld.clamp(x,49f,371f);
-                invalidate();return true;
-
-            case MotionEvent.ACTION_MOVE:
-                if(draggingVolume){
-                    int pointer=event.findPointerIndex(activePointerId);
-                    if(pointer>=0)updateVolumeFromX((event.getX(pointer)-offsetX())/sc);
-                    return true;
-                }
-                if(aiming){
-                    int pointer=event.findPointerIndex(activePointerId);
-                    if(pointer>=0){
-                        x=(event.getX(pointer)-offsetX())/sc;
-                        y=event.getY(pointer)/sc;
-                        aimX=BlobWorld.clamp(x,49f,371f);
-                        if(draggingFromTray){dragX=x;dragY=y;}
-                        gameSession.action(SystemClock.uptimeMillis());
-                        invalidate();
-                    }
-                }
-                return true;
-
-            case MotionEvent.ACTION_UP:
-                if(draggingVolume){
-                    int pointer=event.findPointerIndex(activePointerId);
-                    if(pointer>=0)updateVolumeFromX((event.getX(pointer)-offsetX())/sc);
-                    draggingVolume=false;activePointerId=MotionEvent.INVALID_POINTER_ID;
-                    announceForAccessibility("Volume "+audio.volumePercent()+" per cento");
-                    invalidate();return true;
-                }
-                if(aiming){
-                    int pointer=event.findPointerIndex(activePointerId);
-                    if(pointer>=0){
-                        x=(event.getX(pointer)-offsetX())/sc;
-                        y=event.getY(pointer)/sc;
-                    }
-                    aimX=BlobWorld.clamp(x,49f,371f);
-                    // Releasing over the tray cancels the drag.
-                    boolean shouldLaunch=!draggingFromTray||
-                            (y<centerY-50f&&y>=world.vessel.top-25f);
-                    if(shouldLaunch){
-                        if(world.launch(aimX)){
-                            performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
-                            saveCheckpoint();
-                        }else blockedFlash=.9f;
-                    }
-                }
-                aiming=false;draggingFromTray=false;
-                activePointerId=MotionEvent.INVALID_POINTER_ID;
-                invalidate();return true;
-
-            case MotionEvent.ACTION_CANCEL:
-                draggingVolume=false;aiming=false;draggingFromTray=false;
-                activePointerId=MotionEvent.INVALID_POINTER_ID;
-                invalidate();return true;
-            default:return true;
+    private int actionAt(float x,float y,float h){
+        if(world.gameOver){
+            float t=h*.30f;
+            if(x>=47&&x<=373&&y>=t+160&&y<=t+211&&nextAvailable())return UI_NEXT;
+            if(y>=t+223&&y<=t+273){if(x>=47&&x<=203)return UI_RETRY;if(x>=217&&x<=373)return UI_HOME;}
+            return UI_NONE;
+        }
+        if(y>=15&&y<=65){
+            if(x>=151&&x<=201)return UI_SOUND;
+            if(x>=214&&x<=264)return UI_MUSIC;
+            if(x>=277&&x<=327)return UI_HELP;
+            if(x>=340&&x<=390)return UI_PAUSE;
+        }
+        float p=panelTop(h);
+        if(y>=p+103&&y<=p+150){if(x>=22&&x<=204)return UI_SHAKE;if(x>=216&&x<=398)return UI_EXTRA;}
+        return UI_NONE;
+    }
+    private void doAction(int a){
+        switch(a){
+            case UI_SOUND:openVolume(false);break;
+            case UI_MUSIC:openVolume(true);break;
+            case UI_HELP:openHelp();break;
+            case UI_PAUSE:openPause();break;
+            case UI_SHAKE:
+                world.shake(8,-5,8);shakeAge=0;shakeStep=0;shakePress=1;
+                performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);saveCheckpoint();break;
+            case UI_EXTRA:
+                if(spec.endless){if(world.eraseCount>0){eraseMode=!eraseMode;popPress=1;}}else if(!spec.trial)openExtras();
+                break;
+            case UI_RETRY:restart();break;
+            case UI_HOME:onHome.run();break;
+            case UI_NEXT:if(nextAvailable())onNext.run();break;
         }
     }
-
-    private static boolean hitBubble(float x,float y,float cx,float cy,float r) {
-        float dx=x-cx,dy=y-cy;
-        return dx*dx+dy*dy<=r*r;
+    @Override public boolean onTouchEvent(MotionEvent event){
+        if(getWidth()==0||getHeight()==0||paused())return false;
+        float sc=scale(),h=getHeight()/sc,dy=visualDy(h);
+        float x=(event.getX()-offsetX())/sc,y=event.getY()/sc;
+        boolean inVessel=y>=world.vessel.top+dy-5&&y<=world.bottom()+dy+5&&x>=BlobWorld.LEFT&&x<=BlobWorld.RIGHT;
+        switch(event.getActionMasked()){
+            case MotionEvent.ACTION_DOWN:
+                gameSession.action(SystemClock.uptimeMillis());activePointerId=event.getPointerId(0);
+                touchX=x;touchY=y;uiAction=actionAt(x,y,h);
+                aiming=false;draggingFromTray=false;
+                if(uiAction!=UI_NONE||world.gameOver)return true;
+                if(eraseMode)return true;
+                boolean tray=x>=24&&x<=396&&Math.abs(y-entryY(h))<=24;
+                if(tray||inVessel){
+                    aiming=true;draggingFromTray=tray;dragX=x;dragY=y;
+                    aimX=BlobWorld.clamp(tray?210:x,49,371);invalidate();
+                }
+                return true;
+            case MotionEvent.ACTION_MOVE:
+                if(aiming){
+                    int pointer=event.findPointerIndex(activePointerId);if(pointer>=0){
+                        dragX=(event.getX(pointer)-offsetX())/sc;dragY=event.getY(pointer)/sc;
+                        aimX=BlobWorld.clamp(dragX,49,371);gameSession.action(SystemClock.uptimeMillis());invalidate();
+                    }
+                }return true;
+            case MotionEvent.ACTION_POINTER_UP:
+                if(event.getPointerId(event.getActionIndex())==activePointerId){aiming=false;draggingFromTray=false;uiAction=UI_NONE;activePointerId=MotionEvent.INVALID_POINTER_ID;invalidate();}
+                return true;
+            case MotionEvent.ACTION_UP:
+                if(activePointerId==MotionEvent.INVALID_POINTER_ID)return true;
+                activePointerId=MotionEvent.INVALID_POINTER_ID;
+                int a=uiAction;uiAction=UI_NONE;
+                if(a!=UI_NONE){if(a==actionAt(x,y,h)&&Math.abs(y-touchY)<25)doAction(a);invalidate();return true;}
+                if(world.gameOver)return true;
+                if(eraseMode){
+                    if(inVessel&&Math.abs(y-touchY)<20&&Math.abs(x-touchX)<20&&world.eraseAt(x,y-dy)){
+                        pops.add(new PopFx(world.lastPoppedX,world.lastPoppedY,world.lastPoppedRadius,world.lastPoppedTier));
+                        performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);popPress=1;eraseMode=false;saveCheckpoint();
+                    }
+                    invalidate();return true;
+                }
+                if(aiming&&inVessel){
+                    aimX=BlobWorld.clamp(x,49,371);
+                    if(world.launch(aimX)){performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);saveCheckpoint();}
+                    else blockedFlash=.9f;
+                }
+                aiming=false;draggingFromTray=false;invalidate();return true;
+            case MotionEvent.ACTION_CANCEL:
+                aiming=false;draggingFromTray=false;uiAction=UI_NONE;activePointerId=MotionEvent.INVALID_POINTER_ID;invalidate();return true;
+            default:return true;
+        }
     }
 
     private void restart() {
